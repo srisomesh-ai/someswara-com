@@ -1,0 +1,5 @@
+# Clean URLs: someswara.com/trader -> index.html#/trader
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(trader|entrepreneur|hobby|projects)/?$ /index.html [L]
