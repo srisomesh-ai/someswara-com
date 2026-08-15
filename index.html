@@ -190,6 +190,55 @@ footer{
   color:var(--muted);font-size:.85rem;
 }
 footer a{color:var(--blue);text-decoration:none}
+
+/* ---------- opportunity CTA banner ---------- */
+.invite{
+  max-width:1040px;margin:0 auto;padding:0 22px 60px;
+}
+.invite-in{
+  border-radius:var(--radius);padding:44px 34px;text-align:center;color:#fff;
+  box-shadow:var(--shadow-hover);
+}
+.t-green .invite-in{background:linear-gradient(135deg,#28A745,#1E7E34)}
+.t-blue .invite-in{background:linear-gradient(135deg,#0071E3,#0051A8)}
+.t-orange .invite-in{background:linear-gradient(135deg,#FF9F0A,#E07000)}
+.t-purple .invite-in{background:linear-gradient(135deg,#AF52DE,#7B2FB5)}
+.invite-in.home-grad{background:linear-gradient(135deg,#1D1D1F,#3A3A3E)}
+.invite-in h3{font-size:clamp(1.4rem,4vw,1.9rem);font-weight:800;letter-spacing:-.02em}
+.invite-in p{margin-top:10px;opacity:.9;max-width:560px;margin-inline:auto;font-size:.98rem}
+.invite-in .cta-row{margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn-white{background:#fff;color:var(--ink)}
+.btn-white:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.btn-outline{border:1.5px solid rgba(255,255,255,.7);color:#fff}
+.btn-outline:hover{background:rgba(255,255,255,.12)}
+
+/* ---------- contact page ---------- */
+.contact-cards{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:18px;
+  max-width:900px;margin:0 auto;padding:10px 22px 30px;
+}
+@media(max-width:700px){.contact-cards{grid-template-columns:1fr}}
+.ccard{
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+  padding:30px 24px;text-align:center;box-shadow:var(--shadow);text-decoration:none;
+  transition:all .3s cubic-bezier(.25,.1,.25,1);
+}
+.ccard:hover{transform:translateY(-4px);box-shadow:var(--shadow-hover)}
+.ccard .big{font-size:2rem;margin-bottom:10px}
+.ccard h3{font-size:1.05rem;font-weight:700;margin-bottom:4px}
+.ccard p{color:var(--muted);font-size:.86rem}
+.reasons{
+  max-width:900px;margin:0 auto;padding:10px 22px 60px;
+  display:grid;grid-template-columns:repeat(2,1fr);gap:14px;
+}
+@media(max-width:700px){.reasons{grid-template-columns:1fr}}
+.reason{
+  display:flex;gap:14px;align-items:flex-start;
+  background:var(--soft);border-radius:16px;padding:18px 20px;
+}
+.reason .em{font-size:1.3rem}
+.reason b{display:block;font-size:.95rem}
+.reason span{color:var(--muted);font-size:.86rem}
 </style>
 </head>
 <body>
@@ -203,6 +252,7 @@ footer a{color:var(--blue);text-decoration:none}
       <a href="#/entrepreneur">Entrepreneur</a>
       <a href="#/hobby">Hobby</a>
       <a href="#/projects">Projects</a>
+      <a href="#/contact">Contact</a>
     </nav>
   </div>
 </header>
@@ -250,6 +300,16 @@ footer a{color:var(--blue);text-decoration:none}
     <p>"I believe one person can live <b>many lives at once</b> — you just have to refuse to choose."</p>
     <div class="who">— Someswara (Sri Somesh) · Visakhapatnam</div>
   </div>
+
+  <div class="invite rv" style="padding-top:40px">
+    <div class="invite-in home-grad">
+      <h3>Open to opportunities 🤝</h3>
+      <p>Investors, clients, event organisers, collaborators or learners — whatever brings you here, I'd love to hear from you.</p>
+      <div class="cta-row">
+        <a class="btn btn-white" href="#/contact">Get in touch</a>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ================= TRADER ================= -->
@@ -290,6 +350,16 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="center-cta rv"><a class="btn btn-primary" href="#/projects">See my trading tools</a></div>
+
+  <div class="invite rv">
+    <div class="invite-in">
+      <h3>Interested in the markets? 📈</h3>
+      <p>Want to learn trading from my real experience, discuss strategies, or explore working together on trading tools and automation? I'm open to serious conversations.</p>
+      <div class="cta-row">
+        <a class="btn btn-white" href="#/contact">Let's talk trading</a>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ================= ENTREPRENEUR ================= -->
@@ -324,6 +394,16 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="center-cta rv"><a class="btn btn-primary" href="#/projects">Explore the products</a></div>
+
+  <div class="invite rv">
+    <div class="invite-in">
+      <h3>Investors & partners welcome 🚀</h3>
+      <p>My products are live, revenue-generating and growing. If you're an investor looking for opportunities, a business wanting these solutions, or a partner who wants to scale with me — let's build together.</p>
+      <div class="cta-row">
+        <a class="btn btn-white" href="#/contact">Discuss a partnership</a>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ================= HOBBY ================= -->
@@ -358,6 +438,16 @@ footer a{color:var(--blue);text-decoration:none}
     <a class="social" href="#YOUTUBE_LINK" target="_blank" rel="noopener">▶️ YouTube</a>
     <a class="social" href="#SPOTIFY_LINK" target="_blank" rel="noopener">🎵 Spotify</a>
     <a class="social" href="#FACEBOOK_LINK" target="_blank" rel="noopener">👥 Facebook</a>
+  </div>
+
+  <div class="invite rv">
+    <div class="invite-in">
+      <h3>Make your occasion musical 🎤</h3>
+      <p>Want a custom song for your wedding, birthday, or special function? A live performance for your event? Or creative collaboration on music and lyrics? I'd love to create something for you.</p>
+      <div class="cta-row">
+        <a class="btn btn-white" href="#/contact">Book / request a song</a>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -411,6 +501,50 @@ footer a{color:var(--blue);text-decoration:none}
       <p>Augmented-reality web platform bringing printed photos to life with video overlays via QR.</p>
     </div>
   </div>
+
+  <div class="invite rv">
+    <div class="invite-in">
+      <h3>Need a software solution? 🛠️</h3>
+      <p>Website, mobile app, CRM, automation, GPS tracking or any custom tool — I design and deliver practical solutions quickly, because I build for my own businesses every day.</p>
+      <div class="cta-row">
+        <a class="btn btn-white" href="#/contact">Request a solution</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CONTACT ================= -->
+<div class="page t-blue" id="pg-contact">
+  <div class="p-hero">
+    <span class="p-tag">Contact</span>
+    <h2>Let's create an opportunity together.</h2>
+    <p class="sub">Whatever brought you here — trading, business, music or software — I personally read and reply to every message.</p>
+  </div>
+
+  <div class="contact-cards rv">
+    <a class="ccard" href="https://wa.me/91XXXXXXXXXX?text=Hi%20Someswara%2C%20I%20found%20you%20through%20someswara.com" target="_blank" rel="noopener">
+      <div class="big">💬</div>
+      <h3>WhatsApp</h3>
+      <p>Fastest way to reach me</p>
+    </a>
+    <a class="ccard" href="mailto:hello@someswara.com">
+      <div class="big">✉️</div>
+      <h3>Email</h3>
+      <p>hello@someswara.com</p>
+    </a>
+    <a class="ccard" href="https://instagram.com/srisomesh_music" target="_blank" rel="noopener">
+      <div class="big">📸</div>
+      <h3>Instagram</h3>
+      <p>@srisomesh_music</p>
+    </a>
+  </div>
+
+  <div class="reasons rv">
+    <div class="reason"><span class="em">📈</span><div><b>Learn or collaborate on trading</b><span>Strategy discussions, tools, automation</span></div></div>
+    <div class="reason"><span class="em">🚀</span><div><b>Invest or partner in my businesses</b><span>BharatGPS, HamaraStaff, HamaraService & more</span></div></div>
+    <div class="reason"><span class="em">🎤</span><div><b>Book music for your occasion</b><span>Custom songs, live performance, lyrics</span></div></div>
+    <div class="reason"><span class="em">🛠️</span><div><b>Get a software solution built</b><span>Web, mobile, CRM, GPS, automation — delivered fast</span></div></div>
+  </div>
 </div>
 
 <footer>
@@ -418,7 +552,7 @@ footer a{color:var(--blue);text-decoration:none}
 </footer>
 
 <script>
-const pages={'':'pg-home','/':'pg-home','/trader':'pg-trader','/entrepreneur':'pg-entrepreneur','/hobby':'pg-hobby','/projects':'pg-projects'};
+const pages={'':'pg-home','/':'pg-home','/trader':'pg-trader','/entrepreneur':'pg-entrepreneur','/hobby':'pg-hobby','/projects':'pg-projects','/contact':'pg-contact'};
 function route(){
   let h=location.hash.replace('#','');
   // Support clean URLs (someswara.com/trader) served via .htaccess
