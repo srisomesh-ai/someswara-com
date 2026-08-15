@@ -420,7 +420,12 @@ footer a{color:var(--blue);text-decoration:none}
 <script>
 const pages={'':'pg-home','/':'pg-home','/trader':'pg-trader','/entrepreneur':'pg-entrepreneur','/hobby':'pg-hobby','/projects':'pg-projects'};
 function route(){
-  const h=location.hash.replace('#','');
+  let h=location.hash.replace('#','');
+  // Support clean URLs (someswara.com/trader) served via .htaccess
+  if(!h && location.pathname!=='/' ){
+    const p='/'+location.pathname.replace(/^\/+|\/+$/g,'');
+    if(pages[p]) h=p;
+  }
   const id=pages[h]||'pg-home';
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('show',p.id===id));
   document.querySelectorAll('#nav a').forEach(a=>{
