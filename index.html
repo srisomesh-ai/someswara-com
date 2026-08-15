@@ -62,6 +62,54 @@ nav a.active{color:#fff;background:var(--ink)}
 
 /* ---------- HOME ---------- */
 .hero{text-align:center;padding:88px 22px 60px;max-width:820px;margin:0 auto}
+
+/* full-screen welcome */
+.hero-full{
+  min-height:calc(100svh - 56px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:40px 22px 70px;position:relative;
+}
+.hand{
+  font-size:3.4rem;margin-bottom:18px;
+  animation:handWave 2.6s ease-in-out infinite;
+}
+@keyframes handWave{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.06)}}
+.rotator-line{
+  margin-top:20px;font-size:clamp(1.05rem,3vw,1.4rem);font-weight:600;color:var(--muted);
+  display:flex;gap:.45em;justify-content:center;align-items:baseline;flex-wrap:wrap;
+}
+.rotator{
+  display:inline-block;position:relative;height:1.5em;overflow:hidden;
+  text-align:left;min-width:7.5em;vertical-align:bottom;
+}
+.rotator span{
+  display:block;height:1.5em;line-height:1.5em;color:var(--blue);font-weight:700;
+  animation:rotateWords 10s cubic-bezier(.7,0,.3,1) infinite;
+}
+@keyframes rotateWords{
+  0%,16%{transform:translateY(0)}
+  20%,36%{transform:translateY(-1.5em)}
+  40%,56%{transform:translateY(-3em)}
+  60%,76%{transform:translateY(-4.5em)}
+  80%,96%{transform:translateY(-6em)}
+  100%{transform:translateY(-7.5em)}
+}
+@media(prefers-reduced-motion:reduce){.rotator span{animation:none}.hand{animation:none}}
+.hero-full h1{margin-top:14px}
+.hero-full p{margin-top:20px}
+.scroll-hint{
+  position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+  font-size:1.6rem;color:var(--muted);text-decoration:none;
+  animation:hintBounce 1.8s ease-in-out infinite;
+}
+@keyframes hintBounce{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,8px)}}
+
+/* impact line on tiles */
+.impact{
+  margin-top:14px;padding:10px 14px;border-radius:12px;
+  background:var(--soft);font-size:.87rem;color:var(--ink);
+}
+.impact b{color:#28A745;font-weight:700}
 .hero .hi{
   display:inline-block;font-size:.85rem;font-weight:600;color:var(--blue);
   background:rgba(0,113,227,.08);border-radius:99px;padding:7px 18px;margin-bottom:22px;
@@ -263,17 +311,22 @@ footer a{color:var(--blue);text-decoration:none}
 
 <!-- ================= HOME ================= -->
 <div class="page" id="pg-home">
-  <div class="hero">
-    <span class="hi">👋 Hello, I'm Someswara</span>
-    <h1>One life.<br><span>Many passions.</span></h1>
-    <p>Entrepreneur. Trader. Singer. Builder. From Visakhapatnam, India — introducing myself to the world.</p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="#/entrepreneur">Explore my work</a>
-      <a class="btn btn-secondary" href="#/hobby">Hear my music</a>
+  <div class="hero hero-full">
+    <div class="hand">🤝</div>
+    <span class="hi">Welcome — I'm Someswara</span>
+    <div class="rotator-line">
+      Planning <span class="rotator"><span>a business?</span><span>to trade?</span><span>an app?</span><span>a special song?</span><span>any solution?</span><span>a business?</span></span>
     </div>
+    <h1>Hundreds of problems.<br><span>One solution — me.</span></h1>
+    <p>Whether you're starting a business, entering the markets, building an app, celebrating an occasion or stuck on any problem — approach me. Then scroll down and see what I've already built.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#/contact">Approach me</a>
+      <a class="btn btn-secondary" href="#home-works">See my works ↓</a>
+    </div>
+    <a class="scroll-hint" href="#home-works" aria-label="Scroll to my works">⌄</a>
   </div>
 
-  <div class="home-cards">
+  <div class="home-cards" id="home-works">
     <a class="hcard c1 rv" href="#/trader">
       <div class="ic">📈</div>
       <h3>Trader</h3>
@@ -379,18 +432,21 @@ footer a{color:var(--blue);text-decoration:none}
       <span class="mini">Flagship · Founder</span>
       <h3>BharatGPS — Sribharat GPS Tracker Pvt Ltd</h3>
       <p>GPS fleet-tracking company from Visakhapatnam serving vehicles across multiple servers — live tracking, geofencing, school-bus solutions, route monitoring, technician field app, CRM and an in-house HR & payroll system. A complete ecosystem, built and operated by my team.</p>
+      <p class="impact"><b>✓ The difference:</b> Fleet owners see every vehicle live — thefts prevented, fuel misuse caught, driver discipline up.</p>
       <p class="visit"><a href="https://bharatgps.com" target="_blank" rel="noopener">Visit bharatgps.com →</a></p>
     </div>
     <div class="tile rv">
       <span class="mini">SaaS</span>
       <h3>HamaraStaff</h3>
       <p>Field-staff attendance & visit-tracking SaaS — GPS check-ins, visit proof, trials and subscriptions. Live at hamarastaff.com.</p>
+      <p class="impact"><b>✓ The difference:</b> No more fake field visits — every check-in is GPS-verified, payroll becomes transparent.</p>
       <p class="visit"><a href="https://hamarastaff.com" target="_blank" rel="noopener">Visit hamarastaff.com →</a></p>
     </div>
     <div class="tile rv">
       <span class="mini">Marketplace</span>
       <h3>HamaraService</h3>
       <p>Home-services marketplace connecting customers with verified providers. Live at hamaraservice.com.</p>
+      <p class="impact"><b>✓ The difference:</b> Trusted help at home in a few taps — verified providers, fair pricing.</p>
       <p class="visit"><a href="https://hamaraservice.com" target="_blank" rel="noopener">Visit hamaraservice.com →</a></p>
     </div>
     <div class="tile wide rv">
@@ -471,48 +527,56 @@ footer a{color:var(--blue);text-decoration:none}
       <span class="mini">Fleet Tech</span>
       <h3>BharatGPS Portal & Apps</h3>
       <p>Multi-server GPS dashboards, Android app, technician field app, checkpoint route monitoring.</p>
+      <p class="impact"><b>✓ The difference:</b> One screen controls an entire fleet across servers.</p>
       <p class="visit"><a href="https://bharatgps.com" target="_blank" rel="noopener">Visit bharatgps.com →</a></p>
     </div>
     <div class="tile rv">
       <span class="mini">CRM</span>
       <h3>TaskManager CRM</h3>
       <p>Operations CRM — tasks, payments, claims with photo proof, balance sheets, exports, push alerts.</p>
+      <p class="impact"><b>✓ The difference:</b> My whole company runs on it daily — task to payment in one place, zero paperwork.</p>
       <p class="visit"><span class="soon">Internal business tool 🔒</span></p>
     </div>
     <div class="tile rv">
       <span class="mini">Messenger</span>
       <h3>Kalisi</h3>
       <p>Privacy-first Android messenger — end-to-end encryption, voice calls, groups, status stories.</p>
+      <p class="impact"><b>✓ The difference:</b> Conversations that truly stay private — encrypted end to end.</p>
       <p class="visit"><span class="soon">Launching soon 🚀</span></p>
     </div>
     <div class="tile rv">
       <span class="mini">Community</span>
       <h3>Pavan Midway App</h3>
       <p>Apartment community app for 140 flats — visitor QR gate passes, complaints, notices, push alerts.</p>
+      <p class="impact"><b>✓ The difference:</b> 140 families manage visitors and complaints without registers or paperwork.</p>
       <p class="visit"><a href="https://linen-oyster-283741.hostingersite.com" target="_blank" rel="noopener">Visit the app →</a></p>
     </div>
     <div class="tile rv">
       <span class="mini">Trading</span>
       <h3>Somu Trader</h3>
       <p>Auto-trading robot — funding-fade algorithm, live positions, balance-based sizing, SL verification.</p>
+      <p class="impact"><b>✓ The difference:</b> Emotion removed from trading — discipline enforced by code, 24/7.</p>
       <p class="visit"><span class="soon">Private trading tool 🔒</span></p>
     </div>
     <div class="tile rv">
       <span class="mini">SaaS</span>
       <h3>HamaraStaff & HamaraService</h3>
       <p>Field-staff tracking SaaS and a home-services marketplace — portals plus Android apps.</p>
+      <p class="impact"><b>✓ The difference:</b> Two live products serving real businesses and homes every day.</p>
       <p class="visit"><a href="https://hamarastaff.com" target="_blank" rel="noopener">hamarastaff.com →</a> &nbsp; <a href="https://hamaraservice.com" target="_blank" rel="noopener">hamaraservice.com →</a></p>
     </div>
     <div class="tile rv">
       <span class="mini">HR</span>
       <h3>BharatGPS HR System</h3>
       <p>Attendance, payroll, commissions & payslips — planned as a multi-tenant SaaS.</p>
+      <p class="impact"><b>✓ The difference:</b> Salaries and commissions computed in minutes, not days of manual work.</p>
       <p class="visit"><span class="soon">Internal · SaaS launch planned 🔒</span></p>
     </div>
     <div class="tile rv">
       <span class="mini">Creative Tech</span>
       <h3>AR Photo Experience</h3>
       <p>Augmented-reality web platform bringing printed photos to life with video overlays via QR.</p>
+      <p class="impact"><b>✓ The difference:</b> A printed photo becomes a living memory people can replay anytime.</p>
       <p class="visit"><span class="soon">Demo on request 💬</span></p>
     </div>
   </div>
