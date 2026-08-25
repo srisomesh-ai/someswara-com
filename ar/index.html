@@ -43,7 +43,7 @@
   .acc .k{font-size:12px;color:var(--mute);background:var(--paper);border-radius:999px;padding:3px 9px}
   .newacc{display:flex;gap:8px;margin-bottom:12px} .newacc input{flex:1}
   .head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
-  .head h2{margin:0} .head .r{display:flex;gap:8px}
+  .head h2{margin:0} a{color:var(--teal)} .head .r{display:flex;gap:8px}
   .code{font-size:12px;color:var(--mute);margin-bottom:18px;word-break:break-all}
   .item{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
   .item img{width:64px;height:64px;object-fit:cover;border-radius:8px;background:#eee}
@@ -120,9 +120,14 @@
         <div id="imgPrev">Tap to choose an image<br><span class="hint">You can crop it next</span></div></div>
     </div>
     <div>
-      <label class="field">Video to play on it</label>
+      <label class="field">Video to play on it
+        <span style="float:right;font-weight:500"><a href="#" id="vidMode" onclick="toggleVidMode(event)">Use a URL instead</a></span></label>
       <div class="drop" id="dropVid"><input type="file" id="vidFile" accept="video/mp4,video/*">
         <div id="vidPrev">Tap to choose a video<br><span class="hint">MP4 · under 200 MB</span></div></div>
+      <div id="urlBox" style="display:none">
+        <input type="text" id="vidUrl" placeholder="https://…/video.mp4" oninput="checkUrl()">
+        <div class="status" id="urlSt">Direct MP4 link only — YouTube / Drive links won't work</div>
+      </div>
     </div>
   </div>
   <div class="progress" id="prog"><i></i></div>
@@ -173,7 +178,7 @@ window.MindCompiler = Compiler;
 <script>
 const API='api.php';
 let PASS=sessionStorage.getItem('arpass')||'', ACCOUNTS=[], CUR=null;
-let imgFile=null, vidFile=null, imgRatio=1, vidRatio=1, cropper=null;
+let imgFile=null, vidFile=null, vidUrl='', urlMode=false, imgRatio=1, vidRatio=1, cropper=null;
 const $=s=>document.querySelector(s);
 
 async function login(){ PASS=$('#pass').value; const r=await post({action:'login'}); if(!r.ok){$('#loginErr').textContent=r.error;return;} sessionStorage.setItem('arpass',PASS); boot(); }
@@ -205,7 +210,7 @@ function openAcc(code){
   document.querySelectorAll('.acc').forEach(d=>d.classList.toggle('on',d.dataset.code===code));
   const d=$('#detail'); d.innerHTML=''; d.appendChild($('#detailTpl').content.cloneNode(true));
   $('#dName').textContent=CUR.name; $('#dCode').textContent='Player link: '+CUR.qrUrl;
-  bindPickers(); renderItems(); imgFile=vidFile=null;
+  bindPickers(); renderItems(); imgFile=vidFile=null; vidUrl=''; urlMode=false;
 }
 async function deleteAcc(){
   if(!confirm(`Delete "${CUR.name}" and all its pictures? Its QR will stop working.`)) return;
@@ -238,6 +243,24 @@ function bindPickers(){
     $('#dropVid').classList.add('on');
   };
 }
+function toggleVidMode(e){
+  e.preventDefault(); urlMode=!urlMode;
+  $('#dropVid').style.display=urlMode?'none':''; $('#urlBox').style.display=urlMode?'':'none';
+  $('#vidMode').textContent=urlMode?'Upload a file instead':'Use a URL instead';
+}
+let urlTimer;
+function checkUrl(){
+  clearTimeout(urlTimer); vidUrl=$('#vidUrl').value.trim(); vidRatio=1;
+  const st=$('#urlSt'); st.className='status'; st.textContent='Direct MP4 link only — YouTube / Drive links won\'t work';
+  if(!/^https?:\/\//i.test(vidUrl)) return;
+  urlTimer=setTimeout(()=>{
+    st.textContent='Checking…';
+    const v=document.createElement('video'); v.preload='metadata';
+    v.onloadedmetadata=()=>{ vidRatio=v.videoHeight/v.videoWidth; st.textContent=`OK · ${v.videoWidth}×${v.videoHeight} · ${Math.round(v.duration)}s`; };
+    v.onerror=()=>{ st.textContent='Could not read that video in the browser — the server will still try to download it'; };
+    v.src=vidUrl;
+  },500);
+}
 $('#chips').onclick=e=>{ const c=e.target.closest('.chip'); if(!c||!cropper) return;
   document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on');
   const r=parseFloat(c.dataset.r); cropper.setAspectRatio(r?1/r:NaN); };
@@ -261,15 +284,19 @@ async function compileAll(images, from, to){
 
 async function addItem(){
   if(!imgFile){setProg(0,'Choose a target image first',true);return;}
-  if(!vidFile){setProg(0,'Choose a video first',true);return;}
-  if(vidFile.size>200*1048576){setProg(0,'Video must be under 200 MB',true);return;}
+  if(urlMode){ if(!/^https?:\/\//i.test(vidUrl)){setProg(0,'Enter a valid video URL',true);return;} }
+  else { if(!vidFile){setProg(0,'Choose a video first',true);return;}
+         if(vidFile.size>200*1048576){setProg(0,'Video must be under 200 MB',true);return;} }
   const title=$('#title').value.trim()||'Untitled', btn=$('#saveBtn'); btn.disabled=true;
   try{
     setProg(2,'Loading existing pictures…');
     const existing=await Promise.all(CUR.items.map(it=>loadImg(it.thumb+'?v='+Date.now())));
     const mind=await compileAll([...existing, await loadImg(URL.createObjectURL(imgFile))], 5, 85);
-    setProg(87,'Uploading…');
-    const r=await post({action:'item_add',code:CUR.code,title,ratio:imgRatio.toFixed(4),vratio:vidRatio.toFixed(4)},{target:imgFile,video:vidFile,mind});
+    setProg(87, urlMode?'Server is downloading the video…':'Uploading…');
+    const fields={action:'item_add',code:CUR.code,title,ratio:imgRatio.toFixed(4),vratio:vidRatio.toFixed(4)};
+    const files={target:imgFile,mind};
+    if(urlMode) fields.video_url=vidUrl; else files.video=vidFile;
+    const r=await post(fields,files);
     if(!r.ok) throw new Error(r.error);
     await loadAccounts(true);
   }catch(e){ setProg(0,'Could not add: '+e.message,true); btn.disabled=false; }

@@ -76,16 +76,38 @@ switch ($action) {
     $code = clean($_POST['code'] ?? '');
     $list = load(); $i = findAcc($list, $code);
     if ($i < 0) out(false, ['error' => 'Account not found']);
-    if (empty($_FILES['mind']) || empty($_FILES['video']) || empty($_FILES['target']))
-      out(false, ['error' => 'Target image, video and compiled file are all required']);
-    if ($_FILES['video']['size'] > MAX_VIDEO_MB * 1024 * 1024)
+    $videoUrl = trim($_POST['video_url'] ?? '');
+    if (empty($_FILES['mind']) || empty($_FILES['target']) || (empty($_FILES['video']) && $videoUrl === ''))
+      out(false, ['error' => 'Target image, a video (file or URL) and compiled file are all required']);
+    if (!empty($_FILES['video']) && $_FILES['video']['size'] > MAX_VIDEO_MB * 1024 * 1024)
       out(false, ['error' => "Video must be under " . MAX_VIDEO_MB . " MB"]);
+    if ($videoUrl !== '' && !preg_match('#^https?://#i', $videoUrl))
+      out(false, ['error' => 'Video URL must start with http:// or https://']);
 
     $id  = substr(bin2hex(random_bytes(5)), 0, 8);
     $dir = DATA_DIR . "/$code/$id";
     mkdir($dir, 0755, true);
     move_uploaded_file($_FILES['target']['tmp_name'], "$dir/target.jpg");
-    move_uploaded_file($_FILES['video']['tmp_name'],  "$dir/video.mp4");
+
+    if (!empty($_FILES['video'])) {
+      move_uploaded_file($_FILES['video']['tmp_name'], "$dir/video.mp4");
+    } else {
+      // Download the video server-side so the player never hits cross-origin limits
+      set_time_limit(600);
+      $fp = fopen("$dir/video.mp4", 'w');
+      $ch = curl_init($videoUrl);
+      curl_setopt_array($ch, [CURLOPT_FILE => $fp, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 5,
+        CURLOPT_TIMEOUT => 560, CURLOPT_USERAGENT => 'Mozilla/5.0 ARVideo/1.0',
+        CURLOPT_MAXFILESIZE => MAX_VIDEO_MB * 1024 * 1024]);
+      $okDl = curl_exec($ch); $http = curl_getinfo($ch, CURLINFO_HTTP_CODE); $ctype = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '';
+      $err = curl_error($ch); curl_close($ch); fclose($fp);
+      $size = filesize("$dir/video.mp4");
+      if (!$okDl || $http >= 400 || $size < 10000 || stripos($ctype, 'text/html') !== false) {
+        rrmdir($dir);
+        out(false, ['error' => 'Could not download video from that URL' . ($err ? " ($err)" : ($http>=400 ? " (HTTP $http)" : '')) .
+          '. It must be a direct link to an MP4 file — YouTube, Google Drive or Instagram pages will not work.']);
+      }
+    }
     move_uploaded_file($_FILES['mind']['tmp_name'],   DATA_DIR . "/$code/targets.mind");
 
     $list[$i]['items'][] = [
