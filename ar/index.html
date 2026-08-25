@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AR Video Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root{
@@ -103,7 +102,7 @@
     <div class="progress" id="prog"><i></i></div>
     <div class="status" id="st"></div>
 
-    <button class="btn" style="width:100%;margin-top:14px" id="saveBtn" onclick="createExp()">Compile & save</button>
+    <button class="btn" style="width:100%;margin-top:14px" id="saveBtn" onclick="createExp()" disabled>Loading compiler…</button>
 
     <div class="tip">Compiling analyses the image for tracking points in your browser — it takes 10–40 seconds. Avoid plain, repetitive or very glossy images.</div>
   </section>
@@ -130,6 +129,12 @@
   </div>
 </div>
 
+<script type="module">
+import { Compiler } from "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js";
+window.MindCompiler = Compiler;
+document.getElementById('saveBtn').disabled = false;
+document.getElementById('saveBtn').textContent = 'Compile & save';
+</script>
 <script>
 const API = 'api.php';
 let PASS = sessionStorage.getItem('arpass') || '';
@@ -188,7 +193,8 @@ async function createExp(){
     // 1. compile target in browser (MindAR)
     setProg(2,'Loading image…');
     const img = await loadImage(imgFile);
-    const compiler = new MINDAR.IMAGE.Compiler();
+    if(!window.MindCompiler) throw new Error("Compiler still loading — try again in a moment");
+    const compiler = new window.MindCompiler();
     await compiler.compileImageTargets([img], p=>setProg(2+Math.round(p*0.8), `Analysing image… ${Math.round(p)}%`));
     const buf = await compiler.exportData();
     const mindBlob = new Blob([buf],{type:'application/octet-stream'});
