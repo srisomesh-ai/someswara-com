@@ -60,6 +60,10 @@ async function init(){
 }
 
 function start(e){
+  // fit video INSIDE the target frame (contain) — never stretch or crop
+  const R = e.ratio, VR = e.vratio || R;
+  let w, h;
+  if (VR > R) { h = R; w = R / VR; } else { w = 1; h = VR; }
   // Build A-Frame scene only after the tap so autoplay + camera permissions are user-initiated
   $('#scene').innerHTML = `
     <a-scene mindar-image="imageTargetSrc: ${e.mind}; autoStart: true; uiLoading: no; uiScanning: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.01; missTolerance: 10; warmupTolerance: 3"
@@ -69,7 +73,7 @@ function start(e){
       </a-assets>
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
       <a-entity mindar-image-target="targetIndex: 0">
-        <a-video id="plane" src="#vid" width="1" height="${e.ratio}" position="0 0 0" rotation="0 0 0"></a-video>
+        <a-video id="plane" src="#vid" width="${w}" height="${h}" position="0 0 0" rotation="0 0 0"></a-video>
       </a-entity>
     </a-scene>`;
 

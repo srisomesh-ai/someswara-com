@@ -6,6 +6,8 @@
 <title>AR Video Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 <style>
   :root{
     --ink:#101418; --paper:#F7F8F6; --card:#FFFFFF; --line:#E1E5E2;
@@ -57,6 +59,13 @@
   #qr img,#qr canvas{border-radius:8px}
   .link{font-size:12px;word-break:break-all;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:14px}
   .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  /* crop */
+  #cropModal .box{max-width:560px;text-align:left}
+  #cropWrap{max-height:60vh;background:#111;border-radius:10px;overflow:hidden}
+  #cropWrap img{max-width:100%;display:block}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font:500 12px Inter;cursor:pointer}
+  .chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
   /* login */
   #login{max-width:360px;margin:80px auto;padding:0 20px}
 </style>
@@ -114,6 +123,28 @@
   </section>
 </main>
 
+<!-- CROP MODAL -->
+<div class="modal" id="cropModal">
+  <div class="box">
+    <h3>Crop target image</h3>
+    <p>Crop to exactly the printed area. Everything outside the frame will be ignored.</p>
+    <div id="cropWrap"><img id="cropImg" alt=""></div>
+    <div class="chips" id="chips">
+      <button class="chip on" data-r="0">Free</button>
+      <button class="chip" data-r="1">1:1</button>
+      <button class="chip" data-r="0.75">4:3</button>
+      <button class="chip" data-r="1.3333">3:4</button>
+      <button class="chip" data-r="0.5625">16:9</button>
+      <button class="chip" data-r="1.7778">9:16</button>
+    </div>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn ghost" onclick="rotateCrop()">Rotate</button>
+      <button class="btn ghost" onclick="cancelCrop()">Cancel</button>
+      <button class="btn" onclick="applyCrop()">Use crop</button>
+    </div>
+  </div>
+</div>
+
 <!-- QR MODAL -->
 <div class="modal" id="qrModal" onclick="if(event.target===this)closeQr()">
   <div class="box">
@@ -138,7 +169,7 @@ document.getElementById('saveBtn').textContent = 'Compile & save';
 <script>
 const API = 'api.php';
 let PASS = sessionStorage.getItem('arpass') || '';
-let imgFile = null, vidFile = null, imgRatio = 1, currentLink = '';
+let imgFile = null, vidFile = null, imgRatio = 1, vidRatio = 1, currentLink = '', cropper = null, rawImgUrl = '';
 
 /* ---------- auth ---------- */
 async function login(){
@@ -164,16 +195,38 @@ async function post(fields, files){
 
 /* ---------- pickers ---------- */
 document.getElementById('imgFile').onchange = e=>{
-  imgFile = e.target.files[0]; if(!imgFile) return;
-  const url = URL.createObjectURL(imgFile);
-  const im = new Image(); im.onload=()=>{ imgRatio = im.naturalHeight/im.naturalWidth; };
-  im.src = url;
-  document.getElementById('imgPrev').innerHTML = `<img src="${url}"><span class="hint">${imgFile.name}</span>`;
-  document.getElementById('dropImg').classList.add('on');
+  const f = e.target.files[0]; if(!f) return;
+  rawImgUrl = URL.createObjectURL(f);
+  const im = document.getElementById('cropImg');
+  if(cropper){ cropper.destroy(); cropper=null; }
+  im.src = rawImgUrl;
+  document.getElementById('cropModal').classList.add('open');
+  im.onload = ()=>{ cropper = new Cropper(im,{viewMode:1,autoCropArea:1,background:false,responsive:true}); };
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c.dataset.r==='0'));
 };
+document.getElementById('chips').onclick = e=>{
+  const c=e.target.closest('.chip'); if(!c||!cropper) return;
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on');
+  const r=parseFloat(c.dataset.r); cropper.setAspectRatio(r? 1/r : NaN);   // data-r is h/w
+};
+function rotateCrop(){ cropper && cropper.rotate(90); }
+function cancelCrop(){ document.getElementById('cropModal').classList.remove('open'); document.getElementById('imgFile').value=''; }
+function applyCrop(){
+  if(!cropper) return;
+  const c = cropper.getCroppedCanvas({maxWidth:2000,maxHeight:2000,imageSmoothingQuality:'high'});
+  c.toBlob(b=>{
+    imgFile = new File([b],'target.jpg',{type:'image/jpeg'});
+    imgRatio = c.height/c.width;
+    const url = URL.createObjectURL(b);
+    document.getElementById('imgPrev').innerHTML = `<img src="${url}"><span class="hint">${c.width}×${c.height} · tap to change</span>`;
+    document.getElementById('dropImg').classList.add('on');
+    document.getElementById('cropModal').classList.remove('open');
+  },'image/jpeg',0.92);
+}
 document.getElementById('vidFile').onchange = e=>{
   vidFile = e.target.files[0]; if(!vidFile) return;
   const url = URL.createObjectURL(vidFile);
+  const v=document.createElement('video'); v.onloadedmetadata=()=>{ vidRatio = v.videoHeight/v.videoWidth; }; v.src=url;
   document.getElementById('vidPrev').innerHTML = `<video src="${url}" muted playsinline></video><span class="hint">${vidFile.name} · ${(vidFile.size/1048576).toFixed(1)} MB</span>`;
   document.getElementById('dropVid').classList.add('on');
 };
@@ -202,7 +255,7 @@ async function createExp(){
 
     // 2. upload everything
     setProg(85,'Uploading video and target…');
-    const r = await post({action:'create', title, ratio: imgRatio.toFixed(4)},
+    const r = await post({action:'create', title, ratio: imgRatio.toFixed(4), vratio: vidRatio.toFixed(4)},
                          {target: imgFile, video: vidFile, mind: new File([mindBlob],'targets.mind')});
     if(!r.ok) throw new Error(r.error);
 
@@ -214,7 +267,7 @@ async function createExp(){
 }
 function loadImage(file){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=URL.createObjectURL(file); }); }
 function resetForm(){
-  imgFile=vidFile=null;
+  imgFile=vidFile=null; imgRatio=vidRatio=1;
   document.getElementById('title').value='';
   document.getElementById('imgFile').value=''; document.getElementById('vidFile').value='';
   document.getElementById('imgPrev').innerHTML='Tap to choose an image<br><span class="hint">JPG / PNG · detailed, high-contrast images track best</span>';

@@ -50,7 +50,7 @@ switch ($action) {
       if ($e['id'] === $id) {
         out(true, ['item' => [
           'id' => $e['id'], 'title' => $e['title'],
-          'ratio' => $e['ratio'],
+          'ratio' => $e['ratio'], 'vratio' => $e['vratio'] ?? $e['ratio'],
           'mind' => "data/$id/targets.mind", 'video' => "data/$id/video.mp4",
           'target' => "data/$id/target.jpg",
         ]]);
@@ -77,6 +77,7 @@ switch ($action) {
       'id' => $id,
       'title' => trim(strip_tags($_POST['title'] ?? 'Untitled')),
       'ratio' => (float)($_POST['ratio'] ?? 1),   // target height/width
+      'vratio' => (float)($_POST['vratio'] ?? 1), // video height/width
       'created' => date('c'),
     ];
     save($list);
