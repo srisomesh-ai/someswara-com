@@ -96,7 +96,7 @@
     <label class="field">Video to play on top of it</label>
     <div class="drop" id="dropVid">
       <input type="file" id="vidFile" accept="video/mp4,video/*">
-      <div id="vidPrev">Tap to choose a video<br><span class="hint">MP4 (H.264) · under 60 MB · same shape as the image works best</span></div>
+      <div id="vidPrev">Tap to choose a video<br><span class="hint">MP4 (H.264) · under 200 MB · same shape as the image works best</span></div>
     </div>
 
     <div class="progress" id="prog"><i></i></div>
@@ -158,7 +158,7 @@ async function post(fields, files){
   const fd = new FormData();
   Object.entries(fields).forEach(([k,v])=>fd.append(k,v));
   if(files) Object.entries(files).forEach(([k,v])=>fd.append(k,v,v.name||k));
-  const res = await fetch(API,{method:'POST',body:fd,headers:{'X-Admin-Pass':PASS}});
+  const res = await fetch(API+'?action='+encodeURIComponent(fields.action),{method:'POST',body:fd,headers:{'X-Admin-Pass':PASS}});
   return res.json();
 }
 
@@ -187,6 +187,7 @@ async function createExp(){
   const title = document.getElementById('title').value.trim() || 'Untitled';
   if(!imgFile){ setProg(0,'Choose a target image first',true); return; }
   if(!vidFile){ setProg(0,'Choose a video first',true); return; }
+  if(vidFile.size>200*1048576){ setProg(0,`Video is ${(vidFile.size/1048576).toFixed(0)} MB — keep it under 200 MB`,true); return; }
   const btn=document.getElementById('saveBtn'); btn.disabled=true;
 
   try{
@@ -217,7 +218,7 @@ function resetForm(){
   document.getElementById('title').value='';
   document.getElementById('imgFile').value=''; document.getElementById('vidFile').value='';
   document.getElementById('imgPrev').innerHTML='Tap to choose an image<br><span class="hint">JPG / PNG · detailed, high-contrast images track best</span>';
-  document.getElementById('vidPrev').innerHTML='Tap to choose a video<br><span class="hint">MP4 (H.264) · under 60 MB</span>';
+  document.getElementById('vidPrev').innerHTML='Tap to choose a video<br><span class="hint">MP4 (H.264) · under 200 MB</span>';
   document.querySelectorAll('.drop').forEach(d=>d.classList.remove('on'));
   setTimeout(()=>{document.getElementById('prog').style.display='none';document.getElementById('st').textContent='';},2000);
 }

@@ -10,7 +10,7 @@ header('Access-Control-Allow-Origin: *');
 define('ADMIN_PASS', 'arAdmin@2026');          // change this
 define('DATA_DIR', __DIR__ . '/data');
 define('DB', DATA_DIR . '/experiences.json');
-define('MAX_VIDEO_MB', 60);
+define('MAX_VIDEO_MB', 200);
 
 if (!is_dir(DATA_DIR)) mkdir(DATA_DIR, 0755, true);
 if (!file_exists(DB)) file_put_contents(DB, '[]');
@@ -28,6 +28,9 @@ function baseUrl() {
 }
 
 $action = $_REQUEST['action'] ?? '';
+// Empty POST with a body = server dropped it (over post_max_size)
+if ($_SERVER['REQUEST_METHOD']==='POST' && !$_POST && !$_FILES && ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0)
+  out(false, ['error' => 'Upload too large for server (' . round($_SERVER['CONTENT_LENGTH']/1048576) . ' MB). Raise post_max_size / upload_max_filesize in hPanel PHP config, or use a smaller video.']);
 
 switch ($action) {
 
