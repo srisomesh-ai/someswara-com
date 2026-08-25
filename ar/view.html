@@ -22,18 +22,14 @@
   #hint i{width:8px;height:8px;border-radius:50%;background:#F2A93B;animation:pulse 1.2s infinite}
   #hint.found i{background:#3ED598;animation:none}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  #snd{position:fixed;top:18px;right:18px;z-index:6;background:rgba(16,20,24,.72);backdrop-filter:blur(8px);color:#fff;border:0;border-radius:999px;padding:9px 14px;font:500 13px Inter}
   /* hide MindAR's default loader */
   .mindar-ui-overlay{display:none!important}
 </style>
 </head>
 <body>
 
-<div class="ov" id="intro">
-  <img id="thumb" alt="">
-  <h1 id="ttl">AR Video</h1>
-  <p>Allow camera access, then point your phone at the printed picture. The video plays on top of it.</p>
-  <button class="btn" id="startBtn">Start camera</button>
-</div>
+<div class="ov" id="intro"><h1 id="ttl">Starting camera…</h1><p>Allow camera access when asked.</p></div>
 
 <div class="ov hide" id="errOv">
   <h1>Can't start</h1>
@@ -41,6 +37,7 @@
   <button class="btn" onclick="location.reload()">Try again</button>
 </div>
 
+<button id="snd" style="display:none">🔇 Tap for sound</button>
 <div id="hint" style="display:none"><i></i><span>Point at the picture</span></div>
 <div id="scene"></div>
 
@@ -55,8 +52,8 @@ async function init(){
   const r = await fetch(`api.php?action=get&id=${id}`).then(x=>x.json()).catch(()=>({ok:false,error:'Network error'}));
   if(!r.ok) return fail(r.error||'Experience not found');
   const e = r.item;
-  $('#thumb').src = e.target; $('#ttl').textContent = e.title; document.title = e.title;
-  $('#startBtn').onclick = ()=>start(e);
+  document.title = e.title;
+  start(e);
 }
 
 function start(e){
@@ -79,11 +76,13 @@ function start(e){
 
   const scene = $('a-scene'), vid = $('#vid'), hint = $('#hint'), target = $('[mindar-image-target]');
 
-  // unlock media on this user gesture (iOS)
-  vid.muted = false;
-  vid.play().then(()=>vid.pause()).catch(()=>{});
+  // Browsers block sound without a tap: start muted, unmute on first touch anywhere
+  vid.muted = true;
+  const snd = $('#snd'); snd.style.display='block';
+  const unmute = ()=>{ vid.muted=false; snd.style.display='none'; document.removeEventListener('pointerdown',unmute); };
+  document.addEventListener('pointerdown', unmute, {once:true});
 
-  $('#intro').classList.add('hide'); hint.style.display='flex';
+  scene.addEventListener('arReady', ()=>{ $('#intro').classList.add('hide'); hint.style.display='flex'; });
 
   target.addEventListener('targetFound', ()=>{ hint.classList.add('found'); hint.lastElementChild.textContent='Playing'; vid.play().catch(()=>{}); });
   target.addEventListener('targetLost',  ()=>{ hint.classList.remove('found'); hint.lastElementChild.textContent='Point at the picture'; vid.pause(); });
