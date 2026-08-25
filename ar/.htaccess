@@ -7,6 +7,6 @@ php_value max_execution_time 600
 AddType application/octet-stream .mind
 
 # Protect the JSON index from direct download
-<Files "experiences.json">
+<Files "accounts.json">
   Require all denied
 </Files>

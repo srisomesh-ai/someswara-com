@@ -11,7 +11,7 @@ ar-video/
 ├── api.php           Backend: login | create | list | delete | get
 ├── .htaccess         Upload limits, .mind mime type, protects the JSON index
 └── data/
-    ├── experiences.json          index of all experiences
+    ├── accounts.json          index of all experiences
     └── {id}/
         ├── target.jpg            the printed picture
         ├── video.mp4             the video overlay
