@@ -60,7 +60,11 @@
   .link{font-size:12px;word-break:break-all;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:14px}
   .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
   #cropModal .box{max-width:560px;text-align:left}
-  #cropWrap{max-height:60vh;background:#111;border-radius:10px;overflow:hidden} #cropWrap img{max-width:100%;display:block}
+  #cropWrap{height:60vh;background:#111;border-radius:10px;overflow:hidden;touch-action:none} #cropWrap img{max-width:100%;display:block;opacity:0}
+  .cropper-point{width:14px!important;height:14px!important;opacity:.9!important}
+  .cropper-point.point-n,.cropper-point.point-s{margin-left:-7px!important} .cropper-point.point-e,.cropper-point.point-w{margin-top:-7px!important}
+  .cropper-line{background:#0F8F84!important} .cropper-point{background:#0F8F84!important}
+  .cropper-view-box{outline:2px solid #0F8F84!important}
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
   .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font:500 12px Inter;cursor:pointer}
   .chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
@@ -240,7 +244,7 @@ function bindPickers(){
     const f=e.target.files[0]; if(!f) return;
     const im=$('#cropImg'); if(cropper){cropper.destroy();cropper=null;}
     im.src=URL.createObjectURL(f); $('#cropModal').classList.add('open');
-    im.onload=()=>{ cropper=new Cropper(im,{viewMode:1,autoCropArea:1,background:false,responsive:true}); };
+    im.onload=()=>{ cropper=new Cropper(im,{viewMode:1,dragMode:'move',autoCropArea:0.9,background:false,responsive:true,zoomable:true,zoomOnWheel:true,zoomOnTouch:false,cropBoxMovable:true,cropBoxResizable:true,toggleDragModeOnDblclick:false,minCropBoxWidth:40,minCropBoxHeight:40,aspectRatio:NaN}); };
     document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.r==='0'));
   };
   $('#vidFile').onchange=e=>{
@@ -271,7 +275,7 @@ function checkUrl(){
 }
 $('#chips').onclick=e=>{ const c=e.target.closest('.chip'); if(!c||!cropper) return;
   document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on');
-  const r=parseFloat(c.dataset.r); cropper.setAspectRatio(r?1/r:NaN); };
+  const r=parseFloat(c.dataset.r); cropper.setAspectRatio(r>0?1/r:NaN); cropper.setCropBoxData({}); };
 function rotateCrop(){ cropper&&cropper.rotate(90); }
 function cancelCrop(){ $('#cropModal').classList.remove('open'); $('#imgFile').value=''; }
 function applyCrop(){
