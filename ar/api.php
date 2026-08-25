@@ -115,6 +115,7 @@ switch ($action) {
       'title' => trim(strip_tags($_POST['title'] ?? 'Untitled')),
       'ratio' => (float)($_POST['ratio'] ?? 1),
       'vratio' => (float)($_POST['vratio'] ?? 1),
+      'fit' => in_array($_POST['fit'] ?? '', ['fill','fit','stretch']) ? $_POST['fit'] : 'fill',
       'created' => date('c'),
     ];
     save($list);
@@ -137,7 +138,7 @@ switch ($action) {
   case 'get':   // public — view.html
     $code = clean($_GET['c'] ?? '');
     foreach (load() as $a) if ($a['code'] === $code) {
-      $items = array_map(fn($it) => ['id'=>$it['id'],'title'=>$it['title'],'ratio'=>$it['ratio'],'vratio'=>$it['vratio'],
+      $items = array_map(fn($it) => ['id'=>$it['id'],'title'=>$it['title'],'ratio'=>$it['ratio'],'vratio'=>$it['vratio'],'fit'=>$it['fit']??'fill',
                                      'video'=>"data/$code/{$it['id']}/video.mp4"], $a['items']);
       out(true, ['name' => $a['name'], 'mind' => "data/$code/targets.mind", 'items' => $items]);
     }

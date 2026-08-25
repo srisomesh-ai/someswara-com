@@ -64,6 +64,7 @@
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
   .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font:500 12px Inter;cursor:pointer}
   .chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+  label.chip{display:inline-block}
   #login{max-width:360px;margin:80px auto;padding:0 20px}
 </style>
 </head>
@@ -129,6 +130,12 @@
         <div class="status" id="urlSt">Direct MP4 link only — YouTube / Drive links won't work</div>
       </div>
     </div>
+  </div>
+  <label class="field">How the video sits on the picture</label>
+  <div class="chips" style="margin:0">
+    <label class="chip on"><input type="radio" name="fit" value="fill" checked hidden> Fill edge to edge</label>
+    <label class="chip"><input type="radio" name="fit" value="fit" hidden> Fit inside (no crop)</label>
+    <label class="chip"><input type="radio" name="fit" value="stretch" hidden> Stretch</label>
   </div>
   <div class="progress" id="prog"><i></i></div>
   <div class="status" id="st"></div>
@@ -222,12 +229,13 @@ function renderItems(){
   $('#items').innerHTML = CUR.items.length ? CUR.items.map(it=>`
     <div class="item">
       <img src="${it.thumb}" alt="">
-      <div><div class="t">${esc(it.title)}</div><div class="u">picture ${sh(it.ratio)} · video ${sh(it.vratio)}</div></div>
+      <div><div class="t">${esc(it.title)}</div><div class="u">picture ${sh(it.ratio)} · video ${sh(it.vratio)} · ${it.fit||'fill'}</div></div>
       <button class="btn danger sm" onclick="removeItem('${it.id}')">Remove</button>
     </div>`).join('') : '<div class="empty">No pictures yet. Add one above.</div>';
 }
 
 function bindPickers(){
+  document.querySelectorAll('input[name=fit]').forEach(r=>r.onchange=()=>document.querySelectorAll('input[name=fit]').forEach(x=>x.parentElement.classList.toggle('on',x.checked)));
   $('#imgFile').onchange=e=>{
     const f=e.target.files[0]; if(!f) return;
     const im=$('#cropImg'); if(cropper){cropper.destroy();cropper=null;}
@@ -293,7 +301,7 @@ async function addItem(){
     const existing=await Promise.all(CUR.items.map(it=>loadImg(it.thumb+'?v='+Date.now())));
     const mind=await compileAll([...existing, await loadImg(URL.createObjectURL(imgFile))], 5, 85);
     setProg(87, urlMode?'Server is downloading the video…':'Uploading…');
-    const fields={action:'item_add',code:CUR.code,title,ratio:imgRatio.toFixed(4),vratio:vidRatio.toFixed(4)};
+    const fields={action:'item_add',code:CUR.code,title,ratio:imgRatio.toFixed(4),vratio:vidRatio.toFixed(4),fit:(document.querySelector('input[name=fit]:checked')||{}).value||'fill'};
     const files={target:imgFile,mind};
     if(urlMode) fields.video_url=vidUrl; else files.video=vidFile;
     const r=await post(fields,files);

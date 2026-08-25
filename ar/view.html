@@ -45,13 +45,20 @@ async function init(){
   document.title=r.name; start(r);
 }
 
-function fit(R,VR){ return VR>R ? {w:R/VR,h:R} : {w:1,h:VR}; }   // contain video inside target frame
+// Size + texture mapping of the video plane relative to the target (width 1, height R)
+function fit(R,VR,mode){
+  if(mode==='fit')     return VR>R ? {w:R/VR,h:R,rep:'1 1',off:'0 0'} : {w:1,h:VR,rep:'1 1',off:'0 0'};
+  if(mode==='stretch') return {w:1,h:R,rep:'1 1',off:'0 0'};
+  // fill: plane = target, crop the video texture to cover
+  if(VR>R){ const k=R/VR; return {w:1,h:R,rep:`1 ${k.toFixed(4)}`,off:`0 ${((1-k)/2).toFixed(4)}`}; }
+  const k=VR/R;          return {w:1,h:R,rep:`${k.toFixed(4)} 1`,off:`${((1-k)/2).toFixed(4)} 0`};
+}
 
 function start(acc){
   const assets=acc.items.map((it,i)=>`<video id="v${i}" src="${it.video}" preload="auto" loop playsinline webkit-playsinline crossorigin="anonymous"></video>`).join('');
-  const targets=acc.items.map((it,i)=>{ const f=fit(it.ratio,it.vratio||it.ratio); return `
+  const targets=acc.items.map((it,i)=>{ const f=fit(it.ratio,it.vratio||it.ratio,it.fit||'fill'); return `
       <a-entity mindar-image-target="targetIndex: ${i}" data-i="${i}">
-        <a-video src="#v${i}" width="${f.w}" height="${f.h}" position="0 0 0"></a-video>
+        <a-video src="#v${i}" width="${f.w}" height="${f.h}" position="0 0 0" material="repeat: ${f.rep}; offset: ${f.off}"></a-video>
       </a-entity>`; }).join('');
 
   $('#scene').innerHTML=`
