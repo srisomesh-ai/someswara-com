@@ -100,7 +100,8 @@ function fillPick(code,q){
     ul.appendChild(li)});
 }
 document.getElementById('photo').onchange=async e=>{const f=e.target.files[0];if(!f)return;const url=URL.createObjectURL(f);
-  try{const r=new ZXing.BrowserMultiFormatReader();const res=await r.decodeFromImageUrl(url);handle(res.getText())}catch(err){fb('bad','No barcode found in photo')}e.target.value=''};
+  try{if(NATIVE){const img=new Image();img.src=url;await img.decode();const d=new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','itf','qr_code']});const codes=await d.detect(img);if(!codes.length)throw 0;handle(codes[0].rawValue)}
+  else{const r=new ZXing.BrowserMultiFormatReader();const res=await r.decodeFromImageUrl(url);handle(res.getText())}}catch(err){fb('bad','No barcode found in photo')}e.target.value=''};
 function render(){
   let done=0;ITEMS.forEach(i=>done+=Math.min(state.scanned[i[0]]||0,i[3]));
   document.getElementById('cnt').textContent=done;document.getElementById('left').textContent=46-done;
@@ -120,20 +121,35 @@ document.getElementById('man').onkeydown=e=>{if(e.key==='Enter')document.getElem
 document.getElementById('reset').onclick=()=>{if(confirm('Clear all scan progress?')){state={scanned:{},extra:[]};save();render()}};
 // camera
 const stat=document.getElementById('stat');
-let reader,devices=[],devIdx=0;
+const video=document.getElementById('v');
+let stream,devices=[],devIdx=0,zx,det,loopId;
+const NATIVE=('BarcodeDetector' in window);
 async function startCam(){
   try{
-    const Z=window.ZXing;const hints=new Map();
-    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.EAN_8,Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.CODE_39,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.ITF,Z.BarcodeFormat.QR_CODE]);
-    hints.set(Z.DecodeHintType.TRY_HARDER,true);
-    if(reader)reader.reset();reader=new Z.BrowserMultiFormatReader(hints,300);
-    if(!devices.length){devices=await reader.listVideoInputDevices();const back=devices.findIndex(d=>/back|rear|environment/i.test(d.label));if(back>=0)devIdx=back;else devIdx=devices.length-1}
-    const id=devices.length?devices[devIdx].deviceId:undefined;
-    const cons={video:{deviceId:id?{exact:id}:undefined,facingMode:id?undefined:'environment',width:{ideal:1920},height:{ideal:1080},focusMode:'continuous'}};
-    await reader.decodeFromConstraints(cons,'v',(res,err)=>{if(res)handle(res.getText())});
-    try{const tr=document.getElementById('v').srcObject.getVideoTracks()[0];const c=tr.getCapabilities&&tr.getCapabilities();if(c&&c.focusMode&&c.focusMode.includes('continuous'))tr.applyConstraints({advanced:[{focusMode:'continuous'}]});if(c&&c.zoom)tr.applyConstraints({advanced:[{zoom:Math.min(c.zoom.max,Math.max(c.zoom.min,1.5))}]})}catch(e){}
-    stat.textContent='Camera on · point at tag barcode';
-  }catch(e){stat.textContent='Camera blocked — use manual entry. ('+(e.message||e)+')'}
+    if(stream){stream.getTracks().forEach(t=>t.stop());cancelAnimationFrame(loopId)}
+    if(!devices.length){try{const tmp=await navigator.mediaDevices.getUserMedia({video:true});tmp.getTracks().forEach(t=>t.stop())}catch(e){}
+      devices=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+      const back=devices.findIndex(d=>/back|rear|environment/i.test(d.label));devIdx=back>=0?back:Math.max(0,devices.length-1)}
+    const id=devices.length?devices[devIdx].deviceId:null;
+    stream=await navigator.mediaDevices.getUserMedia({video:{deviceId:id?{exact:id}:undefined,facingMode:id?undefined:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+    video.srcObject=stream;await video.play();
+    try{const tr=stream.getVideoTracks()[0];const c=tr.getCapabilities?tr.getCapabilities():{};const adv=[];
+      if(c.focusMode&&c.focusMode.includes('continuous'))adv.push({focusMode:'continuous'});
+      if(c.zoom)adv.push({zoom:Math.min(c.zoom.max,Math.max(c.zoom.min,2))});
+      if(adv.length)await tr.applyConstraints({advanced:adv})}catch(e){}
+    if(NATIVE){det=det||new BarcodeDetector({formats:['ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf','qr_code']});stat.textContent='Camera on (native) · point at barcode';nativeLoop()}
+    else{const Z=window.ZXing;const hints=new Map();hints.set(Z.DecodeHintType.TRY_HARDER,true);zx=new Z.BrowserMultiFormatReader(hints,250);
+      zx.decodeFromStream(stream,video,(res)=>{if(res)handle(res.getText())});stat.textContent='Camera on (zxing) · point at barcode'}
+  }catch(e){stat.textContent='Camera error: '+(e.message||e)}
+}
+const cv=document.createElement('canvas');
+async function nativeLoop(){
+  if(video.readyState>=2&&video.videoWidth){
+    const w=video.videoWidth,h=video.videoHeight;cv.width=w;cv.height=Math.round(h*.5);
+    const cx=cv.getContext('2d',{willReadFrequently:true});cx.drawImage(video,0,Math.round(h*.25),w,cv.height,0,0,w,cv.height);
+    try{const codes=await det.detect(cv);if(codes.length)handle(codes[0].rawValue)}catch(e){}
+  }
+  loopId=requestAnimationFrame(()=>setTimeout(nativeLoop,120));
 }
 document.getElementById('cams').onclick=()=>{if(devices.length>1){devIdx=(devIdx+1)%devices.length;startCam()}};
 render();startCam();
