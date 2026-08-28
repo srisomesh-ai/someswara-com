@@ -15,8 +15,10 @@
   #cam{width:100%;height:100%;display:block;object-fit:cover}
   
   #arLayer{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
-  #ghostAnchor{position:absolute;width:280px;height:380px;left:50%;top:50%;transform:translate(-50%,-100%)}
-  #ghostImg{width:100%;height:100%;object-fit:contain;filter:brightness(1.4) drop-shadow(0 0 40px rgba(127,216,232,0.9));opacity:0;transition:opacity 0.4s}
+  #ghostAnchor{position:absolute;width:280px;height:380px;left:50%;top:55%;transform:translate(-50%,-50%)}
+  #ghostImg{width:100%;height:100%;object-fit:contain;filter:brightness(1.4) drop-shadow(0 0 40px rgba(127,216,232,0.9));opacity:0.8}
+  
+  #headingDisplay{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(4,6,12,.7);color:var(--spirit);padding:8px 16px;border-radius:6px;font-size:13px;font-family:monospace;border:1px solid var(--spirit);z-index:40;pointer-events:none}
   
   #scanOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;color:var(--bone);text-align:center;font-family:Georgia,serif}
   #scanOverlay.hidden{display:none}
@@ -85,6 +87,7 @@
 </div>
 
 <div id="hud">
+  <div id="headingDisplay">Heading: 0°</div>
   <div id="chapterTag"><span id="locationTag">—</span></div>
   <div id="trust"></div>
   <div id="subtitle"></div>
@@ -205,7 +208,8 @@ function onOrient(e){
   else if(e.absolute && typeof e.alpha==="number") h=normDeg(360-e.alpha);
   else if(typeof e.alpha==="number") h=normDeg(360-e.alpha);
   if(h===null) return;
-  gameData.heading=h;
+  gameData.heading=Math.round(h);
+  $("headingDisplay").textContent="Heading: "+gameData.heading+"°";
   updateGhostVisibility();
 }
 
@@ -216,6 +220,7 @@ function enableDesktop(){
     if(!dragging)return;
     gameData.heading=normDeg(gameData.heading+(e.clientX-lastX)*0.4);
     lastX=e.clientX;
+    $("headingDisplay").textContent="Heading: "+Math.round(gameData.heading)+"°";
     updateGhostVisibility();
   });
   addEventListener("pointerup",function(){dragging=false;});
@@ -223,9 +228,16 @@ function enableDesktop(){
 
 function updateGhostVisibility(){
   if(gameData.phase!=="seek" && gameData.phase!=="final") return;
-  var facingGhost = Math.abs(gameData.heading - 270) < 45;
+  
+  // Check if facing direction ~270° (west/right), with 60° tolerance
+  var diff = Math.abs(gameData.heading - 270);
+  if(diff > 180) diff = 360 - diff;  // Handle wrap-around at 0/360
+  
+  var facingGhost = diff < 60;  // Wider tolerance: 210-330°
   gameData.inView = facingGhost;
-  ghostImg.style.opacity = facingGhost ? "0.9" : "0";
+  
+  // Ghost always faintly visible, brighter when in view
+  ghostImg.style.opacity = facingGhost ? "0.9" : "0.25";
 }
 
 function showLine(line){
@@ -373,15 +385,18 @@ $("startBtn").addEventListener("click",function(){
     paintTrust();
     
     var lang=LANGUAGES[gameData.location.language]||LANGUAGES.te;
-    subtitle.innerHTML=gameData.userName+"... can you help me?";
+    subtitle.innerHTML=gameData.userName+"... <span class='te'>Turn right to find me...</span>";
     subtitle.classList.add("show");
     playScarySound();
     
     setTimeout(function(){
+      subtitle.classList.remove("show");
       var line=lang.dialogues[0];
-      showLine(line);
-      updateGhostVisibility();
-      requestAnimationFrame(loop);
+      setTimeout(function(){
+        showLine(line);
+        updateGhostVisibility();
+        requestAnimationFrame(loop);
+      }, 500);
     },2500);
   });
 });
