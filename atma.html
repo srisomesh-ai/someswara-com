@@ -238,11 +238,10 @@ function enableDesktop(){
   });
 }
 
-/* ---------------- ghost placement ---------------- */
+/* ---------------- ghost placement (LOCKED TO WORLD SPACE) ---------------- */
+const GHOST_WORLD_BEARING=300; // Fixed position in room - ghost stuck to this bearing
 function respawnGhost(){
-  var away=90+Math.random()*180;
-  if(Math.random()<0.5) away=-away;
-  state.ghostBearing=normDeg(state.heading+away);
+  state.ghostBearing=GHOST_WORLD_BEARING; // Always same location, never random
   state.holdMs=0;
 }
 
