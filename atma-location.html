@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ATMA — A Local Ghost Story</title>
+<style>
+  :root{
+    --night:#04060c;
+    --mist:#9fb4c4;
+    --spirit:#7fd8e8;
+    --ember:#f2b544;
+    --bone:#e8e4da;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--night);color:var(--bone);font-family:Georgia,'Times New Roman',serif}
+  button{font-family:inherit}
+
+  #cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.72) saturate(.6) contrast(1.05)}
+  #fx{position:fixed;inset:0;width:100%;height:100%}
+  #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(2,4,10,.55) 78%,rgba(2,4,10,.92) 100%)}
+
+  #hud{position:fixed;inset:0;pointer-events:none;display:none}
+  #chapterTag{position:absolute;top:calc(14px + env(safe-area-inset-top));left:0;right:0;text-align:center;
+    letter-spacing:.35em;font-size:11px;color:var(--mist);text-transform:uppercase;opacity:.85}
+  #trust{position:absolute;top:calc(34px + env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:center;gap:9px}
+  .dot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(159,180,196,.5);transition:all .6s}
+  .dot.lit{background:var(--ember);border-color:var(--ember);box-shadow:0 0 10px 2px rgba(242,181,68,.5)}
+
+  #subtitle{position:absolute;left:8%;right:8%;bottom:24%;text-align:center;font-size:clamp(17px,4.6vw,22px);
+    line-height:1.55;font-style:italic;color:var(--bone);text-shadow:0 0 14px rgba(127,216,232,.55),0 2px 6px #000;
+    opacity:0;transition:opacity 1.1s;z-index:20;pointer-events:none}
+  #subtitle.show{opacity:1}
+  #subtitle .te{display:block;font-size:.82em;color:var(--spirit);margin-top:6px;font-style:normal}
+  #subtitle .local{font-style:normal;color:var(--spirit)}
+
+  #proximity{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:48px;text-shadow:0 0 20px currentColor;
+    opacity:0;transition:opacity 0.3s;z-index:5}
+
+  #holdRing{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:92px;height:92px;display:none;z-index:20}
+  #holdRing svg{width:100%;height:100%;transform:rotate(-90deg)}
+  #holdRing .track{fill:none;stroke:rgba(159,180,196,.25);stroke-width:3}
+  #holdRing .prog{fill:none;stroke:var(--spirit);stroke-width:3;stroke-linecap:round;stroke-dasharray:264;stroke-dashoffset:264;filter:drop-shadow(0 0 6px var(--spirit))}
+
+  #candleBtn{position:absolute;pointer-events:auto;bottom:calc(26px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
+    background:rgba(4,6,12,.55);border:1px solid rgba(242,181,68,.45);color:var(--ember);border-radius:999px;
+    padding:11px 22px;font-size:14px;letter-spacing:.06em;backdrop-filter:blur(6px);cursor:pointer;z-index:30}
+  #candleBtn:disabled{opacity:.35}
+  #muteBtn{position:absolute;pointer-events:auto;top:calc(10px + env(safe-area-inset-top));right:14px;background:none;border:none;
+    color:var(--mist);font-size:20px;cursor:pointer;opacity:.8;z-index:30}
+
+  #hintArrow{position:absolute;top:44%;font-size:44px;color:var(--ember);text-shadow:0 0 18px rgba(242,181,68,.8);
+    display:none;z-index:20;animation:flicker 1.1s infinite}
+  #hintArrow.left{left:16px}
+  #hintArrow.right{right:16px}
+  @keyframes flicker{0%,100%{opacity:1}45%{opacity:.55}60%{opacity:.9}}
+
+  .screen{position:fixed;inset:0;background:var(--night);display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:34px 26px;z-index:100}
+  .eyebrow{letter-spacing:.4em;font-size:11px;color:var(--mist);text-transform:uppercase;margin-bottom:18px}
+  h1{font-size:clamp(42px,13vw,72px);font-weight:normal;letter-spacing:.14em;color:var(--bone);text-shadow:0 0 26px rgba(127,216,232,.35)}
+  h1 .te{display:block;font-size:.38em;letter-spacing:.5em;color:var(--spirit);margin-top:10px}
+  .story{max-width:420px;margin:26px 0 34px;font-size:16px;line-height:1.8;color:var(--mist);font-style:italic}
+  .story b{color:var(--bone);font-style:normal}
+  .story .local{color:var(--spirit);font-style:normal}
+  .cta{background:none;border:1px solid var(--spirit);color:var(--spirit);padding:15px 44px;border-radius:999px;
+    font-size:16px;letter-spacing:.12em;cursor:pointer;text-transform:uppercase;transition:all .3s}
+  .cta:active{background:rgba(127,216,232,.15)}
+  .fine{margin-top:20px;font-size:12px;color:rgba(159,180,196,.6)}
+  #endScreen{display:none;background:radial-gradient(ellipse at 50% 30%,#0d1626 0%,var(--night) 70%)}
+  .hidden{display:none !important}
+
+  .screen input{background:rgba(127,216,232,.1);border:1px solid var(--spirit);color:var(--bone);padding:12px 18px;
+    border-radius:8px;font-size:16px;width:280px;max-width:100%;margin:14px 0;font-family:Georgia,serif}
+  .screen input::placeholder{color:rgba(159,180,196,.5)}
+  .screen input:focus{outline:none;background:rgba(127,216,232,.2);box-shadow:0 0 14px rgba(127,216,232,.4)}
+
+  .loading{position:fixed;inset:0;background:var(--night);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:105;display:none}
+  .loading.show{display:flex}
+  .loading-spinner{width:60px;height:60px;border:3px solid rgba(127,216,232,.3);border-top:3px solid var(--spirit);
+    border-radius:50%;animation:spin 1s linear infinite;margin-bottom:20px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<video id="cam" autoplay playsinline muted></video>
+<canvas id="fx"></canvas>
+<div id="vignette"></div>
+
+<div class="loading" id="loading">
+  <div class="loading-spinner"></div>
+  <p style="color:var(--spirit);font-size:14px" id="loadingText">Finding your location...</p>
+</div>
+
+<div id="hud">
+  <div id="chapterTag" style="text-align:center"><span id="locationTag">—</span></div>
+  <div id="trust"></div>
+  <div id="proximity"></div>
+  <div id="subtitle"></div>
+  <div id="holdRing">
+    <svg viewBox="0 0 92 92"><circle class="track" cx="46" cy="46" r="42"/>
+    <circle class="prog" id="progC" cx="46" cy="46" r="42"/></svg>
+  </div>
+  <button id="candleBtn">🕯 Spirit candle · <span id="candleCt">3</span></button>
+  <button id="muteBtn">🔊</button>
+</div>
+
+<div class="screen" id="permScreen">
+  <div class="eyebrow">Permission Needed</div>
+  <h1>ATMA<span class="te">ఆత్మ</span></h1>
+  <p class="story">This story is about <b>you</b>, in <b>your location</b>.</p>
+  <p class="story">We need:<br>📍 Your location<br>🎤 Your voice permissions<br>🤝 Your name</p>
+  <button class="cta" id="permBtn">Grant Access</button>
+  <p class="fine">Location & motion data used only for this game</p>
+</div>
+
+<div id="hintArrow" class="left">⟵</div>
+
+<div class="screen hidden" id="nameScreen">
+  <div class="eyebrow">Before we begin</div>
+  <h1>ATMA<span class="te">ఆత్మ</span></h1>
+  <p class="story">In <span class="local" id="nameLoc">—</span>, a soul waits for someone named...</p>
+  <input type="text" id="userName" placeholder="Your name" maxlength="30" autocomplete="off">
+  <button class="cta" id="startBtn">Begin the story</button>
+  <p class="fine">The ghost will speak your language · use headphones</p>
+</div>
+
+<div class="screen hidden" id="endScreen">
+  <div class="eyebrow">Chapter complete</div>
+  <h1 style="font-size:clamp(30px,8vw,46px)">The soul is free</h1>
+  <p class="story" id="endMessage">Thank you, <span id="endName">—</span>. In <span class="local" id="endLoc">—</span>, the soul finds peace.</p>
+  <button class="cta" id="againBtn">Begin again</button>
+  <p class="fine">Chapter 2 — coming soon</p>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var TRUST_MAX = 5;
+var FOV = 28;
+var HOLD_MS = 1800;
+var PROXIMITY_RANGE = 35;
+
+var gameData = {
+  userName: "",
+  location: {lat:0, lng:0, name:"Unknown", state:"", country:"", language:"en"},
+  phase:"idle", trust:0, ghostBearing:0, heading:0, headingOk:false,
+  holdMs:0, inView:false, candles:3, muted:false, desktopMode:false
+};
+
+var LANGUAGES = {
+  te:{name:"Telugu",dialogues:[
+    {en:"…who… who are you? Stay away from me!", local:"…మీరు ఎవరు? దూరంగా ఉండండి!"},
+    {en:"You can really… see me?", local:"మీరు నిజంగా నన్ను చూడగలరా?"},
+    {en:"Everyone walked past me for so long. You stopped.", local:"అందరూ నన్ను దాటిపోయారు. కానీ మీరు ఆగారు."},
+    {en:"I died before I could say goodbye to her.", local:"నేను ఆమెకు విదా చెప్పకపోయాను..."},
+    {en:"Will you help me reach her?", local:"ఆమెకు సందేశం చేరిపెట్టాలనిపిస్తుందా?"}
+  ], finalLine:{en:"Take my hand. Lead me to her.", local:"చెయ్యి ఇవ్వు. ఆమెకు చేరవేయి."}},
+  hi:{name:"Hindi",dialogues:[
+    {en:"…who… who are you? Stay away!", local:"…आप कौन हैं? दूर रहो!"},
+    {en:"You can really see me?", local:"क्या आप मुझे देख सकते हैं?"},
+    {en:"Everyone walked past me. You stopped.", local:"सब मुझसे आगे निकल गए। पर आप रुके।"},
+    {en:"I died before I could say goodbye.", local:"मैं उससे विदा नहीं कह पाया..."},
+    {en:"Will you help me?", local:"क्या आप मेरी मदद करेंगे?"}
+  ], finalLine:{en:"Take my hand. Help me.", local:"मेरा हाथ पकड़ो।"}},
+  kn:{name:"Kannada",dialogues:[
+    {en:"…who… who are you? Leave!", local:"…ನೀವು ಯಾರು? ದೂರವಾಗಿ!"},
+    {en:"Can you really see me?", local:"ನೀವು ನನ್ನನ್ನು ನೋಡಬಹುದೇ?"},
+    {en:"Everyone left me. You stayed.", local:"ಸಕಲರೂ ನನ್ನನ್ನು ಬಿಟ್ಟು ಹೋದರು. ನೀವು ಬಿಟ್ಟಿಲ್ಲ."},
+    {en:"I never said goodbye.", local:"ನಾನು ವಿದಾ ಹೇಳಿಲ್ಲ..."},
+    {en:"Please help me.", local:"ದಯವಿಟ್ಟು ನನಗೆ ಸಹಾಯ ಮಾಡಿ."}
+  ], finalLine:{en:"Take my hand.", local:"ನನ್ನ ಕೈ ಹಿಡಿಯಿರಿ."}},
+  ta:{name:"Tamil",dialogues:[
+    {en:"…who… who are you? Go away!", local:"…நீ யார்? போ!"},
+    {en:"You can see me?", local:"நீ என்னைப் பார்க்க முடிகிறதா?"},
+    {en:"Everyone passed me by. But you didn't.", local:"அனைவரும் என்னைவிட்டுச் சென்றனர். ஆனால் நீ சென்றாய் இல்லை."},
+    {en:"I could not say goodbye.", local:"நான் விடைபெரமுடியவில்லை..."},
+    {en:"Will you help me?", local:"நீ என்னுயர் கூட இருப்பாய்?"}
+  ], finalLine:{en:"Take my hand.", local:"என் கையை பிடி."}}
+};
+
+function $(id){return document.getElementById(id);}
+var cam=$("cam"), fx=$("fx"), ctx=fx.getContext("2d");
+var subtitle=$("subtitle"), holdRing=$("holdRing"), progC=$("progC"), proximity=$("proximity");
+var candleBtn=$("candleBtn"), muteBtn=$("muteBtn");
+var loading=$("loading"), loadingText=$("loadingText");
+
+function resize(){fx.width=innerWidth;fx.height=innerHeight;}
+addEventListener("resize",resize);resize();
+
+var trustBox=$("trust");
+for(var i=0;i<TRUST_MAX;i++){var d=document.createElement("div");d.className="dot";trustBox.appendChild(d);}
+function paintTrust(){var dots=trustBox.children;for(var i=0;i<dots.length;i++){dots[i].className="dot"+(i<gameData.trust?" lit":"");}}
+
+var AC=null, droneGain=null;
+function initAudio(){
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    var o1=AC.createOscillator(), o2=AC.createOscillator();
+    o1.frequency.value=54; o2.frequency.value=54.7;
+    droneGain=AC.createGain(); droneGain.gain.value=0.05;
+    o1.connect(droneGain); o2.connect(droneGain); droneGain.connect(AC.destination);
+    o1.start(); o2.start();
+  }catch(e){}
+}
+
+function whisperFemale(text, emotion, distance){
+  if(gameData.muted || !window.speechSynthesis) return;
+  try{
+    var u=new SpeechSynthesisUtterance(text);
+    
+    // Emotion-based prosody
+    switch(emotion){
+      case "cry":
+        u.rate = 0.70;
+        u.pitch = 1.4;
+        u.volume = 0.75;
+        break;
+      case "scared":
+        u.rate = 0.78;
+        u.pitch = 1.25;
+        u.volume = 0.65;
+        break;
+      case "tender":
+        u.rate = 0.82;
+        u.pitch = 1.15;
+        u.volume = 0.85;
+        break;
+      case "whisper":
+        u.rate = 0.75;
+        u.pitch = 1.1;
+        u.volume = 0.4;
+        break;
+      default: // normal
+        u.rate = 0.85;
+        u.pitch = 1.2;
+        u.volume = 0.9;
+    }
+    
+    // Distance effect: closer = louder, higher pitch
+    if(distance !== undefined && distance < 20){
+      u.volume = Math.min(1, u.volume * (1 + (20-distance)/20));
+      u.pitch = u.pitch * (1 + (20-distance)/40);
+    }
+    
+    // Select female voice
+    var voices = speechSynthesis.getVoices();
+    var femaleVoice = voices.find(v => 
+      v.name.includes("Female") || v.name.includes("woman") || 
+      v.name.includes("Samantha") || v.name.includes("Victoria") ||
+      v.name.includes("Karen") || v.name.includes("Moira")
+    ) || voices.find(v => !v.name.includes("Google")) || voices[0];
+    if(femaleVoice) u.voice = femaleVoice;
+    
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+muteBtn.addEventListener("click",function(){
+  gameData.muted=!gameData.muted;
+  muteBtn.textContent=gameData.muted?"🔇":"🔊";
+  if(droneGain) droneGain.gain.value=gameData.muted?0:0.05;
+  if(gameData.muted && window.speechSynthesis) speechSynthesis.cancel();
+});
+
+function normDeg(a){a=a%360;return a<0?a+360:a;}
+function angDiff(a,b){var d=normDeg(a-b);return d>180?d-360:d;}
+var smooth=null;
+function onOrient(e){
+  var h=null;
+  if(typeof e.webkitCompassHeading==="number"){h=e.webkitCompassHeading;}
+  else if(e.absolute && typeof e.alpha==="number"){h=normDeg(360-e.alpha);}
+  else if(typeof e.alpha==="number"){h=normDeg(360-e.alpha);}
+  if(h===null) return;
+  gameData.headingOk=true;
+  if(smooth===null) smooth=h;
+  smooth=normDeg(smooth + angDiff(h,smooth)*0.15);
+  gameData.heading=smooth;
+}
+
+function enableDesktop(){
+  gameData.desktopMode=true;
+  var dragging=false,lastX=0;
+  addEventListener("pointerdown",function(e){dragging=true;lastX=e.clientX;});
+  addEventListener("pointermove",function(e){
+    if(!dragging)return;
+    gameData.heading=normDeg(gameData.heading+(e.clientX-lastX)*0.5);
+    lastX=e.clientX;
+  });
+  addEventListener("pointerup",function(){dragging=false;});
+}
+
+function respawnGhost(){
+  var away=90+Math.random()*180;
+  if(Math.random()<0.5) away=-away;
+  gameData.ghostBearing=normDeg(gameData.heading+away);
+}
+
+var lastVib=0;
+function vibPulse(absD){
+  if(!navigator.vibrate) return;
+  var now=Date.now();
+  var interval = absD<8?200 : absD<15?400 : absD<25?700 : 0;
+  if(interval && now-lastVib>interval){navigator.vibrate(40);lastVib=now;}
+}
+
+var particles=[];
+function seedParticles(){
+  particles=[];
+  for(var i=0;i<46;i++){
+    particles.push({a:Math.random()*Math.PI*2, r:14+Math.random()*46,
+      s:0.004+Math.random()*0.012, sz:0.6+Math.random()*2.1, ph:Math.random()*Math.PI*2});
+  }
+}
+seedParticles();
+
+function spiritHue(){return 190 - (190-45)*(gameData.trust/TRUST_MAX);}
+
+function drawSpirit(t){
+  if(gameData.phase!=="seek" && gameData.phase!=="final") return;
+  var d=angDiff(gameData.ghostBearing,gameData.heading);
+  var absD=Math.abs(d);
+  vibPulse(absD);
+  if(absD>FOV){gameData.inView=false;return;}
+
+  var x=fx.width/2 + (d/FOV)*(fx.width/2)*1.05;
+  var baseY=fx.height*0.44 + Math.sin(t/900)*10;
+  var vis=Math.max(0,1-absD/FOV);
+  var near=0.55 + 0.5*(gameData.trust/TRUST_MAX);
+  var R=46*near*(0.7+0.3*vis);
+  var hue=spiritHue();
+
+  gameData.inView = absD < 8;
+
+  ctx.save();
+  ctx.globalCompositeOperation="lighter";
+
+  var g=ctx.createRadialGradient(x,baseY,0,x,baseY,R*2.6);
+  g.addColorStop(0,"hsla("+hue+",85%,80%,"+(0.75*vis)+")");
+  g.addColorStop(0.35,"hsla("+hue+",80%,60%,"+(0.28*vis)+")");
+  g.addColorStop(1,"hsla("+hue+",80%,50%,0)");
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(x,baseY,R*2.6,0,7);ctx.fill();
+
+  var g2=ctx.createRadialGradient(x,baseY,0,x,baseY+R*1.4,R*1.8);
+  g2.addColorStop(0,"hsla("+hue+",70%,88%,"+(0.5*vis)+")");
+  g2.addColorStop(1,"hsla("+hue+",70%,60%,0)");
+  ctx.fillStyle=g2;
+  ctx.beginPath();ctx.ellipse(x,baseY+R*0.9,R*0.75,R*1.5,0,0,7);ctx.fill();
+
+  if(gameData.trust>=2 && vis>0.5){
+    ctx.fillStyle="hsla("+hue+",30%,12%,"+(0.8*vis)+")";
+    var ey=baseY-R*0.15, ex=R*0.28;
+    ctx.beginPath();ctx.ellipse(x-ex,ey,R*0.09,R*0.16,0,0,7);ctx.fill();
+    ctx.beginPath();ctx.ellipse(x+ex,ey,R*0.09,R*0.16,0,0,7);ctx.fill();
+  }
+
+  for(var i=0;i<particles.length;i++){
+    var p=particles[i];
+    p.a+=p.s;
+    var px=x+Math.cos(p.a)*p.r*near;
+    var py=baseY+Math.sin(p.a*0.9+p.ph)*p.r*0.7*near + Math.sin(t/700+p.ph)*4;
+    ctx.fillStyle="hsla("+hue+",90%,75%,"+(0.55*vis*(0.4+0.6*Math.abs(Math.sin(t/500+p.ph))))+")";
+    ctx.beginPath();ctx.arc(px,py,p.sz,0,7);ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function showProximity(absD){
+  if(absD < PROXIMITY_RANGE && absD > FOV){
+    var pct = Math.round(100 * (1 - (absD - FOV)/(PROXIMITY_RANGE - FOV)));
+    proximity.textContent = pct + "%";
+    proximity.style.color = "hsla("+(190-(190-45)*pct/100)+", 90%, 60%, 0.8)";
+    proximity.style.opacity = "1";
+  }else{
+    proximity.style.opacity = "0";
+  }
+}
+
+function showLine(line, emotion, distance){
+  subtitle.innerHTML=line.en+'<span class="te">'+line.local+'</span>';
+  subtitle.classList.add("show");
+  whisperFemale(line.local, emotion, distance);
+  setTimeout(function(){subtitle.classList.remove("show");},5200);
+}
+
+function ghostFound(){
+  gameData.phase="speak";
+  holdRing.style.display="none";
+  var lang = LANGUAGES[gameData.location.language] || LANGUAGES.en;
+  var line = lang.dialogues[gameData.trust];
+  var d=Math.abs(angDiff(gameData.ghostBearing,gameData.heading));
+  var emotion = gameData.trust===3?"cry":(gameData.trust===4?"whisper":"normal");
+  gameData.trust++;
+  paintTrust();
+  showLine(line, emotion, d);
+  if(navigator.vibrate)navigator.vibrate([80,100,80]);
+  setTimeout(function(){
+    if(gameData.trust>=TRUST_MAX){
+      gameData.phase="final";
+      showLine(lang.finalLine, "tender", 5);
+      gameData.ghostBearing=normDeg(gameData.heading+ (Math.random()<0.5?-25:25));
+    }else{
+      respawnGhost();
+      gameData.phase="seek";
+    }
+  },3400);
+}
+
+candleBtn.addEventListener("click",function(){
+  if(gameData.candles<=0||gameData.phase==="done")return;
+  gameData.candles--;
+  var arrow=$("hintArrow");
+  arrow.textContent=angDiff(gameData.ghostBearing,gameData.heading)<0?"⟵":"⟶";
+  arrow.style.display="block";
+  setTimeout(function(){arrow.style.display="none";},4000);
+});
+
+var holdT0=null, finalHoldT0=null;
+function loop(t){
+  ctx.clearRect(0,0,fx.width,fx.height);
+  drawSpirit(t);
+
+  if(gameData.phase==="seek"){
+    var d=angDiff(gameData.ghostBearing, gameData.heading);
+    var absD=Math.abs(d);
+    showProximity(absD);
+    
+    if(gameData.inView){
+      if(holdT0===null)holdT0=t;
+      var frac=Math.min(1,(t-holdT0)/HOLD_MS);
+      holdRing.style.display="block";
+      progC.style.strokeDashoffset=264*(1-frac);
+      if(frac>=1){holdT0=null;ghostFound();}
+    }else{
+      holdT0=null;holdRing.style.display="none";
+      progC.style.strokeDashoffset=264;
+    }
+  }
+  
+  if(gameData.phase==="final"){
+    var d=angDiff(gameData.ghostBearing, gameData.heading);
+    var absD=Math.abs(d);
+    
+    if(gameData.inView){
+      if(finalHoldT0===null)finalHoldT0=t;
+      var frac=Math.min(1,(t-finalHoldT0)/3000);
+      holdRing.style.display="block";
+      progC.style.strokeDashoffset=264*(1-frac);
+      if(frac>=1){gameData.phase="done";finalHoldT0=null;}
+    }else{
+      finalHoldT0=null;holdRing.style.display="none";
+      progC.style.strokeDashoffset=264;
+    }
+  }
+  
+  if(gameData.phase==="done"){
+    holdRing.style.display="none";
+    $("hud").style.display="none";
+    $("endScreen").classList.remove("hidden");
+    $("endName").textContent=gameData.userName;
+    $("endLoc").textContent=gameData.location.name;
+    gameData.phase="finished";
+  }
+  
+  requestAnimationFrame(loop);
+}
+
+function getLocation(){
+  return new Promise(function(resolve){
+    loading.classList.add("show");
+    loadingText.textContent="Locating you...";
+    
+    if(!navigator.geolocation){
+      gameData.location.name="Unknown";
+      resolve();
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(function(pos){
+      var lat=pos.coords.latitude, lng=pos.coords.longitude;
+      gameData.location.lat=lat;
+      gameData.location.lng=lng;
+      loadingText.textContent="Finding region...";
+      reverseGeocode(lat, lng, resolve);
+    }, function(err){
+      console.log("Geolocation denied");
+      gameData.location.name="your land";
+      resolve();
+    });
+  });
+}
+
+function reverseGeocode(lat, lng, callback){
+  fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat="+lat+"&lon="+lng)
+    .then(r=>r.json())
+    .then(data=>{
+      var addr=data.address||{};
+      gameData.location.name=addr.city||addr.town||addr.village||"your land";
+      gameData.location.state=addr.state||"";
+      gameData.location.country=addr.country||"";
+      detectLanguage();
+      callback();
+    })
+    .catch(()=>{gameData.location.name="your land";callback();});
+}
+
+function detectLanguage(){
+  var state=gameData.location.state.toLowerCase();
+  var name=gameData.location.name.toLowerCase();
+  
+  // Telangana / Andhra Pradesh
+  if(state.includes("telangana") || state.includes("andhra") || name.includes("hyderabad") || name.includes("bangalore")) 
+    gameData.location.language="te";
+  // Karnataka
+  else if(state.includes("karnataka") || name.includes("bangalore") || name.includes("mysore"))
+    gameData.location.language="kn";
+  // Tamil Nadu
+  else if(state.includes("tamil") || name.includes("chennai") || name.includes("madurai"))
+    gameData.location.language="ta";
+  // Hindi belt
+  else if(state.includes("maharashtra") || state.includes("madhya") || state.includes("uttar") || 
+          state.includes("delhi") || state.includes("haryana") || state.includes("rajasthan") ||
+          name.includes("mumbai") || name.includes("delhi") || name.includes("agra"))
+    gameData.location.language="hi";
+  else gameData.location.language="en";
+}
+
+function startCamera(){
+  return navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false})
+    .then(function(s){cam.srcObject=s;})
+    .catch(function(){});
+}
+
+function startSensors(){
+  var p=Promise.resolve();
+  if(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission==="function"){
+    p=DeviceOrientationEvent.requestPermission().catch(function(){return;});
+  }
+  return p.then(function(){
+    addEventListener("deviceorientationabsolute",onOrient,true);
+    addEventListener("deviceorientation",onOrient,true);
+    setTimeout(function(){if(!gameData.headingOk)enableDesktop();},2500);
+  });
+}
+
+$("permBtn").addEventListener("click",function(){
+  getLocation().then(function(){
+    loading.classList.remove("show");
+    $("permScreen").classList.add("hidden");
+    $("nameScreen").classList.remove("hidden");
+    $("nameLoc").textContent=gameData.location.name;
+    $("locationTag").textContent=(gameData.location.name+" · "+gameData.location.state).toUpperCase();
+    startCamera().then(startSensors);
+  });
+});
+
+$("startBtn").addEventListener("click",function(){
+  gameData.userName=$("userName").value||"friend";
+  if(!gameData.userName) gameData.userName="friend";
+  
+  $("nameScreen").classList.add("hidden");
+  $("hud").style.display="block";
+  initAudio();
+  
+  gameData.phase="seek";
+  respawnGhost();
+  paintTrust();
+  
+  var lang=LANGUAGES[gameData.location.language]||LANGUAGES.en;
+  var intro={
+    en:"A soul in "+gameData.location.name+" has been waiting for someone like "+gameData.userName+".",
+    local:gameData.userName+" ... "+gameData.location.name+"లో ఒక ఆత్మ నిన్ను ఎదురుచూస్తోంది."
+  };
+  
+  setTimeout(function(){
+    whisperFemale(intro.local, "tender");
+    setTimeout(function(){
+      var firstLine={
+        en:"Something is here. Turn slowly… find me.",
+        local:"నేను ఇక్కడే ఉన్నాను. మెల్లగా నన్ను ఆరోవుటలో ఆరోవుటు."
+      };
+      showLine(firstLine, "scared");
+    },3000);
+    requestAnimationFrame(loop);
+  },500);
+});
+
+$("againBtn").addEventListener("click",function(){location.reload();});
+
+// Auto-start permission flow on load
+setTimeout(function(){
+  $("permScreen").style.display="flex";
+}, 500);
+
+})();
+</script>
+</body>
+</html>
