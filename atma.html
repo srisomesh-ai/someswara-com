@@ -3,91 +3,68 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ATMA — Chapter 1: The Voice at the Gate</title>
+<title>ATMA — Chapter 1</title>
 <style>
   :root{
     --night:#04060c;
     --mist:#9fb4c4;
     --spirit:#7fd8e8;
     --ember:#f2b544;
-    --blood:#8c2f39;
     --bone:#e8e4da;
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overflow:hidden;background:var(--night);color:var(--bone);
-    font-family:Georgia,'Times New Roman',serif}
+  html,body{height:100%;overflow:hidden;background:var(--night);color:var(--bone);font-family:Georgia,'Times New Roman',serif}
   button{font-family:inherit}
 
-  #cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;
-    filter:brightness(.72) saturate(.6) contrast(1.05)}
+  #cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.72) saturate(.6) contrast(1.05)}
   #fx{position:fixed;inset:0;width:100%;height:100%}
-  #vignette{position:fixed;inset:0;pointer-events:none;
-    background:radial-gradient(ellipse at center,transparent 45%,rgba(2,4,10,.55) 78%,rgba(2,4,10,.92) 100%)}
+  #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(2,4,10,.55) 78%,rgba(2,4,10,.92) 100%)}
 
-  /* ---------- HUD ---------- */
   #hud{position:fixed;inset:0;pointer-events:none;display:none}
-  #chapterTag{position:absolute;top:calc(14px + env(safe-area-inset-top));left:0;right:0;
-    text-align:center;letter-spacing:.35em;font-size:11px;color:var(--mist);
-    text-transform:uppercase;opacity:.85}
-  #trust{position:absolute;top:calc(34px + env(safe-area-inset-top));left:0;right:0;
-    display:flex;justify-content:center;gap:9px}
-  .dot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(159,180,196,.5);
-    transition:all .6s}
-  .dot.lit{background:var(--ember);border-color:var(--ember);
-    box-shadow:0 0 10px 2px rgba(242,181,68,.5)}
+  #chapterTag{position:absolute;top:calc(14px + env(safe-area-inset-top));left:0;right:0;text-align:center;
+    letter-spacing:.35em;font-size:11px;color:var(--mist);text-transform:uppercase;opacity:.85}
+  #trust{position:absolute;top:calc(34px + env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:center;gap:9px}
+  .dot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(159,180,196,.5);transition:all .6s}
+  .dot.lit{background:var(--ember);border-color:var(--ember);box-shadow:0 0 10px 2px rgba(242,181,68,.5)}
 
-  #subtitle{position:absolute;left:8%;right:8%;bottom:24%;text-align:center;
-    font-size:clamp(17px,4.6vw,22px);line-height:1.55;font-style:italic;
-    color:var(--bone);text-shadow:0 0 14px rgba(127,216,232,.55),0 2px 6px #000;
-    opacity:0;transition:opacity 1.1s}
+  #subtitle{position:absolute;left:8%;right:8%;bottom:24%;text-align:center;font-size:clamp(17px,4.6vw,22px);
+    line-height:1.55;font-style:italic;color:var(--bone);text-shadow:0 0 14px rgba(127,216,232,.55),0 2px 6px #000;
+    opacity:0;transition:opacity 1.1s;z-index:20;pointer-events:none}
   #subtitle.show{opacity:1}
   #subtitle .te{display:block;font-size:.82em;color:var(--spirit);margin-top:6px;font-style:normal}
 
-  #holdRing{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
-    width:92px;height:92px;display:none}
+  #proximity{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:48px;text-shadow:0 0 20px currentColor;opacity:0;transition:opacity 0.3s;z-index:5}
+
+  #holdRing{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:92px;height:92px;display:none;z-index:20}
   #holdRing svg{width:100%;height:100%;transform:rotate(-90deg)}
   #holdRing .track{fill:none;stroke:rgba(159,180,196,.25);stroke-width:3}
-  #holdRing .prog{fill:none;stroke:var(--spirit);stroke-width:3;stroke-linecap:round;
-    stroke-dasharray:264;stroke-dashoffset:264;filter:drop-shadow(0 0 6px var(--spirit))}
+  #holdRing .prog{fill:none;stroke:var(--spirit);stroke-width:3;stroke-linecap:round;stroke-dasharray:264;stroke-dashoffset:264;filter:drop-shadow(0 0 6px var(--spirit))}
 
-  #candleBtn{position:absolute;pointer-events:auto;bottom:calc(26px + env(safe-area-inset-bottom));
-    left:50%;transform:translateX(-50%);
-    background:rgba(4,6,12,.55);border:1px solid rgba(242,181,68,.45);color:var(--ember);
-    border-radius:999px;padding:11px 22px;font-size:14px;letter-spacing:.06em;
-    backdrop-filter:blur(6px);cursor:pointer}
+  #candleBtn{position:absolute;pointer-events:auto;bottom:calc(26px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
+    background:rgba(4,6,12,.55);border:1px solid rgba(242,181,68,.45);color:var(--ember);border-radius:999px;
+    padding:11px 22px;font-size:14px;letter-spacing:.06em;backdrop-filter:blur(6px);cursor:pointer;z-index:30}
   #candleBtn:disabled{opacity:.35}
-  #muteBtn{position:absolute;pointer-events:auto;top:calc(10px + env(safe-area-inset-top));
-    right:14px;background:none;border:none;color:var(--mist);font-size:20px;cursor:pointer;opacity:.8}
+  #muteBtn{position:absolute;pointer-events:auto;top:calc(10px + env(safe-area-inset-top));right:14px;background:none;border:none;
+    color:var(--mist);font-size:20px;cursor:pointer;opacity:.8;z-index:30}
 
-  #hintArrow{position:absolute;top:44%;font-size:44px;color:var(--ember);
-    text-shadow:0 0 18px rgba(242,181,68,.8);display:none;
-    animation:flicker 1.1s infinite}
+  #hintArrow{position:absolute;top:44%;font-size:44px;color:var(--ember);text-shadow:0 0 18px rgba(242,181,68,.8);
+    display:none;z-index:20;animation:flicker 1.1s infinite}
   #hintArrow.left{left:16px}
   #hintArrow.right{right:16px}
   @keyframes flicker{0%,100%{opacity:1}45%{opacity:.55}60%{opacity:.9}}
 
-  #handZone{position:absolute;pointer-events:auto;left:50%;top:58%;
-    transform:translate(-50%,-50%);width:120px;height:120px;border-radius:50%;
-    display:none;cursor:pointer}
-
-  /* ---------- Screens ---------- */
-  .screen{position:fixed;inset:0;background:var(--night);display:flex;
-    flex-direction:column;align-items:center;justify-content:center;
-    text-align:center;padding:34px 26px;z-index:10}
+  .screen{position:fixed;inset:0;background:var(--night);display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:34px 26px;z-index:100}
   .eyebrow{letter-spacing:.4em;font-size:11px;color:var(--mist);text-transform:uppercase;margin-bottom:18px}
-  h1{font-size:clamp(42px,13vw,72px);font-weight:normal;letter-spacing:.14em;
-    color:var(--bone);text-shadow:0 0 26px rgba(127,216,232,.35)}
+  h1{font-size:clamp(42px,13vw,72px);font-weight:normal;letter-spacing:.14em;color:var(--bone);text-shadow:0 0 26px rgba(127,216,232,.35)}
   h1 .te{display:block;font-size:.38em;letter-spacing:.5em;color:var(--spirit);margin-top:10px}
-  .story{max-width:420px;margin:26px 0 34px;font-size:16px;line-height:1.8;
-    color:var(--mist);font-style:italic}
+  .story{max-width:420px;margin:26px 0 34px;font-size:16px;line-height:1.8;color:var(--mist);font-style:italic}
   .story b{color:var(--bone);font-style:normal}
-  .cta{background:none;border:1px solid var(--spirit);color:var(--spirit);
-    padding:15px 44px;border-radius:999px;font-size:16px;letter-spacing:.12em;cursor:pointer;
-    text-transform:uppercase;transition:all .3s}
+  .cta{background:none;border:1px solid var(--spirit);color:var(--spirit);padding:15px 44px;border-radius:999px;
+    font-size:16px;letter-spacing:.12em;cursor:pointer;text-transform:uppercase;transition:all .3s}
   .cta:active{background:rgba(127,216,232,.15)}
   .fine{margin-top:20px;font-size:12px;color:rgba(159,180,196,.6)}
   #endScreen{display:none;background:radial-gradient(ellipse at 50% 30%,#0d1626 0%,var(--night) 70%)}
-  .hidden{display:none !important}
 </style>
 </head>
 <body>
@@ -99,13 +76,12 @@
 <div id="hud">
   <div id="chapterTag">Chapter One · The Voice at the Gate</div>
   <div id="trust"></div>
+  <div id="proximity"></div>
   <div id="subtitle"></div>
   <div id="holdRing">
     <svg viewBox="0 0 92 92"><circle class="track" cx="46" cy="46" r="42"/>
     <circle class="prog" id="progC" cx="46" cy="46" r="42"/></svg>
   </div>
-  <div id="hintArrow"></div>
-  <div id="handZone"></div>
   <button id="candleBtn">🕯 Spirit candle · <span id="candleCt">3</span></button>
   <button id="muteBtn">🔊</button>
 </div>
@@ -113,11 +89,9 @@
 <div class="screen" id="startScreen">
   <div class="eyebrow">A story you walk through</div>
   <h1>ATMA<span class="te">ఆత్మ</span></h1>
-  <p class="story">Near the old gate, people say a young man died before he could
-    say one last word.<br><br>
+  <p class="story">Near the old gate, people say a young man died before he could say one last word.<br><br>
     <b>His soul is still here. He hides from everyone.</b><br><br>
-    Open your eyes. Turn slowly. Find him — again and again —
-    until he trusts you enough to speak.</p>
+    Open your eyes. Turn slowly. Find him — again and again — until he trusts you enough to speak.</p>
   <button class="cta" id="startBtn">Light the candle</button>
   <p class="fine">Needs camera &amp; motion access · use headphones · walk safely, watch your step</p>
 </div>
@@ -125,8 +99,7 @@
 <div class="screen" id="endScreen">
   <div class="eyebrow">Chapter complete</div>
   <h1 style="font-size:clamp(30px,8vw,46px)">The soul is free</h1>
-  <p class="story" id="endText">“Tell her I was not in pain.<br>
-    Thank you, my friend. <b>వెళ్ళొస్తాను.</b>”</p>
+  <p class="story">"Tell her I was not in pain.<br>Thank you, my friend. <b>వెళ్ళొస్తాను.</b>"</p>
   <button class="cta" id="againBtn">Begin again</button>
   <p class="fine">Chapter 2 — coming soon</p>
 </div>
@@ -135,16 +108,14 @@
 (function(){
 "use strict";
 
-/* ---------------- state ---------------- */
 var TRUST_MAX = 5;
+var FOV = 28; // Field of view - tighter for more challenge
+var HOLD_MS = 1800; // Faster hold to find
+var PROXIMITY_RANGE = 35; // Show proximity indicator this many degrees out
+
 var state = {
-  phase:"idle",          // idle | seek | speak | final | done
-  trust:0,
-  ghostBearing:0,
-  heading:0, headingOk:false,
-  holdMs:0, inView:false,
-  candles:3, muted:false,
-  desktopMode:false
+  phase:"idle", trust:0, ghostBearing:0, heading:0, headingOk:false,
+  holdMs:0, inView:false, candles:3, muted:false, desktopMode:false
 };
 
 var DIALOGUE = [
@@ -156,17 +127,14 @@ var DIALOGUE = [
 ];
 var FINAL_LINE = {en:"Take my hand. I will show you what I left behind.", te:"చెయ్యి ఇవ్వు. నేను వదిలేసింది చూపిస్తాను."};
 
-/* ---------------- dom ---------------- */
 function $(id){return document.getElementById(id);}
 var cam=$("cam"), fx=$("fx"), ctx=fx.getContext("2d");
-var subtitle=$("subtitle"), holdRing=$("holdRing"), progC=$("progC");
-var hintArrow=$("hintArrow"), handZone=$("handZone");
+var subtitle=$("subtitle"), holdRing=$("holdRing"), progC=$("progC"), proximity=$("proximity");
 var candleBtn=$("candleBtn"), candleCt=$("candleCt"), muteBtn=$("muteBtn");
 
 function resize(){fx.width=innerWidth;fx.height=innerHeight;}
 addEventListener("resize",resize);resize();
 
-/* trust dots */
 var trustBox=$("trust");
 for(var i=0;i<TRUST_MAX;i++){var d=document.createElement("div");d.className="dot";trustBox.appendChild(d);}
 function paintTrust(){
@@ -174,18 +142,18 @@ function paintTrust(){
   for(var i=0;i<dots.length;i++){dots[i].className="dot"+(i<state.trust?" lit":"");}
 }
 
-/* ---------------- audio ---------------- */
 var AC=null, droneGain=null;
 function initAudio(){
   try{
     AC=new (window.AudioContext||window.webkitAudioContext)();
     var o1=AC.createOscillator(), o2=AC.createOscillator();
-    o1.frequency.value=54; o2.frequency.value=54.7; o1.type="sine"; o2.type="sine";
+    o1.frequency.value=54; o2.frequency.value=54.7;
     droneGain=AC.createGain(); droneGain.gain.value=0.05;
     o1.connect(droneGain); o2.connect(droneGain); droneGain.connect(AC.destination);
     o1.start(); o2.start();
   }catch(e){}
 }
+
 function whisper(text){
   if(state.muted || !window.speechSynthesis) return;
   try{
@@ -194,6 +162,7 @@ function whisper(text){
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   }catch(e){}
 }
+
 muteBtn.addEventListener("click",function(){
   state.muted=!state.muted;
   muteBtn.textContent=state.muted?"🔇":"🔊";
@@ -201,19 +170,14 @@ muteBtn.addEventListener("click",function(){
   if(state.muted && window.speechSynthesis) speechSynthesis.cancel();
 });
 
-/* ---------------- compass ---------------- */
 function normDeg(a){a=a%360;return a<0?a+360:a;}
 function angDiff(a,b){var d=normDeg(a-b);return d>180?d-360:d;}
 var smooth=null;
 function onOrient(e){
   var h=null;
-  if(typeof e.webkitCompassHeading==="number" && !isNaN(e.webkitCompassHeading)){
-    h=e.webkitCompassHeading;
-  }else if(e.absolute && typeof e.alpha==="number"){
-    h=normDeg(360-e.alpha);
-  }else if(typeof e.alpha==="number"){
-    h=normDeg(360-e.alpha);
-  }
+  if(typeof e.webkitCompassHeading==="number" && !isNaN(e.webkitCompassHeading)){h=e.webkitCompassHeading;}
+  else if(e.absolute && typeof e.alpha==="number"){h=normDeg(360-e.alpha);}
+  else if(typeof e.alpha==="number"){h=normDeg(360-e.alpha);}
   if(h===null) return;
   state.headingOk=true;
   if(smooth===null) smooth=h;
@@ -221,24 +185,22 @@ function onOrient(e){
   state.heading=smooth;
 }
 
-/* desktop / no-sensor fallback: drag or arrow keys to look around */
 function enableDesktop(){
   state.desktopMode=true; state.headingOk=true;
   var dragging=false,lastX=0;
   addEventListener("pointerdown",function(e){dragging=true;lastX=e.clientX;});
   addEventListener("pointermove",function(e){
     if(!dragging)return;
-    state.heading=normDeg(state.heading+(e.clientX-lastX)*0.4);
+    state.heading=normDeg(state.heading+(e.clientX-lastX)*0.5);
     lastX=e.clientX;
   });
   addEventListener("pointerup",function(){dragging=false;});
   addEventListener("keydown",function(e){
-    if(e.key==="ArrowLeft")state.heading=normDeg(state.heading-4);
-    if(e.key==="ArrowRight")state.heading=normDeg(state.heading+4);
+    if(e.key==="ArrowLeft")state.heading=normDeg(state.heading-6);
+    if(e.key==="ArrowRight")state.heading=normDeg(state.heading+6);
   });
 }
 
-/* ---------------- ghost placement ---------------- */
 function respawnGhost(){
   var away=90+Math.random()*180;
   if(Math.random()<0.5) away=-away;
@@ -246,16 +208,14 @@ function respawnGhost(){
   state.holdMs=0;
 }
 
-/* ---------------- vibration ---------------- */
 var lastVib=0;
 function vibPulse(absD){
   if(!navigator.vibrate) return;
   var now=Date.now();
-  var interval = absD<8?260 : absD<18?550 : absD<32?1000 : 0;
-  if(interval && now-lastVib>interval){navigator.vibrate(28);lastVib=now;}
+  var interval = absD<8?200 : absD<15?400 : absD<25?700 : 0;
+  if(interval && now-lastVib>interval){navigator.vibrate(40);lastVib=now;}
 }
 
-/* ---------------- spirit rendering ---------------- */
 var particles=[];
 function seedParticles(){
   particles=[];
@@ -267,26 +227,23 @@ function seedParticles(){
 }
 seedParticles();
 
-function spiritHue(){ // cold cyan -> warm gold as trust grows
-  return 190 - (190-45)*(state.trust/TRUST_MAX);
-}
+function spiritHue(){return 190 - (190-45)*(state.trust/TRUST_MAX);}
 
 function drawSpirit(t){
   if(state.phase!=="seek" && state.phase!=="final") return;
   var d=angDiff(state.ghostBearing,state.heading);
   var absD=Math.abs(d);
-  var fov=32; // half-angle in which the ghost is drawable
   vibPulse(absD);
-  if(absD>fov){state.inView=false;return;}
+  if(absD>FOV){state.inView=false;return;}
 
-  var x=fx.width/2 + (d/fov)*(fx.width/2)*1.05;
+  var x=fx.width/2 + (d/FOV)*(fx.width/2)*1.05;
   var baseY=fx.height*0.44 + Math.sin(t/900)*10;
-  var vis=Math.max(0,1-absD/fov);
-  var near=0.55 + 0.5*(state.trust/TRUST_MAX);   // he lets you come closer each time
+  var vis=Math.max(0,1-absD/FOV);
+  var near=0.55 + 0.5*(state.trust/TRUST_MAX);
   var R=46*near*(0.7+0.3*vis);
   var hue=spiritHue();
 
-  state.inView = absD < 10;
+  state.inView = absD < 8;
 
   ctx.save();
   ctx.globalCompositeOperation="lighter";
@@ -298,7 +255,6 @@ function drawSpirit(t){
   ctx.fillStyle=g;
   ctx.beginPath();ctx.arc(x,baseY,R*2.6,0,7);ctx.fill();
 
-  // body wisp
   var g2=ctx.createRadialGradient(x,baseY,0,x,baseY+R*1.4,R*1.8);
   g2.addColorStop(0,"hsla("+hue+",70%,88%,"+(0.5*vis)+")");
   g2.addColorStop(1,"hsla("+hue+",70%,60%,0)");
@@ -307,7 +263,6 @@ function drawSpirit(t){
   ctx.ellipse(x,baseY+R*0.9,R*0.75,R*1.5,0,0,7);
   ctx.fill();
 
-  // eyes appear from trust 2
   if(state.trust>=2 && vis>0.5){
     ctx.fillStyle="hsla("+hue+",30%,12%,"+(0.8*vis)+")";
     var ey=baseY-R*0.15, ex=R*0.28;
@@ -315,7 +270,6 @@ function drawSpirit(t){
     ctx.beginPath();ctx.ellipse(x+ex,ey,R*0.09,R*0.16,0,0,7);ctx.fill();
   }
 
-  // orbiting motes
   for(var i=0;i<particles.length;i++){
     var p=particles[i];
     p.a+=p.s;
@@ -325,7 +279,6 @@ function drawSpirit(t){
     ctx.beginPath();ctx.arc(px,py,p.sz,0,7);ctx.fill();
   }
 
-  // extended hand in final phase
   if(state.phase==="final"){
     var hy=baseY+R*2.1+Math.sin(t/600)*5;
     var hg=ctx.createRadialGradient(x,hy,0,x,hy,R*0.66);
@@ -333,15 +286,21 @@ function drawSpirit(t){
     hg.addColorStop(1,"hsla("+hue+",90%,70%,0)");
     ctx.fillStyle=hg;
     ctx.beginPath();ctx.arc(x,hy,R*0.66,0,7);ctx.fill();
-    handZone.style.left=x+"px";
-    handZone.style.top=hy+"px";
-    handZone.style.display=state.inView?"block":"none";
   }
   ctx.restore();
 }
 
-/* ---------------- find / dialogue flow ---------------- */
-var HOLD_NEEDED=2000;
+function showProximity(absD){
+  if(absD < PROXIMITY_RANGE && absD > FOV){
+    var pct = Math.round(100 * (1 - (absD - FOV)/(PROXIMITY_RANGE - FOV)));
+    proximity.textContent = pct + "%";
+    proximity.style.color = "hsla("+(190-(190-45)*pct/100)+", 90%, 60%, 0.8)";
+    proximity.style.opacity = "1";
+  }else{
+    proximity.style.opacity = "0";
+  }
+}
+
 function showLine(line,holdMs){
   subtitle.innerHTML=line.en+'<span class="te">'+line.te+'</span>';
   subtitle.classList.add("show");
@@ -356,13 +315,12 @@ function ghostFound(){
   state.trust++;
   paintTrust();
   showLine(line);
-  if(navigator.vibrate)navigator.vibrate([60,80,60]);
+  if(navigator.vibrate)navigator.vibrate([80,100,80]);
   setTimeout(function(){
     if(state.trust>=TRUST_MAX){
       state.phase="final";
       showLine(FINAL_LINE,9000);
-      // final: he stays put, slightly off to one side
-      state.ghostBearing=normDeg(state.heading+ (Math.random()<0.5?-30:30));
+      state.ghostBearing=normDeg(state.heading+ (Math.random()<0.5?-25:25));
     }else{
       respawnGhost();
       state.phase="seek";
@@ -370,50 +328,31 @@ function ghostFound(){
   },3400);
 }
 
-/* hold-to-free in final phase */
-var freeing=false, freeStart=0;
-function beginFree(){if(state.phase!=="final")return;freeing=true;freeStart=Date.now();}
-function cancelFree(){freeing=false;progC.style.strokeDashoffset=264;}
-handZone.addEventListener("pointerdown",beginFree);
-addEventListener("pointerup",cancelFree);
-handZone.addEventListener("pointerdown",function(){holdRing.style.display="block";});
-
-function tickFinal(){
-  if(!freeing){return;}
-  var frac=Math.min(1,(Date.now()-freeStart)/3000);
-  progC.style.strokeDashoffset=264*(1-frac);
-  holdRing.style.display="block";
-  if(frac>=1){
-    freeing=false; state.phase="done";
-    holdRing.style.display="none"; handZone.style.display="none";
-    if(navigator.vibrate)navigator.vibrate([80,60,80,60,200]);
-    whisper("Thank you, my friend.");
-    setTimeout(function(){$("endScreen").style.display="flex";},1400);
-  }
-}
-
-/* ---------------- candle hint ---------------- */
 candleBtn.addEventListener("click",function(){
   if(state.candles<=0||state.phase==="done")return;
   state.candles--; candleCt.textContent=state.candles;
   if(state.candles===0)candleBtn.disabled=true;
   var d=angDiff(state.ghostBearing,state.heading);
-  hintArrow.textContent=d<0?"⟵":"⟶";
-  hintArrow.className=d<0?"left":"right";
-  hintArrow.style.display="block";
-  setTimeout(function(){hintArrow.style.display="none";},4000);
+  var arrow=$("hintArrow");
+  arrow.textContent=d<0?"⟵":"⟶";
+  arrow.className=d<0?"left":"right";
+  arrow.style.display="block";
+  setTimeout(function(){arrow.style.display="none";},4000);
 });
 
-/* ---------------- main loop ---------------- */
 var holdT0=null;
 function loop(t){
   ctx.clearRect(0,0,fx.width,fx.height);
   drawSpirit(t);
 
   if(state.phase==="seek"){
+    var d=angDiff(state.ghostBearing, state.heading);
+    var absD=Math.abs(d);
+    showProximity(absD);
+    
     if(state.inView){
       if(holdT0===null)holdT0=t;
-      var frac=Math.min(1,(t-holdT0)/HOLD_NEEDED);
+      var frac=Math.min(1,(t-holdT0)/HOLD_MS);
       holdRing.style.display="block";
       progC.style.strokeDashoffset=264*(1-frac);
       if(frac>=1){holdT0=null;ghostFound();}
@@ -422,16 +361,20 @@ function loop(t){
       progC.style.strokeDashoffset=264;
     }
   }
-  if(state.phase==="final")tickFinal();
+  
+  if(state.phase==="final"){
+    proximity.style.opacity="0";
+  }
+  
   requestAnimationFrame(loop);
 }
 
-/* ---------------- start ---------------- */
 function startCamera(){
   return navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false})
     .then(function(s){cam.srcObject=s;})
-    .catch(function(){ /* keep dark background if camera denied */ });
+    .catch(function(){});
 }
+
 function startSensors(){
   var p=Promise.resolve("granted");
   if(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission==="function"){
