@@ -84,6 +84,10 @@
   .fine{margin-top:20px;font-size:12px;color:rgba(159,180,196,.6)}
   #endScreen{display:none;background:radial-gradient(ellipse at 50% 30%,#0d1626 0%,var(--night) 70%)}
   .hidden{display:none !important}
+  
+  #loadingMsg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:150;color:var(--spirit);text-align:center;display:none}
+  #loadingMsg.show{display:block}
 </style>
 </head>
 <body>
@@ -113,7 +117,7 @@
     Open your eyes. Turn slowly. Find him — again and again —
     until he trusts you enough to speak.</p>
   <button class="cta" id="startBtn">Light the candle</button>
-  <p class="fine">Needs camera &amp; motion access · use headphones · walk safely, watch your step</p>
+  <p class="fine">Needs motion access · use headphones · walk safely, watch your step</p>
 </div>
 
 <div class="screen" id="endScreen">
@@ -125,12 +129,20 @@
   <p class="fine">Chapter 2 — coming soon</p>
 </div>
 
+<div id="loadingMsg" class="show">
+  <p style="font-size:18px;margin-bottom:16px">Loading the spirit...</p>
+  <div style="width:80px;height:80px;margin:0 auto;border:2px solid var(--spirit);border-radius:50%;border-top-color:var(--ember);animation:spin 1s linear infinite"></div>
+</div>
+
+<style>
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function(){
 "use strict";
 
-/* state */
 var TRUST_MAX = 5;
 var state = {
   phase:"idle",
@@ -152,12 +164,12 @@ var DIALOGUE = [
 ];
 var FINAL_LINE = {en:"Take my hand. I will show you what I left behind.", te:"చెయ్యి ఇవ్వు. నేను వదిలేసింది చూపిస్తాను."};
 
-/* dom */
 function $(id){return document.getElementById(id);}
 var canvas=$("canvas");
 var subtitle=$("subtitle"), holdRing=$("holdRing"), progC=$("progC");
 var hintArrow=$("hintArrow"), handZone=$("handZone");
 var candleBtn=$("candleBtn"), candleCt=$("candleCt"), muteBtn=$("muteBtn");
+var loadingMsg=$("loadingMsg");
 
 var trustBox=$("trust");
 for(var i=0;i<TRUST_MAX;i++){var d=document.createElement("div");d.className="dot";trustBox.appendChild(d);}
@@ -166,191 +178,186 @@ function paintTrust(){
   for(var i=0;i<dots.length;i++){dots[i].className="dot"+(i<state.trust?" lit":"");}
 }
 
-/* three.js scene */
 var scene, camera, renderer, ghostGroup, particles;
 function initThree(){
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x04060c);
-  scene.fog = new THREE.Fog(0x04060c, 50, 100);
-  
-  camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000);
-  camera.position.set(0, 0.2, 4.5);
-  camera.lookAt(0, 0.5, 0);
-  
-  renderer = new THREE.WebGLRenderer({canvas:canvas, antialias:true, alpha:false, precision:"highp"});
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowShadowMap;
-  
-  /* lighting - multiple sources for depth */
-  var ambientLight = new THREE.AmbientLight(0x4a6fa5, 0.3);
-  scene.add(ambientLight);
-  
-  var ghostLight = new THREE.PointLight(0x7fd8e8, 1.8, 120);
-  ghostLight.position.set(0, 1, 2);
-  ghostLight.castShadow = true;
-  ghostLight.shadow.mapSize.width = 1024;
-  ghostLight.shadow.mapSize.height = 1024;
-  scene.add(ghostLight);
-  
-  var backLight = new THREE.PointLight(0xa080ff, 0.6, 80);
-  backLight.position.set(-2, 0.5, -3);
-  scene.add(backLight);
-  
-  /* ground plane for shadow */
-  var groundGeom = new THREE.PlaneGeometry(20, 20);
-  var groundMat = new THREE.ShadowMaterial({opacity: 0.3});
-  var ground = new THREE.Mesh(groundGeom, groundMat);
-  ground.rotation.x = -Math.PI/2;
-  ground.position.y = -1.2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-  
-  /* build ghost */
-  ghostGroup = new THREE.Group();
-  scene.add(ghostGroup);
-  
-  /* body - tapering cylinder */
-  var bodyGeom = new THREE.CylinderGeometry(0.5, 1.0, 2.2, 32, 16);
-  var bodyMat = new THREE.MeshStandardMaterial({
-    color: 0x7fd8e8,
-    emissive: 0x5ab5d8,
-    emissiveIntensity: 1.0,
-    metalness: 0.15,
-    roughness: 0.45,
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.88,
-    toneMapped: true
-  });
-  var body = new THREE.Mesh(bodyGeom, bodyMat);
-  body.castShadow = true;
-  body.receiveShadow = true;
-  ghostGroup.add(body);
-  
-  /* head */
-  var headGeom = new THREE.SphereGeometry(0.62, 32, 32);
-  var head = new THREE.Mesh(headGeom, bodyMat.clone());
-  head.position.y = 1.5;
-  head.castShadow = true;
-  head.receiveShadow = true;
-  ghostGroup.add(head);
-  
-  /* eyes - appear from trust 2 */
-  var eyeGeom = new THREE.SphereGeometry(0.16, 16, 16);
-  var eyeMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0a0a,
-    emissive: 0x0f0f0f,
-    metalness: 0.95,
-    roughness: 0.05
-  });
-  var leftEye = new THREE.Mesh(eyeGeom, eyeMat);
-  leftEye.position.set(-0.2, 1.88, 0.45);
-  leftEye.scale.set(0.65, 1.1, 0.55);
-  leftEye.castShadow = true;
-  head.add(leftEye);
-  
-  var rightEye = leftEye.clone();
-  rightEye.position.x = 0.2;
-  head.add(rightEye);
-  
-  /* mouth - crescent */
-  var mouthGeom = new THREE.TorusGeometry(0.25, 0.07, 8, 16, 0, Math.PI);
-  var mouthMat = new THREE.MeshStandardMaterial({color: 0x1a1a1a});
-  var mouth = new THREE.Mesh(mouthGeom, mouthMat);
-  mouth.position.set(0, 1.42, 0.48);
-  mouth.rotation.z = Math.PI;
-  mouth.castShadow = true;
-  head.add(mouth);
-  
-  /* wisps */
-  for(var i = 0; i < 4; i++){
-    var wispGeom = new THREE.IcosahedronGeometry(0.75, 3);
-    var wispMat = new THREE.MeshStandardMaterial({
-      color: 0x9fb4c4,
-      emissive: 0x7fd8e8,
-      emissiveIntensity: 0.7,
-      metalness: 0.05,
-      roughness: 0.8,
-      transparent: true,
-      opacity: 0.3,
-      side: THREE.DoubleSide
-    });
-    var wisp = new THREE.Mesh(wispGeom, wispMat);
-    wisp.position.set((Math.random()-0.5)*2.5, (Math.random()-0.5)*1.8, Math.random()-1);
-    wisp.scale.set(0.7+Math.random()*0.5, 1+Math.random()*0.7, 0.7+Math.random()*0.5);
-    wisp.castShadow = true;
-    ghostGroup.add(wisp);
-  }
-  
-  /* arm */
-  var armGeom = new THREE.CylinderGeometry(0.22, 0.2, 1.6, 16);
-  var armMat = new THREE.MeshStandardMaterial({
-    color: 0x7fd8e8,
-    emissive: 0x5ab5d8,
-    emissiveIntensity: 1.0,
-    metalness: 0.2,
-    roughness: 0.4,
-    transparent: true,
-    opacity: 0.85
-  });
-  var arm = new THREE.Mesh(armGeom, armMat);
-  arm.name = "arm";
-  arm.position.set(0.95, 0.7, 0);
-  arm.rotation.z = 0.45;
-  arm.castShadow = true;
-  arm.scale.set(0, 1, 1);
-  ghostGroup.add(arm);
-  
-  /* hand */
-  var handGeom = new THREE.SphereGeometry(0.4, 20, 20);
-  var hand = new THREE.Mesh(handGeom, armMat.clone());
-  hand.name = "hand";
-  hand.position.set(2.0, -0.3, 0);
-  hand.castShadow = true;
-  hand.scale.set(0, 1, 1);
-  ghostGroup.add(hand);
-  
-  /* particles */
-  var particleCount = 150;
-  var geometry = new THREE.BufferGeometry();
-  var positions = new Float32Array(particleCount * 3);
-  var velocities = [];
-  for(var i = 0; i < particleCount; i++){
-    var angle = Math.random() * Math.PI * 2;
-    var dist = 1.0 + Math.random() * 2.2;
-    positions[i*3+0] = Math.cos(angle) * dist;
-    positions[i*3+1] = (Math.random()-0.5) * 2.5;
-    positions[i*3+2] = Math.sin(angle) * dist;
-    velocities.push({
-      vx: (Math.random()-0.5)*0.06,
-      vy: (Math.random()-0.5)*0.1,
-      vz: (Math.random()-0.5)*0.06,
-      life: 1, lifeMax: 1
-    });
-  }
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  var particleMat = new THREE.PointsMaterial({
-    color: 0x7fd8e8,
-    size: 0.12,
-    sizeAttenuation: true,
-    transparent: true,
-    opacity: 0.9,
-    sizeRange: 0.1
-  });
-  particles = new THREE.Points(geometry, particleMat);
-  particles.userData = {velocities: velocities};
-  ghostGroup.add(particles);
-  
-  addEventListener("resize", function(){
-    camera.aspect = innerWidth/innerHeight;
-    camera.updateProjectionMatrix();
+  try{
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04060c);
+    scene.fog = new THREE.Fog(0x04060c, 50, 100);
+    
+    camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000);
+    camera.position.set(0, 0.2, 4.5);
+    camera.lookAt(0, 0.5, 0);
+    
+    renderer = new THREE.WebGLRenderer({canvas:canvas, antialias:true, alpha:false, precision:"highp"});
     renderer.setSize(innerWidth, innerHeight);
-  });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+    
+    var ambientLight = new THREE.AmbientLight(0x4a6fa5, 0.3);
+    scene.add(ambientLight);
+    
+    var ghostLight = new THREE.PointLight(0x7fd8e8, 1.8, 120);
+    ghostLight.position.set(0, 1, 2);
+    ghostLight.castShadow = true;
+    ghostLight.shadow.mapSize.width = 1024;
+    ghostLight.shadow.mapSize.height = 1024;
+    scene.add(ghostLight);
+    
+    var backLight = new THREE.PointLight(0xa080ff, 0.6, 80);
+    backLight.position.set(-2, 0.5, -3);
+    scene.add(backLight);
+    
+    var groundGeom = new THREE.PlaneGeometry(20, 20);
+    var groundMat = new THREE.ShadowMaterial({opacity: 0.3});
+    var ground = new THREE.Mesh(groundGeom, groundMat);
+    ground.rotation.x = -Math.PI/2;
+    ground.position.y = -1.2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    
+    ghostGroup = new THREE.Group();
+    scene.add(ghostGroup);
+    
+    var bodyGeom = new THREE.CylinderGeometry(0.5, 1.0, 2.2, 32, 16);
+    var bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x7fd8e8,
+      emissive: 0x5ab5d8,
+      emissiveIntensity: 1.0,
+      metalness: 0.15,
+      roughness: 0.45,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.88,
+      toneMapped: true
+    });
+    var body = new THREE.Mesh(bodyGeom, bodyMat);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    ghostGroup.add(body);
+    
+    var headGeom = new THREE.SphereGeometry(0.62, 32, 32);
+    var head = new THREE.Mesh(headGeom, bodyMat.clone());
+    head.position.y = 1.5;
+    head.castShadow = true;
+    head.receiveShadow = true;
+    ghostGroup.add(head);
+    
+    var eyeGeom = new THREE.SphereGeometry(0.16, 16, 16);
+    var eyeMat = new THREE.MeshStandardMaterial({
+      color: 0x0a0a0a,
+      emissive: 0x0f0f0f,
+      metalness: 0.95,
+      roughness: 0.05
+    });
+    var leftEye = new THREE.Mesh(eyeGeom, eyeMat);
+    leftEye.position.set(-0.2, 1.88, 0.45);
+    leftEye.scale.set(0.65, 1.1, 0.55);
+    leftEye.castShadow = true;
+    head.add(leftEye);
+    
+    var rightEye = leftEye.clone();
+    rightEye.position.x = 0.2;
+    head.add(rightEye);
+    
+    var mouthGeom = new THREE.TorusGeometry(0.25, 0.07, 8, 16, 0, Math.PI);
+    var mouthMat = new THREE.MeshStandardMaterial({color: 0x1a1a1a});
+    var mouth = new THREE.Mesh(mouthGeom, mouthMat);
+    mouth.position.set(0, 1.42, 0.48);
+    mouth.rotation.z = Math.PI;
+    mouth.castShadow = true;
+    head.add(mouth);
+    
+    for(var i = 0; i < 4; i++){
+      var wispGeom = new THREE.IcosahedronGeometry(0.75, 3);
+      var wispMat = new THREE.MeshStandardMaterial({
+        color: 0x9fb4c4,
+        emissive: 0x7fd8e8,
+        emissiveIntensity: 0.7,
+        metalness: 0.05,
+        roughness: 0.8,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
+      });
+      var wisp = new THREE.Mesh(wispGeom, wispMat);
+      wisp.position.set((Math.random()-0.5)*2.5, (Math.random()-0.5)*1.8, Math.random()-1);
+      wisp.scale.set(0.7+Math.random()*0.5, 1+Math.random()*0.7, 0.7+Math.random()*0.5);
+      wisp.castShadow = true;
+      ghostGroup.add(wisp);
+    }
+    
+    var armGeom = new THREE.CylinderGeometry(0.22, 0.2, 1.6, 16);
+    var armMat = new THREE.MeshStandardMaterial({
+      color: 0x7fd8e8,
+      emissive: 0x5ab5d8,
+      emissiveIntensity: 1.0,
+      metalness: 0.2,
+      roughness: 0.4,
+      transparent: true,
+      opacity: 0.85
+    });
+    var arm = new THREE.Mesh(armGeom, armMat);
+    arm.name = "arm";
+    arm.position.set(0.95, 0.7, 0);
+    arm.rotation.z = 0.45;
+    arm.castShadow = true;
+    arm.scale.set(0, 1, 1);
+    ghostGroup.add(arm);
+    
+    var handGeom = new THREE.SphereGeometry(0.4, 20, 20);
+    var hand = new THREE.Mesh(handGeom, armMat.clone());
+    hand.name = "hand";
+    hand.position.set(2.0, -0.3, 0);
+    hand.castShadow = true;
+    hand.scale.set(0, 1, 1);
+    ghostGroup.add(hand);
+    
+    var particleCount = 150;
+    var geometry = new THREE.BufferGeometry();
+    var positions = new Float32Array(particleCount * 3);
+    var velocities = [];
+    for(var i = 0; i < particleCount; i++){
+      var angle = Math.random() * Math.PI * 2;
+      var dist = 1.0 + Math.random() * 2.2;
+      positions[i*3+0] = Math.cos(angle) * dist;
+      positions[i*3+1] = (Math.random()-0.5) * 2.5;
+      positions[i*3+2] = Math.sin(angle) * dist;
+      velocities.push({
+        vx: (Math.random()-0.5)*0.06,
+        vy: (Math.random()-0.5)*0.1,
+        vz: (Math.random()-0.5)*0.06,
+        life: 1, lifeMax: 1
+      });
+    }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    var particleMat = new THREE.PointsMaterial({
+      color: 0x7fd8e8,
+      size: 0.12,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.9,
+      sizeRange: 0.1
+    });
+    particles = new THREE.Points(geometry, particleMat);
+    particles.userData = {velocities: velocities};
+    ghostGroup.add(particles);
+    
+    addEventListener("resize", function(){
+      camera.aspect = innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+    
+    loadingMsg.classList.remove("show");
+    return true;
+  }catch(e){
+    console.error("Three.js init failed:", e);
+    return false;
+  }
 }
 
-/* audio */
 var AC=null, droneGain=null;
 function initAudio(){
   try{
@@ -377,7 +384,6 @@ muteBtn.addEventListener("click",function(){
   if(state.muted && window.speechSynthesis) speechSynthesis.cancel();
 });
 
-/* compass */
 function normDeg(a){a=a%360;return a<0?a+360:a;}
 function angDiff(a,b){var d=normDeg(a-b);return d>180?d-360:d;}
 var smooth=null;
@@ -413,7 +419,6 @@ function enableDesktop(){
   });
 }
 
-/* ghost placement */
 function respawnGhost(){
   var away=90+Math.random()*180;
   if(Math.random()<0.5) away=-away;
@@ -490,7 +495,6 @@ candleBtn.addEventListener("click",function(){
   setTimeout(function(){hintArrow.style.display="none";},4000);
 });
 
-/* animation loop */
 var HOLD_NEEDED=2000;
 var holdT0=null;
 function loop(t){
@@ -505,11 +509,9 @@ function loop(t){
     state.inView = absD < 10;
     var vis = Math.max(0, 1 - absD/fov);
     
-    /* camera yaw - rotate around Y axis */
     camera.rotation.order = 'YXZ';
     camera.rotation.y = d * Math.PI / 180 * 0.4;
     
-    /* ghost scale & opacity */
     var near = 0.55 + 0.5*(state.trust/TRUST_MAX);
     var scale = (0.7 + 0.3*vis) * near;
     ghostGroup.scale.set(scale, scale, scale);
@@ -520,13 +522,11 @@ function loop(t){
       }
     });
     
-    /* ghost floating & rotation */
     ghostGroup.position.y = Math.sin(t/900)*0.12 + 0.2*(1-vis);
     ghostGroup.position.z = 0;
     ghostGroup.rotation.y = t*0.0001;
     ghostGroup.rotation.z = Math.sin(t/2000)*0.08;
     
-    /* arm/hand extend in final */
     var arm = ghostGroup.getObjectByName("arm");
     var hand = ghostGroup.getObjectByName("hand");
     if(state.phase==="final"){
@@ -542,7 +542,6 @@ function loop(t){
       hand.scale.x = 0;
     }
     
-    /* color shift with trust */
     var hue = spiritHue();
     ghostGroup.children.forEach(function(child){
       if(child.isMesh && child.material && child.material.emissive){
@@ -551,7 +550,6 @@ function loop(t){
       }
     });
     
-    /* particles */
     if(particles && particles.userData.velocities){
       var positions = particles.geometry.attributes.position.array;
       var vels = particles.userData.velocities;
@@ -574,7 +572,6 @@ function loop(t){
       particles.geometry.attributes.position.needsUpdate = true;
     }
     
-    /* seek hold */
     if(state.phase==="seek"){
       if(state.inView){
         if(holdT0===null)holdT0=t;
@@ -597,10 +594,6 @@ function loop(t){
   requestAnimationFrame(loop);
 }
 
-function startCamera(){
-  return navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false})
-    .catch(function(){});
-}
 function startSensors(){
   var p=Promise.resolve("granted");
   if(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission==="function"){
@@ -616,9 +609,15 @@ function startSensors(){
 $("startBtn").addEventListener("click",function(){
   $("startScreen").style.display="none";
   $("hud").style.display="block";
-  initThree();
+  loadingMsg.classList.add("show");
+  
+  if(!initThree()){
+    loadingMsg.innerHTML = "<p style='color:var(--blood)'>Error loading scene. Please refresh.</p>";
+    return;
+  }
+  
   initAudio();
-  startCamera().then(startSensors).then(function(){
+  startSensors().then(function(){
     state.phase="seek";
     respawnGhost();
     paintTrust();
