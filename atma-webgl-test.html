@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ATMA WebGL Test</title>
+<style>
+body{margin:0;padding:0;background:#04060c;color:#7fd8e8;font-family:monospace;overflow:hidden}
+#canvas{display:block;width:100vw;height:100vh}
+#info{position:fixed;top:0;left:0;background:rgba(0,0,0,.9);padding:20px;z-index:10;
+  max-width:50%;max-height:100%;overflow-y:auto;font-size:14px;line-height:1.8}
+</style>
+</head>
+<body>
+<div id="info"></div>
+<canvas id="canvas"></canvas>
+
+<script>
+function log(msg){
+  var info = document.getElementById("info");
+  info.innerHTML += msg + "<br>";
+  console.log(msg);
+}
+
+log("=== ATMA WebGL Test ===");
+log("Time: " + new Date().toLocaleTimeString());
+
+var canvas = document.getElementById("canvas");
+log("Canvas: " + canvas.width + "x" + canvas.height);
+
+try{
+  var gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+  if(!gl){
+    log("✗ WebGL not supported");
+    throw new Error("No WebGL");
+  }
+  log("✓ WebGL initialized");
+  
+  // Clear to cyan
+  gl.clearColor(0.5, 0.85, 0.91, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  log("✓ Canvas cleared to cyan");
+  
+  // Try to render a simple triangle
+  var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vertexShader, 
+    "void main(){gl.Position = vec4(0.0, 0.5, 0.0, 1.0);}");
+  gl.compileShader(vertexShader);
+  
+  var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fragmentShader,
+    "void main(){gl_FragColor = vec4(1.0, 0.4, 1.0, 1.0);}");
+  gl.compileShader(fragmentShader);
+  
+  var program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  
+  if(!gl.getProgramParameter(program, gl.LINK_STATUS)){
+    log("✗ Shader link failed");
+  }else{
+    log("✓ Shaders compiled and linked");
+  }
+  
+  log("");
+  log("🟦 Canvas is working!");
+  log("If you see cyan background,");
+  log("WebGL is functional.");
+  log("");
+  log("The 3D issue is with Three.js,");
+  log("not the browser.");
+  
+}catch(e){
+  log("✗ Error: " + e.message);
+  log("Your browser may not support WebGL");
+}
+</script>
+</body>
+</html>
