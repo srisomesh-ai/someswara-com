@@ -167,153 +167,177 @@ function paintTrust(){
 }
 
 /* three.js scene */
-var scene, camera, renderer, ghost, ghostGroup, particles;
+var scene, camera, renderer, ghostGroup, particles;
 function initThree(){
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x04060c);
+  scene.fog = new THREE.Fog(0x04060c, 50, 100);
   
-  camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 1000);
-  camera.position.z = 0;
+  camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000);
+  camera.position.set(0, 0.2, 4.5);
+  camera.lookAt(0, 0.5, 0);
   
-  renderer = new THREE.WebGLRenderer({canvas:canvas, antialias:true, alpha:false});
+  renderer = new THREE.WebGLRenderer({canvas:canvas, antialias:true, alpha:false, precision:"highp"});
   renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowShadowMap;
   
-  /* lighting */
-  var ambientLight = new THREE.AmbientLight(0x4a6fa5, 0.15);
+  /* lighting - multiple sources for depth */
+  var ambientLight = new THREE.AmbientLight(0x4a6fa5, 0.3);
   scene.add(ambientLight);
   
-  var ghostLight = new THREE.PointLight(0x7fd8e8, 1.2, 80);
-  ghostLight.position.set(0, 0, 20);
+  var ghostLight = new THREE.PointLight(0x7fd8e8, 1.8, 120);
+  ghostLight.position.set(0, 1, 2);
   ghostLight.castShadow = true;
+  ghostLight.shadow.mapSize.width = 1024;
+  ghostLight.shadow.mapSize.height = 1024;
   scene.add(ghostLight);
+  
+  var backLight = new THREE.PointLight(0xa080ff, 0.6, 80);
+  backLight.position.set(-2, 0.5, -3);
+  scene.add(backLight);
+  
+  /* ground plane for shadow */
+  var groundGeom = new THREE.PlaneGeometry(20, 20);
+  var groundMat = new THREE.ShadowMaterial({opacity: 0.3});
+  var ground = new THREE.Mesh(groundGeom, groundMat);
+  ground.rotation.x = -Math.PI/2;
+  ground.position.y = -1.2;
+  ground.receiveShadow = true;
+  scene.add(ground);
   
   /* build ghost */
   ghostGroup = new THREE.Group();
   scene.add(ghostGroup);
   
-  /* body - tapering cylinder for ghostly form */
-  var bodyGeom = new THREE.CylinderGeometry(0.6, 1.2, 2.4, 32, 16);
+  /* body - tapering cylinder */
+  var bodyGeom = new THREE.CylinderGeometry(0.5, 1.0, 2.2, 32, 16);
   var bodyMat = new THREE.MeshStandardMaterial({
     color: 0x7fd8e8,
     emissive: 0x5ab5d8,
-    emissiveIntensity: 0.8,
-    metalness: 0.1,
-    roughness: 0.4,
+    emissiveIntensity: 1.0,
+    metalness: 0.15,
+    roughness: 0.45,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.85
+    opacity: 0.88,
+    toneMapped: true
   });
   var body = new THREE.Mesh(bodyGeom, bodyMat);
   body.castShadow = true;
+  body.receiveShadow = true;
   ghostGroup.add(body);
   
-  /* head - sphere */
-  var headGeom = new THREE.SphereGeometry(0.65, 32, 32);
-  var head = new THREE.Mesh(headGeom, bodyMat);
-  head.position.y = 1.6;
+  /* head */
+  var headGeom = new THREE.SphereGeometry(0.62, 32, 32);
+  var head = new THREE.Mesh(headGeom, bodyMat.clone());
+  head.position.y = 1.5;
   head.castShadow = true;
+  head.receiveShadow = true;
   ghostGroup.add(head);
   
-  /* eyes - black spheres */
-  var eyeGeom = new THREE.SphereGeometry(0.18, 16, 16);
+  /* eyes - appear from trust 2 */
+  var eyeGeom = new THREE.SphereGeometry(0.16, 16, 16);
   var eyeMat = new THREE.MeshStandardMaterial({
     color: 0x0a0a0a,
-    emissive: 0x1a1a1a,
-    metalness: 0.9,
-    roughness: 0.1
+    emissive: 0x0f0f0f,
+    metalness: 0.95,
+    roughness: 0.05
   });
   var leftEye = new THREE.Mesh(eyeGeom, eyeMat);
-  leftEye.position.set(-0.22, 1.92, 0.48);
-  leftEye.scale.set(0.7, 1.2, 0.6);
+  leftEye.position.set(-0.2, 1.88, 0.45);
+  leftEye.scale.set(0.65, 1.1, 0.55);
+  leftEye.castShadow = true;
   head.add(leftEye);
   
   var rightEye = leftEye.clone();
-  rightEye.position.x = 0.22;
+  rightEye.position.x = 0.2;
   head.add(rightEye);
   
-  /* mouth hint - dark crescent */
-  var mouthGeom = new THREE.TorusGeometry(0.28, 0.08, 8, 16, 0, Math.PI);
+  /* mouth - crescent */
+  var mouthGeom = new THREE.TorusGeometry(0.25, 0.07, 8, 16, 0, Math.PI);
   var mouthMat = new THREE.MeshStandardMaterial({color: 0x1a1a1a});
   var mouth = new THREE.Mesh(mouthGeom, mouthMat);
-  mouth.position.set(0, 1.48, 0.52);
-  mouth.rotationZ = Math.PI;
+  mouth.position.set(0, 1.42, 0.48);
+  mouth.rotation.z = Math.PI;
+  mouth.castShadow = true;
   head.add(mouth);
   
-  /* wispy wisps - floating meshes around body */
-  for(var i = 0; i < 3; i++){
-    var wispGeom = new THREE.TetrahedronGeometry(0.8, 2);
+  /* wisps */
+  for(var i = 0; i < 4; i++){
+    var wispGeom = new THREE.IcosahedronGeometry(0.75, 3);
     var wispMat = new THREE.MeshStandardMaterial({
       color: 0x9fb4c4,
       emissive: 0x7fd8e8,
-      emissiveIntensity: 0.6,
-      metalness: 0,
-      roughness: 0.7,
+      emissiveIntensity: 0.7,
+      metalness: 0.05,
+      roughness: 0.8,
       transparent: true,
-      opacity: 0.25
+      opacity: 0.3,
+      side: THREE.DoubleSide
     });
     var wisp = new THREE.Mesh(wispGeom, wispMat);
-    wisp.position.set((Math.random()-0.5)*2, (Math.random()-0.5)*1.5, Math.random()-0.5);
-    wisp.scale.set(0.8+Math.random()*0.6, 1.1+Math.random()*0.8, 0.8+Math.random()*0.6);
+    wisp.position.set((Math.random()-0.5)*2.5, (Math.random()-0.5)*1.8, Math.random()-1);
+    wisp.scale.set(0.7+Math.random()*0.5, 1+Math.random()*0.7, 0.7+Math.random()*0.5);
     wisp.castShadow = true;
     ghostGroup.add(wisp);
   }
   
-  /* arm/hand extends in final phase */
-  var armGeom = new THREE.CylinderGeometry(0.25, 0.22, 1.8, 16);
+  /* arm */
+  var armGeom = new THREE.CylinderGeometry(0.22, 0.2, 1.6, 16);
   var armMat = new THREE.MeshStandardMaterial({
     color: 0x7fd8e8,
     emissive: 0x5ab5d8,
-    emissiveIntensity: 0.9,
+    emissiveIntensity: 1.0,
     metalness: 0.2,
-    roughness: 0.35,
+    roughness: 0.4,
     transparent: true,
-    opacity: 0.8
+    opacity: 0.85
   });
   var arm = new THREE.Mesh(armGeom, armMat);
   arm.name = "arm";
-  arm.position.set(1.0, 0.8, 0);
-  arm.rotation.z = Math.PI * 0.35;
+  arm.position.set(0.95, 0.7, 0);
+  arm.rotation.z = 0.45;
   arm.castShadow = true;
   arm.scale.set(0, 1, 1);
   ghostGroup.add(arm);
   
   /* hand */
-  var handGeom = new THREE.SphereGeometry(0.42, 20, 20);
-  var hand = new THREE.Mesh(handGeom, armMat);
+  var handGeom = new THREE.SphereGeometry(0.4, 20, 20);
+  var hand = new THREE.Mesh(handGeom, armMat.clone());
   hand.name = "hand";
-  hand.position.set(2.1, -0.4, 0);
+  hand.position.set(2.0, -0.3, 0);
   hand.castShadow = true;
   hand.scale.set(0, 1, 1);
   ghostGroup.add(hand);
   
-  /* particle system */
-  var particleCount = 120;
+  /* particles */
+  var particleCount = 150;
   var geometry = new THREE.BufferGeometry();
   var positions = new Float32Array(particleCount * 3);
   var velocities = [];
   for(var i = 0; i < particleCount; i++){
     var angle = Math.random() * Math.PI * 2;
-    var dist = 0.8 + Math.random() * 1.8;
+    var dist = 1.0 + Math.random() * 2.2;
     positions[i*3+0] = Math.cos(angle) * dist;
-    positions[i*3+1] = (Math.random()-0.5) * 2;
+    positions[i*3+1] = (Math.random()-0.5) * 2.5;
     positions[i*3+2] = Math.sin(angle) * dist;
     velocities.push({
-      vx: (Math.random()-0.5)*0.08,
-      vy: (Math.random()-0.5)*0.12,
-      vz: (Math.random()-0.5)*0.08,
+      vx: (Math.random()-0.5)*0.06,
+      vy: (Math.random()-0.5)*0.1,
+      vz: (Math.random()-0.5)*0.06,
       life: 1, lifeMax: 1
     });
   }
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   var particleMat = new THREE.PointsMaterial({
     color: 0x7fd8e8,
-    size: 0.16,
+    size: 0.12,
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.8
+    opacity: 0.9,
+    sizeRange: 0.1
   });
   particles = new THREE.Points(geometry, particleMat);
   particles.userData = {velocities: velocities};
@@ -389,7 +413,7 @@ function enableDesktop(){
   });
 }
 
-/* ghost placement & interaction */
+/* ghost placement */
 function respawnGhost(){
   var away=90+Math.random()*180;
   if(Math.random()<0.5) away=-away;
@@ -424,6 +448,7 @@ function ghostFound(){
   setTimeout(function(){
     if(state.trust>=TRUST_MAX){
       state.phase="final";
+      state.finalStartTime=0;
       showLine(FINAL_LINE,9000);
       state.ghostBearing=normDeg(state.heading+ (Math.random()<0.5?-30:30));
     }else{
@@ -471,7 +496,6 @@ var holdT0=null;
 function loop(t){
   state.time = t;
   
-  /* update scene */
   if(state.phase==="seek" || state.phase==="final"){
     var d=angDiff(state.ghostBearing, state.heading);
     var absD=Math.abs(d);
@@ -481,61 +505,66 @@ function loop(t){
     state.inView = absD < 10;
     var vis = Math.max(0, 1 - absD/fov);
     
-    /* camera yaw */
+    /* camera yaw - rotate around Y axis */
     camera.rotation.order = 'YXZ';
-    camera.rotation.y = d * Math.PI / 180;
+    camera.rotation.y = d * Math.PI / 180 * 0.4;
     
     /* ghost scale & opacity */
     var near = 0.55 + 0.5*(state.trust/TRUST_MAX);
     var scale = (0.7 + 0.3*vis) * near;
     ghostGroup.scale.set(scale, scale, scale);
+    
     ghostGroup.children.forEach(function(child){
-      if(child.material && child.material.opacity !== undefined){
-        child.material.opacity = Math.max(0.3, 0.85 * vis);
+      if(child.material && typeof child.material.opacity !== "undefined"){
+        child.material.opacity = Math.max(0.3, 0.88 * vis);
       }
     });
     
-    /* ghost breathing & floating */
-    ghostGroup.position.y = Math.sin(t/900)*0.15 + 0.3*(1-vis);
-    ghostGroup.rotation.y = t*0.0002;
+    /* ghost floating & rotation */
+    ghostGroup.position.y = Math.sin(t/900)*0.12 + 0.2*(1-vis);
+    ghostGroup.position.z = 0;
+    ghostGroup.rotation.y = t*0.0001;
+    ghostGroup.rotation.z = Math.sin(t/2000)*0.08;
     
-    /* arm/hand extend in final phase */
+    /* arm/hand extend in final */
     var arm = ghostGroup.getObjectByName("arm");
     var hand = ghostGroup.getObjectByName("hand");
     if(state.phase==="final"){
-      var armExt = Math.min(1, (t - state.finalStartTime || t) / 800);
+      if(state.finalStartTime===0) state.finalStartTime=t;
+      var armExt = Math.min(1, (t - state.finalStartTime) / 1200);
       arm.scale.x = armExt;
       hand.scale.x = armExt;
-      if(armExt>0.5){
-        handZone.style.left = (innerWidth/2 + d/fov*(innerWidth/2)*1.05 + 60) + "px";
-        handZone.style.top = "50%";
-        handZone.style.display = state.inView ? "block" : "none";
+      if(armExt>0.6 && state.inView){
+        handZone.style.display = "block";
       }
     }else{
       arm.scale.x = 0;
       hand.scale.x = 0;
     }
     
-    /* ghost color shift with trust */
+    /* color shift with trust */
     var hue = spiritHue();
     ghostGroup.children.forEach(function(child){
-      if(child.material && child.material.emissive){
-        child.material.emissive.setHSL(hue/360, 0.9, 0.5);
+      if(child.isMesh && child.material && child.material.emissive){
+        var hh = hue/360;
+        child.material.emissive.setHSL(hh, 0.85, 0.45);
       }
     });
     
-    /* particle animation */
+    /* particles */
     if(particles && particles.userData.velocities){
       var positions = particles.geometry.attributes.position.array;
       var vels = particles.userData.velocities;
       for(var i=0; i<vels.length; i++){
         var v = vels[i];
-        v.life -= 0.008;
+        v.life -= 0.007;
         if(v.life < 0){
           v.life = v.lifeMax;
-          positions[i*3+0] = (Math.random()-0.5)*0.1;
-          positions[i*3+1] = (Math.random()-0.5)*0.1;
-          positions[i*3+2] = (Math.random()-0.5)*0.1;
+          var angle = Math.random() * Math.PI * 2;
+          var dist = 1.2 + Math.random() * 0.5;
+          positions[i*3+0] = Math.cos(angle) * dist;
+          positions[i*3+1] = (Math.random()-0.5)*0.2;
+          positions[i*3+2] = Math.sin(angle) * dist;
         }else{
           positions[i*3+0] += v.vx;
           positions[i*3+1] += v.vy;
@@ -545,7 +574,7 @@ function loop(t){
       particles.geometry.attributes.position.needsUpdate = true;
     }
     
-    /* seek hold logic */
+    /* seek hold */
     if(state.phase==="seek"){
       if(state.inView){
         if(holdT0===null)holdT0=t;
@@ -561,7 +590,6 @@ function loop(t){
     
     if(state.phase==="final"){
       tickFinal();
-      state.finalStartTime = state.finalStartTime || t;
     }
   }
   
