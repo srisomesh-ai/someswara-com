@@ -360,8 +360,8 @@ function ghostFound(){
     if(state.trust>=TRUST_MAX){
       state.phase="final";
       showLine(FINAL_LINE,9000);
-      // final: he stays put, slightly off to one side
-      state.ghostBearing=normDeg(state.heading+ (Math.random()<0.5?-30:30));
+      // final: he stays put at fixed world bearing 300°
+      state.ghostBearing=GHOST_WORLD_BEARING; // Locked to world space
     }else{
       respawnGhost();
       state.phase="seek";
