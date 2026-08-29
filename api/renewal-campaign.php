@@ -9,53 +9,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+
 // ========== CONFIG ==========
-$exotel_sid = 'srisomesh';
-$exotel_token = 'your_exotel_token_here';
-$exotel_from = '+919440XXX';
-
-// Use temporary data directory (more compatible)
-$data_dir = '/tmp/renewal_campaign_' . md5(__DIR__);
+$data_dir = sys_get_temp_dir() . '/renewal_campaign';
 @mkdir($data_dir, 0777, true);
-$sqlite_db = $data_dir . '/renewal_campaign.db';
+$devices_file = $data_dir . '/devices.json';
+$calls_file = $data_dir . '/calls.json';
 
-// ========== SQLITE DB INIT ==========
-try {
-    $pdo = new PDO('sqlite:' . $sqlite_db);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_THROW);
-    
-    // Create tables if not exist
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS devices (
-            id INTEGER PRIMARY KEY,
-            sim_number TEXT UNIQUE,
-            vehicle_name TEXT,
-            customer_name TEXT,
-            customer_phone TEXT,
-            expiry_date TEXT,
-            server_name TEXT,
-            device_status TEXT DEFAULT 'unknown',
-            last_online TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ");
-    
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS call_logs (
-            id INTEGER PRIMARY KEY,
-            sim_number TEXT,
-            customer_phone TEXT,
-            call_status TEXT,
-            call_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            response TEXT
-        )
-    ");
-} catch (Exception $e) {
-    http_response_code(500);
-    die(json_encode(['error' => 'Database init error', 'details' => $e->getMessage()]));
-}
-
-// ========== MOCK DEVICE DATA (For Testing) ==========
+// ========== MOCK DEVICE DATA ==========
 function getMockDevices() {
     return [
         [
@@ -111,81 +74,99 @@ function getMockDevices() {
     ];
 }
 
-// ========== ENDPOINTS ==========
+// ========== HELPER FUNCTIONS ==========
 
-$action = $_GET['action'] ?? 'list';
-
-switch ($action) {
-    
-    case 'list':
-        listDevices();
-        break;
-        
-    case 'trigger-call':
-        triggerCall($_POST['sim'] ?? null);
-        break;
-        
-    case 'get-call-logs':
-        getCallLogs($_GET['sim'] ?? null);
-        break;
-        
-    case 'sync-devices':
-        syncDevices();
-        break;
-        
-    default:
-        http_response_code(400);
-        echo json_encode(['error' => 'Invalid action']);
+function readDevices() {
+    global $devices_file;
+    if (file_exists($devices_file)) {
+        $json = file_get_contents($devices_file);
+        return json_decode($json, true) ?? [];
+    }
+    return [];
 }
 
-// ========== FUNCTIONS ==========
+function writeDevices($devices) {
+    global $devices_file;
+    $json = json_encode($devices, JSON_PRETTY_PRINT);
+    if (file_put_contents($devices_file, $json) === false) {
+        throw new Exception("Cannot write devices file");
+    }
+}
+
+function readCalls() {
+    global $calls_file;
+    if (file_exists($calls_file)) {
+        $json = file_get_contents($calls_file);
+        return json_decode($json, true) ?? [];
+    }
+    return [];
+}
+
+function writeCalls($calls) {
+    global $calls_file;
+    $json = json_encode($calls, JSON_PRETTY_PRINT);
+    if (file_put_contents($calls_file, $json) === false) {
+        throw new Exception("Cannot write calls file");
+    }
+}
+
+// ========== ENDPOINT HANDLERS ==========
 
 function listDevices() {
-    global $pdo;
+    $filter_status = $_GET['status'] ?? null;
+    $filter_days = intval($_GET['days'] ?? 7);
     
-    $filter_status = $_GET['status'] ?? null;  // 'online' or 'offline'
-    $filter_days = $_GET['days'] ?? 7;  // Expires within X days
+    $devices = readDevices();
     
-    $query = "SELECT * FROM devices WHERE 1=1";
-    $params = [];
+    // Filter by expiry date
+    $filtered = [];
+    $now = time();
+    $expiry_limit = $now + ($filter_days * 86400);
     
-    if ($filter_status) {
-        $query .= " AND device_status = ?";
-        $params[] = $filter_status;
+    foreach ($devices as $device) {
+        $expiry_time = strtotime($device['expiry_date']);
+        if ($expiry_time < $expiry_limit && $expiry_time > $now) {
+            // Check status filter
+            if ($filter_status && $device['device_status'] !== $filter_status) {
+                continue;
+            }
+            
+            // Add derived fields
+            $device['days_left'] = intval(($expiry_time - $now) / 86400);
+            $device['callable'] = ($device['device_status'] === 'online') ? 1 : 0;
+            
+            $filtered[] = $device;
+        }
     }
     
-    // Calculate expiry window (e.g., expires in next 10 days)
-    $query .= " AND DATE(expiry_date) BETWEEN DATE('now') AND DATE('now', '+' || ? || ' days')";
-    $params[] = $filter_days;
+    // Sort by expiry date
+    usort($filtered, function($a, $b) {
+        return strtotime($a['expiry_date']) - strtotime($b['expiry_date']);
+    });
     
-    $query .= " ORDER BY DATE(expiry_date) ASC";
-    
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $devices = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Add derived fields
-    foreach ($devices as &$device) {
-        $device['days_left'] = intval((strtotime($device['expiry_date']) - time()) / 86400);
-        $device['callable'] = ($device['device_status'] === 'online') ? 1 : 0;  // Only call online devices
-    }
-    
-    echo json_encode(['devices' => $devices, 'total' => count($devices)]);
+    echo json_encode([
+        'devices' => $filtered,
+        'total' => count($filtered),
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
 }
 
 function triggerCall($sim) {
-    global $pdo, $exotel_sid, $exotel_token, $exotel_from;
-    
     if (!$sim) {
         http_response_code(400);
         echo json_encode(['error' => 'SIM number required']);
         return;
     }
     
-    // Get device info
-    $stmt = $pdo->prepare("SELECT * FROM devices WHERE sim_number = ?");
-    $stmt->execute([$sim]);
-    $device = $stmt->fetch(PDO::FETCH_ASSOC);
+    $devices = readDevices();
+    $device = null;
+    
+    foreach ($devices as $d) {
+        if ($d['sim_number'] === $sim) {
+            $device = $d;
+            break;
+        }
+    }
     
     if (!$device) {
         http_response_code(404);
@@ -199,116 +180,130 @@ function triggerCall($sim) {
         return;
     }
     
-    // Prepare call message
-    $customer_name = $device['customer_name'];
-    $expiry_date = $device['expiry_date'];
-    $vehicle = $device['vehicle_name'];
-    
-    // In production, use Sarvam AI TTS or Exotel's native TTS
-    // For now, we'll prepare the call and log it
-    $call_message = "Hello $customer_name, your GPS device for $vehicle expires on $expiry_date. Press 1 to renew now, press 2 to speak with an agent.";
-    
-    $customer_phone = $device['customer_phone'];
-    
-    // ===== EXOTEL CALL INTEGRATION =====
-    // Exotel API: POST https://api.exotel.com/v1/Accounts/{SID}/Calls/connect.json
-    $exotel_url = "https://api.exotel.com/v1/Accounts/$exotel_sid/Calls/connect.json";
-    
-    $call_data = [
-        'From' => $exotel_from,
-        'To' => $customer_phone,
-        'CallerId' => $exotel_from,
-        'Url' => 'http://somewhere.com/ivr_callback.php',  // IVR webhook (optional for now)
-        'CallType' => 'trans'  // trans = transactional
+    // Log the call
+    $call_log = [
+        'sim_number' => $sim,
+        'customer_phone' => $device['customer_phone'],
+        'call_status' => 'initiated',
+        'call_time' => date('Y-m-d H:i:s'),
+        'response' => json_encode([
+            'message' => "Outgoing call initiated to {$device['customer_phone']}",
+            'customer' => $device['customer_name'],
+            'vehicle' => $device['vehicle_name'],
+            'expiry' => $device['expiry_date']
+        ])
     ];
     
-    // For TEST: Log without actual API call
-    $call_result = simulateExotelCall($call_data, $device);
-    
-    // Log the call attempt
-    $stmt = $pdo->prepare("
-        INSERT INTO call_logs (sim_number, customer_phone, call_status, response)
-        VALUES (?, ?, ?, ?)
-    ");
-    $stmt->execute([
-        $sim,
-        $customer_phone,
-        $call_result['status'],
-        json_encode($call_result['details'])
-    ]);
+    $calls = readCalls();
+    $calls[] = $call_log;
+    writeCalls($calls);
     
     echo json_encode([
         'success' => true,
         'message' => "Call triggered for {$device['customer_name']}",
         'device' => $device,
-        'call_result' => $call_result
+        'call_log' => $call_log
     ]);
 }
 
-function simulateExotelCall($call_data, $device) {
-    // In test mode, simulate the call
-    return [
-        'status' => 'initiated',
-        'details' => [
-            'message' => "Outgoing call initiated to {$device['customer_phone']}",
-            'customer' => $device['customer_name'],
-            'vehicle' => $device['vehicle_name'],
-            'expiry' => $device['expiry_date'],
-            'timestamp' => date('Y-m-d H:i:s')
-        ]
-    ];
-}
-
 function getCallLogs($sim = null) {
-    global $pdo;
-    
-    $query = "SELECT * FROM call_logs WHERE 1=1";
-    $params = [];
+    $calls = readCalls();
     
     if ($sim) {
-        $query .= " AND sim_number = ?";
-        $params[] = $sim;
+        $calls = array_filter($calls, function($log) use ($sim) {
+            return $log['sim_number'] === $sim;
+        });
     }
     
-    $query .= " ORDER BY call_time DESC LIMIT 50";
+    // Sort by date descending
+    usort($calls, function($a, $b) {
+        return strtotime($b['call_time']) - strtotime($a['call_time']);
+    });
     
-    $stmt = $pdo->prepare($query);
-    $stmt->execute($params);
-    $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Limit to 50
+    $calls = array_slice($calls, 0, 50);
     
-    echo json_encode(['logs' => $logs]);
+    echo json_encode(['logs' => $calls]);
 }
 
 function syncDevices() {
-    global $pdo;
-    
     try {
-        // Sync from mock data (in production, fetch from BharatGPS servers)
         $mock_devices = getMockDevices();
         
-        $count = 0;
+        $devices = [];
         foreach ($mock_devices as $device) {
-            $stmt = $pdo->prepare("
-                INSERT OR REPLACE INTO devices 
-                (sim_number, vehicle_name, customer_name, customer_phone, expiry_date, server_name, device_status, last_online)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            $result = $stmt->execute([
-                $device['sim'],
-                $device['vehicle'],
-                $device['customer'],
-                $device['phone'],
-                $device['expiry'],
-                $device['server'],
-                $device['status'],
-                $device['last_online']
-            ]);
-            if ($result) $count++;
+            $devices[] = [
+                'sim_number' => $device['sim'],
+                'vehicle_name' => $device['vehicle'],
+                'customer_name' => $device['customer'],
+                'customer_phone' => $device['phone'],
+                'expiry_date' => $device['expiry'],
+                'server_name' => $device['server'],
+                'device_status' => $device['status'],
+                'last_online' => $device['last_online'],
+                'created_at' => date('Y-m-d H:i:s')
+            ];
         }
         
-        echo json_encode(['success' => true, 'synced' => $count, 'total' => count($mock_devices)]);
+        writeDevices($devices);
+        
+        echo json_encode([
+            'success' => true,
+            'synced' => count($devices),
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['error' => 'Sync failed', 'details' => $e->getMessage()]);
+        echo json_encode(['error' => $e->getMessage()]);
     }
 }
+
+function showDiagnostics() {
+    global $data_dir;
+    
+    echo json_encode([
+        'php_version' => phpversion(),
+        'temp_dir' => sys_get_temp_dir(),
+        'data_dir' => $data_dir,
+        'data_dir_exists' => is_dir($data_dir),
+        'data_dir_writable' => is_writable($data_dir),
+        'json_support' => extension_loaded('json') ? 'YES' : 'NO',
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+}
+
+// ========== MAIN ROUTER ==========
+
+try {
+    $action = $_GET['action'] ?? 'list';
+    
+    switch ($action) {
+        case 'diagnostics':
+            showDiagnostics();
+            break;
+        case 'list':
+            listDevices();
+            break;
+        case 'trigger-call':
+            triggerCall($_POST['sim'] ?? null);
+            break;
+        case 'get-call-logs':
+            getCallLogs($_GET['sim'] ?? null);
+            break;
+        case 'sync-devices':
+            syncDevices();
+            break;
+        default:
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid action: ' . $action]);
+    }
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'Server error',
+        'message' => $e->getMessage(),
+        'file' => basename($e->getFile()),
+        'line' => $e->getLine()
+    ]);
+}
+?>
