@@ -774,19 +774,30 @@ function observeReveals(){
 let allDevices = [];
 
 async function loadDashboard(){
-  await syncDevices();
-  await loadDevices();
-  await loadCallLogs();
+  try{
+    document.getElementById('device-container').innerHTML=`<div class="empty-state"><h3>Initializing...</h3><p>Syncing with servers...</p></div>`;
+    await syncDevices();
+    await loadCallLogs();
+  }catch(e){
+    console.error('Dashboard init error:', e);
+  }
 }
 
 async function syncDevices(){
   try{
     const res=await fetch('./api/renewal-campaign.php?action=sync-devices');
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
+    if(data.error){
+      showToast(`Error: ${data.error}`,'error');
+      console.error('API error:', data);
+      return;
+    }
     showToast(`✓ Synced ${data.synced} devices from servers`,'success');
+    await loadDevices();
   }catch(e){
     console.error('Sync error:',e);
-    showToast('Error syncing devices','error');
+    showToast(`Sync failed: ${e.message}`,'error');
   }
 }
 
@@ -794,7 +805,15 @@ async function loadDevices(){
   try{
     const days=document.getElementById('filter-days').value||7;
     const res=await fetch(`./api/renewal-campaign.php?action=list&days=${days}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
+    
+    if(data.error){
+      showToast(`Error: ${data.error}`,'error');
+      console.error('API error:', data);
+      return;
+    }
+    
     allDevices=data.devices||[];
     
     // Update stats
@@ -803,11 +822,13 @@ async function loadDevices(){
     document.getElementById('stat-total').textContent=allDevices.length;
     document.getElementById('stat-online').textContent=online;
     document.getElementById('stat-offline').textContent=offline;
+    document.getElementById('stat-called').textContent='0';
     
     renderDeviceTable(allDevices);
   }catch(e){
     console.error('Load error:',e);
-    showToast('Error loading devices','error');
+    showToast(`Error: ${e.message}`,'error');
+    document.getElementById('device-container').innerHTML=`<div class="empty-state"><h3>Error loading devices</h3><p>${e.message}</p><p><small>Check browser console for details</small></p></div>`;
   }
 }
 

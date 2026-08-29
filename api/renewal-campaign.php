@@ -10,13 +10,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // ========== CONFIG ==========
-$exotel_sid = 'srisomesh';  // Your Exotel SID
-$exotel_token = 'your_exotel_token_here';  // Replace with actual token
-$exotel_from = '+919440XXX';  // Your Exotel virtual number (will test locally)
-$sqlite_db = __DIR__ . '/../data/renewal_campaign.db';
+$exotel_sid = 'srisomesh';
+$exotel_token = 'your_exotel_token_here';
+$exotel_from = '+919440XXX';
 
-// Create data directory
-@mkdir(__DIR__ . '/../data', 0755, true);
+// Use temporary data directory (more compatible)
+$data_dir = '/tmp/renewal_campaign_' . md5(__DIR__);
+@mkdir($data_dir, 0777, true);
+$sqlite_db = $data_dir . '/renewal_campaign.db';
 
 // ========== SQLITE DB INIT ==========
 try {
@@ -46,12 +47,12 @@ try {
             customer_phone TEXT,
             call_status TEXT,
             call_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            response TEXT,
-            FOREIGN KEY(sim_number) REFERENCES devices(sim_number)
+            response TEXT
         )
     ");
 } catch (Exception $e) {
-    die(json_encode(['error' => 'Database error: ' . $e->getMessage()]));
+    http_response_code(500);
+    die(json_encode(['error' => 'Database init error', 'details' => $e->getMessage()]));
 }
 
 // ========== MOCK DEVICE DATA (For Testing) ==========
@@ -281,26 +282,33 @@ function getCallLogs($sim = null) {
 function syncDevices() {
     global $pdo;
     
-    // Sync from mock data (in production, fetch from BharatGPS servers)
-    $mock_devices = getMockDevices();
-    
-    foreach ($mock_devices as $device) {
-        $stmt = $pdo->prepare("
-            INSERT OR REPLACE INTO devices 
-            (sim_number, vehicle_name, customer_name, customer_phone, expiry_date, server_name, device_status, last_online)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $device['sim'],
-            $device['vehicle'],
-            $device['customer'],
-            $device['phone'],
-            $device['expiry'],
-            $device['server'],
-            $device['status'],
-            $device['last_online']
-        ]);
+    try {
+        // Sync from mock data (in production, fetch from BharatGPS servers)
+        $mock_devices = getMockDevices();
+        
+        $count = 0;
+        foreach ($mock_devices as $device) {
+            $stmt = $pdo->prepare("
+                INSERT OR REPLACE INTO devices 
+                (sim_number, vehicle_name, customer_name, customer_phone, expiry_date, server_name, device_status, last_online)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $result = $stmt->execute([
+                $device['sim'],
+                $device['vehicle'],
+                $device['customer'],
+                $device['phone'],
+                $device['expiry'],
+                $device['server'],
+                $device['status'],
+                $device['last_online']
+            ]);
+            if ($result) $count++;
+        }
+        
+        echo json_encode(['success' => true, 'synced' => $count, 'total' => count($mock_devices)]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Sync failed', 'details' => $e->getMessage()]);
     }
-    
-    echo json_encode(['success' => true, 'synced' => count($mock_devices)]);
 }
