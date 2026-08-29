@@ -291,52 +291,6 @@ footer a{color:var(--blue);text-decoration:none}
 .reason .em{font-size:1.3rem}
 .reason b{display:block;font-size:.95rem}
 .reason span{color:var(--muted);font-size:.86rem}
-
-/* ---------- renewal campaign dashboard ---------- */
-.t-renewal{color:var(--blue)}
-.dashboard{max-width:1200px;margin:0 auto;padding:0 22px}
-.dashboard-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;gap:14px;flex-wrap:wrap}
-@media(max-width:640px){.dashboard-header{flex-direction:column;align-items:flex-start}}
-
-.filters{display:flex;gap:12px;align-items:center;margin-bottom:24px;flex-wrap:wrap}
-.filters select,.filters input{padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-size:.9rem;font-family:inherit}
-.filters button{padding:8px 16px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:.9rem}
-.filters button:hover{background:var(--blue-dark)}
-.filters button.secondary{background:var(--soft);color:var(--ink)}
-.filters button.secondary:hover{background:#EBEBF0}
-
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
-@media(max-width:800px){.stats-row{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:600px){.stats-row{grid-template-columns:1fr}}
-
-.stat-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;text-align:center;box-shadow:var(--shadow)}
-.stat-card .num{font-size:1.8rem;font-weight:700;color:var(--blue);display:block}
-.stat-card .label{color:var(--muted);font-size:.85rem;margin-top:4px}
-
-.device-table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
-.device-table thead{background:var(--soft)}
-.device-table th{padding:14px;text-align:left;font-size:.85rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.device-table td{padding:14px;border-top:1px solid var(--line);font-size:.9rem}
-.device-table tbody tr:hover{background:var(--soft)}
-
-.device-row.offline{opacity:.7}
-.device-row.callable td{background:rgba(52,199,89,.04)}
-
-.status-badge{display:inline-block;padding:4px 12px;border-radius:99px;font-size:.75rem;font-weight:600}
-.status-online{background:rgba(52,199,89,.15);color:#28A745}
-.status-offline{background:rgba(255,59,48,.15);color:#FF3B30}
-
-.btn-call{background:var(--blue);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600;transition:all .2s}
-.btn-call:hover{background:var(--blue-dark);transform:scale(1.05)}
-.btn-call:disabled{background:var(--muted);cursor:not-allowed;opacity:.5;transform:none}
-
-.empty-state{text-align:center;padding:60px 22px;color:var(--muted)}
-.empty-state svg{width:60px;height:60px;margin-bottom:16px;opacity:.5}
-.empty-state h3{font-size:1.1rem;margin-bottom:8px;color:var(--ink)}
-
-.toast{position:fixed;bottom:20px;right:20px;background:var(--ink);color:#fff;padding:14px 20px;border-radius:8px;box-shadow:var(--shadow-hover);z-index:999;max-width:320px}
-.toast.success{background:#28A745}
-.toast.error{background:#FF3B30}
 </style>
 </head>
 <body>
@@ -350,7 +304,6 @@ footer a{color:var(--blue);text-decoration:none}
       <a href="#/entrepreneur">Entrepreneur</a>
       <a href="#/hobby">Hobby</a>
       <a href="#/projects">Projects</a>
-      <a href="#/renewal-campaign">📞 Renewal</a>
       <a href="#/contact">Contact</a>
     </nav>
   </div>
@@ -673,79 +626,14 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 </div>
 
-<!-- ================= RENEWAL CAMPAIGN ================= -->
-<div class="page t-blue" id="pg-renewal-campaign">
-  <div class="p-hero">
-    <span class="p-tag">Operations</span>
-    <h2>📞 BharatGPS Renewal Campaign</h2>
-    <p class="sub">Smart calling system for device renewal — filters offline devices, tracks call results, keeps customers engaged.</p>
-  </div>
-
-  <div class="dashboard">
-    <!-- Stats Row -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <span class="num" id="stat-total">0</span>
-        <span class="label">Expiring Soon</span>
-      </div>
-      <div class="stat-card">
-        <span class="num" id="stat-online">0</span>
-        <span class="label">Online (Ready to Call)</span>
-      </div>
-      <div class="stat-card">
-        <span class="num" id="stat-offline">0</span>
-        <span class="label">Offline (SMS Only)</span>
-      </div>
-      <div class="stat-card">
-        <span class="num" id="stat-called">0</span>
-        <span class="label">Already Called</span>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="filters">
-      <select id="filter-status" onchange="applyFilters()">
-        <option value="">All Devices</option>
-        <option value="online">🟢 Online Only</option>
-        <option value="offline">🔴 Offline Only</option>
-        <option value="callable">📞 Callable (Online)</option>
-      </select>
-      <select id="filter-days" onchange="applyFilters()">
-        <option value="7">Expires in 7 days</option>
-        <option value="10">Expires in 10 days</option>
-        <option value="14">Expires in 14 days</option>
-      </select>
-      <button class="secondary" onclick="syncDevices()">🔄 Sync Devices</button>
-      <button onclick="bulkCall()">📞 Call All Online</button>
-    </div>
-
-    <!-- Device Table -->
-    <div id="device-container">
-      <div class="empty-state">
-        <h3>Loading devices...</h3>
-        <p>Syncing with BharatGPS servers...</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Call Log Section -->
-  <div class="dashboard" style="margin-top:40px;padding-bottom:40px">
-    <h3 style="margin-bottom:16px">📋 Recent Call Activity</h3>
-    <div id="call-log-container">
-      <p style="color:var(--muted);text-align:center;padding:40px 22px">No calls logged yet</p>
-    </div>
-  </div>
-</div>
-
 <footer>
   © 2026 Someswara · Visakhapatnam, India · <a href="https://instagram.com/srisomesh">Instagram</a> · someswara.com
 </footer>
 
 <script>
-const pages={'':'pg-home','/':'pg-home','/trader':'pg-trader','/entrepreneur':'pg-entrepreneur','/hobby':'pg-hobby','/projects':'pg-projects','/renewal-campaign':'pg-renewal-campaign','/contact':'pg-contact'};
+const pages={'':'pg-home','/':'pg-home','/trader':'pg-trader','/entrepreneur':'pg-entrepreneur','/hobby':'pg-hobby','/projects':'pg-projects','/contact':'pg-contact'};
 function route(){
   let h=location.hash.replace('#','');
-  // Support clean URLs (someswara.com/trader) served via .htaccess
   if(!h && location.pathname!=='/' ){
     const p='/'+location.pathname.replace(/^\/+|\/+$/g,'');
     if(pages[p]) h=p;
@@ -758,8 +646,6 @@ function route(){
   });
   window.scrollTo({top:0});
   requestAnimationFrame(observeReveals);
-  // Load dashboard when navigating to renewal campaign
-  if(id==='pg-renewal-campaign') loadDashboard();
 }
 window.addEventListener('hashchange',route);
 
@@ -769,205 +655,6 @@ const io=new IntersectionObserver(es=>{
 function observeReveals(){
   document.querySelectorAll('.page.show .rv:not(.in)').forEach(el=>io.observe(el));
 }
-
-// ========== RENEWAL CAMPAIGN DASHBOARD ==========
-let allDevices = [];
-
-async function loadDashboard(){
-  try{
-    document.getElementById('device-container').innerHTML=`<div class="empty-state"><h3>Initializing...</h3><p>Syncing with servers...</p></div>`;
-    await syncDevices();
-    await loadCallLogs();
-  }catch(e){
-    console.error('Dashboard init error:', e);
-  }
-}
-
-async function syncDevices(){
-  try{
-    const res=await fetch('./api/renewal-campaign.php?action=sync-devices');
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data=await res.json();
-    if(data.error){
-      showToast(`Error: ${data.error}`,'error');
-      console.error('API error:', data);
-      return;
-    }
-    showToast(`✓ Synced ${data.synced} devices from servers`,'success');
-    await loadDevices();
-  }catch(e){
-    console.error('Sync error:',e);
-    showToast(`Sync failed: ${e.message}`,'error');
-  }
-}
-
-async function loadDevices(){
-  try{
-    const days=document.getElementById('filter-days').value||7;
-    const res=await fetch(`./api/renewal-campaign.php?action=list&days=${days}`);
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data=await res.json();
-    
-    if(data.error){
-      showToast(`Error: ${data.error}`,'error');
-      console.error('API error:', data);
-      return;
-    }
-    
-    allDevices=data.devices||[];
-    
-    // Update stats
-    const online=allDevices.filter(d=>d.device_status==='online').length;
-    const offline=allDevices.filter(d=>d.device_status==='offline').length;
-    document.getElementById('stat-total').textContent=allDevices.length;
-    document.getElementById('stat-online').textContent=online;
-    document.getElementById('stat-offline').textContent=offline;
-    document.getElementById('stat-called').textContent='0';
-    
-    renderDeviceTable(allDevices);
-  }catch(e){
-    console.error('Load error:',e);
-    showToast(`Error: ${e.message}`,'error');
-    document.getElementById('device-container').innerHTML=`<div class="empty-state"><h3>Error loading devices</h3><p>${e.message}</p><p><small>Check browser console for details</small></p></div>`;
-  }
-}
-
-function renderDeviceTable(devices){
-  const container=document.getElementById('device-container');
-  
-  if(devices.length===0){
-    container.innerHTML=`<div class="empty-state"><h3>No devices found</h3><p>No devices expiring within the selected period</p></div>`;
-    return;
-  }
-  
-  let html=`<table class="device-table">
-    <thead>
-      <tr>
-        <th>Customer</th>
-        <th>Vehicle / SIM</th>
-        <th>Expires In</th>
-        <th>Status</th>
-        <th>Last Online</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody>`;
-  
-  devices.forEach(d=>{
-    const statusClass=d.device_status==='online'?'status-online':'status-offline';
-    const statusLabel=d.device_status==='online'?'🟢 Online':'🔴 Offline';
-    const canCall=d.callable?'':'disabled';
-    const rowClass=d.device_status==='offline'?'offline':d.callable?'callable':'';
-    
-    html+=`<tr class="device-row ${rowClass}">
-      <td><strong>${d.customer_name}</strong><br><small style="color:var(--muted)">${d.customer_phone}</small></td>
-      <td>${d.vehicle_name}<br><small style="color:var(--muted)">${d.sim_number}</small></td>
-      <td><strong>${d.days_left} days</strong><br><small>${d.expiry_date}</small></td>
-      <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-      <td><small>${d.last_online}</small></td>
-      <td><button class="btn-call" onclick="callCustomer('${d.sim_number}')" ${canCall}>Call</button></td>
-    </tr>`;
-  });
-  
-  html+=`</tbody></table>`;
-  container.innerHTML=html;
-}
-
-async function callCustomer(sim){
-  if(!confirm('Trigger call to this customer?')) return;
-  
-  try{
-    const res=await fetch('./api/renewal-campaign.php?action=trigger-call',{
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:`sim=${encodeURIComponent(sim)}`
-    });
-    
-    const data=await res.json();
-    if(data.success){
-      showToast(`✓ Call initiated for ${data.device.customer_name}`,'success');
-      loadCallLogs();
-    }else{
-      showToast(data.error||'Failed to trigger call','error');
-    }
-  }catch(e){
-    console.error('Call error:',e);
-    showToast('Error triggering call','error');
-  }
-}
-
-async function bulkCall(){
-  const callable=allDevices.filter(d=>d.callable);
-  if(callable.length===0){
-    showToast('No online devices to call','error');
-    return;
-  }
-  
-  if(!confirm(`Call ${callable.length} online device(s)?`)) return;
-  
-  for(const device of callable){
-    await callCustomer(device.sim_number);
-    await new Promise(r=>setTimeout(r,1000)); // 1s delay between calls
-  }
-}
-
-function applyFilters(){
-  const status=document.getElementById('filter-status').value;
-  let filtered=allDevices;
-  
-  if(status==='callable') filtered=allDevices.filter(d=>d.callable);
-  else if(status) filtered=allDevices.filter(d=>d.device_status===status);
-  
-  renderDeviceTable(filtered);
-}
-
-async function loadCallLogs(){
-  try{
-    const res=await fetch('./api/renewal-campaign.php?action=get-call-logs');
-    const data=await res.json();
-    
-    const container=document.getElementById('call-log-container');
-    if(data.logs.length===0){
-      container.innerHTML=`<p style="color:var(--muted);text-align:center;padding:40px 22px">No calls logged yet</p>`;
-      return;
-    }
-    
-    let html=`<table class="device-table">
-      <thead>
-        <tr>
-          <th>Phone</th>
-          <th>Status</th>
-          <th>Time</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>`;
-    
-    data.logs.forEach(log=>{
-      const details=JSON.parse(log.response||'{}');
-      html+=`<tr>
-        <td><small>${log.customer_phone}</small></td>
-        <td><span class="status-badge status-online">${log.call_status}</span></td>
-        <td><small>${log.call_time}</small></td>
-        <td><small>${details.message||''}</small></td>
-      </tr>`;
-    });
-    
-    html+=`</tbody></table>`;
-    container.innerHTML=html;
-  }catch(e){
-    console.error('Log error:',e);
-  }
-}
-
-function showToast(msg,type='info'){
-  const toast=document.createElement('div');
-  toast.className=`toast ${type}`;
-  toast.textContent=msg;
-  document.body.appendChild(toast);
-  setTimeout(()=>toast.remove(),3000);
-}
-
 route();
 </script>
 </body>
