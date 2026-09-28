@@ -1,0 +1,7 @@
+data/*
+!data/.htaccess
+videos/*
+!videos/.htaccess
+uploads/*
+!uploads/.htaccess
+.DS_Store
