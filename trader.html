@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Futures Trader in India — Funding-Rate Strategies & Auto-Trading | Someswara</title>
+<meta name="description" content="Someswara, crypto F&O trader from Visakhapatnam, India — funding-rate fade strategy, self-built auto-trading robot and risk-first capital protection on India-regulated exchanges.">
+<meta name="author" content="Someswara (Sri Somesh)">
+<link rel="canonical" href="https://someswara.com/trader">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://someswara.com/trader">
+<meta property="og:title" content="Crypto Futures Trader in India — Funding-Rate Strategies & Auto-Trading | Someswara">
+<meta property="og:description" content="Someswara, crypto F&O trader from Visakhapatnam, India — funding-rate fade strategy, self-built auto-trading robot and risk-first capital protection on India-regulated exchanges.">
+<meta property="og:site_name" content="someswara.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FAFAFC;--card:#FFFFFF;--ink:#17202A;--muted:#5F6B76;--line:#E7EAF0;
+--headbg:rgba(250,250,252,.85);--navhover:#EEF1F6;--softbox:#F2F4F8;--good:#1E8E3E;
+--shadow:0 2px 16px rgba(23,32,42,.06);--shadow-hover:0 14px 44px rgba(23,32,42,.12);
+--accent:#1E8E3E;--accent-soft:rgba(30,142,62,.12);--invite-grad:linear-gradient(135deg,#1E8E3E,#115C27)}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:'Outfit',sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.site-header{position:sticky;top:0;z-index:80;background:var(--headbg);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+.header-in{max-width:1100px;margin:0 auto;padding:0 22px;display:flex;justify-content:space-between;align-items:center;height:60px}
+.logo{font-weight:800;font-size:1.08rem;text-decoration:none}
+.logo span{color:var(--accent)}
+nav ul{display:flex;gap:4px;list-style:none}
+nav a{text-decoration:none;color:var(--muted);font-size:.85rem;font-weight:600;padding:8px 14px;border-radius:12px;transition:all .2s}
+nav a:hover{color:var(--ink);background:var(--navhover)}
+nav a[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
+@media(max-width:680px){nav a{padding:6px 7px;font-size:.73rem}}
+.rv{opacity:0;transform:translateY(22px);transition:opacity .65s ease,transform .65s ease}
+.rv.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
+.p-hero{max-width:860px;margin:0 auto;text-align:center;padding:72px 22px 36px}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:.8rem;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:99px;padding:7px 16px;margin-bottom:18px}
+h1{font-size:clamp(2rem,5.4vw,3.3rem);font-weight:800;letter-spacing:-.03em;line-height:1.1}
+h1 em{font-style:normal;color:var(--accent)}
+h1 .loc{display:block;font-size:.42em;font-weight:600;color:var(--muted);margin-top:12px;letter-spacing:0}
+.p-hero .lede{margin-top:18px;color:var(--muted);font-size:1.08rem;max-width:620px;margin-inline:auto}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:900px;margin:0 auto;padding:16px 22px 6px}
+@media(max-width:640px){.stats{grid-template-columns:1fr}}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;text-align:center;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:1.3rem;font-weight:800;color:var(--accent)}
+.stat span{color:var(--muted);font-size:.84rem}
+section{max-width:1100px;margin:0 auto;padding:36px 22px 6px}
+h2{font-size:clamp(1.4rem,3.6vw,1.9rem);font-weight:800;letter-spacing:-.02em;line-height:1.2}
+.sec-head{text-align:center;max-width:700px;margin:0 auto 24px}
+.sec-head p{margin-top:8px;color:var(--muted);font-size:.98rem}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding-top:6px}
+@media(max-width:700px){.tiles{grid-template-columns:1fr}}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:var(--shadow);transition:all .25s}
+.tile:hover{transform:translateY(-4px);box-shadow:var(--shadow-hover)}
+.tile.wide{grid-column:1/-1}
+.mini{display:inline-block;font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-radius:99px;padding:5px 12px;margin-bottom:12px;background:var(--accent-soft);color:var(--accent)}
+h3{font-size:1.1rem;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+.tile p{color:var(--muted);font-size:.92rem}
+.impact{margin-top:12px;padding:10px 14px;border-radius:12px;background:var(--softbox);font-size:.86rem;color:var(--ink)}
+.impact b{color:var(--good);font-weight:700}
+.visit{margin-top:12px;font-size:.9rem}
+.visit a{color:var(--accent);font-weight:700;text-decoration:none}
+.visit a:hover{text-decoration:underline}
+.visit .soon{color:var(--muted);font-weight:600}
+.invite{max-width:1100px;margin:0 auto;padding:36px 22px 64px}
+.invite-in{border-radius:22px;padding:40px 32px;text-align:center;color:#fff;background:var(--invite-grad);box-shadow:var(--shadow-hover)}
+.invite-in h2{color:#fff}
+.invite-in p{margin-top:10px;opacity:.92;max-width:580px;margin-inline:auto;font-size:.97rem}
+.cta-row{margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:.92rem;border-radius:14px;padding:12px 26px;transition:all .2s}
+.btn-white{background:#fff;color:#17202A}
+.btn-white:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.btn-outline{border:1.5px solid rgba(255,255,255,.7);color:#fff}
+.btn-outline:hover{background:rgba(255,255,255,.12)}
+.site-footer{border-top:1px solid var(--line);padding:28px 22px;text-align:center;color:var(--muted);font-size:.85rem}
+.site-footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-in">
+    <a class="logo" href="/">Somes<span>wara</span></a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/trader" aria-current="page">Trader</a></li>
+        <li><a href="/entrepreneur">Entrepreneur</a></li>
+        <li><a href="/hobby">Films</a></li>
+        <li><a href="/projects">Projects</a></li>
+        <li><a href="/contact">Contact</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<div class="p-hero">
+  <span class="kicker">📈 /trader · Live markets, real discipline</span>
+  <h1>Crypto Futures Trader — <em>risk first, always</em>
+    <span class="loc">Someswara · Visakhapatnam, India</span>
+  </h1>
+  <p class="lede">I trade crypto perpetual futures on India-regulated exchanges. No borrowed signals, no blind bets — my edge is built with my own hands: data, code and cold discipline.</p>
+</div>
+<div class="stats">
+  <div class="stat rv"><b>Crypto F&O</b><span>Perpetual futures — primary market</span></div>
+  <div class="stat rv"><b>Algo + Manual</b><span>Robot-assisted, human-judged</span></div>
+  <div class="stat rv"><b>Stop-loss first</b><span>Defined before every entry</span></div>
+</div>
+<section aria-labelledby="h-edge">
+  <div class="sec-head rv"><h2 id="h-edge">My edge, in four positions</h2><p>The market pays the disciplined and punishes the emotional. I choose my side with code.</p></div>
+  <div class="tiles">
+    <div class="tile rv"><span class="mini">Strategy</span><h3>Funding-Rate Fade</h3><p>When funding rates go extreme, the crowd is over-leveraged on one side. I fade the crowd — longs against over-punished shorts, shorts against over-heated longs — with a strict stop on every position.</p></div>
+    <div class="tile rv"><span class="mini">Automation</span><h3>Somu Trader — my own robot</h3><p>A self-built auto-trading engine scanning round the clock: balance-based lot sizing, order placement and stop-loss verification. Discipline enforced by code, not mood.</p></div>
+    <div class="tile rv"><span class="mini">Risk Management</span><h3>Capital protection over profit chasing</h3><p>Position size comes from account maths, never excitement. Surviving the market matters more than beating it — that's how you stay in the game for years.</p></div>
+    <div class="tile rv"><span class="mini">Market Craft</span><h3>Always a student of the tape</h3><p>Order flow, CVD, RSI, ATR, exchange basis spreads — I keep building dashboards to see what the market is really doing beneath the price.</p></div>
+  </div>
+</section>
+<div class="invite">
+  <div class="invite-in rv">
+    <h2>Interested in the markets? 📈</h2>
+    <p>Want to learn trading from real experience, discuss strategies, or build trading tools and automation together? I'm open to serious conversations — no tips, no profit promises, just real craft.</p>
+    <div class="cta-row">
+      <a class="btn btn-white" href="https://wa.me/917330984620?text=Hi%20Someswara%2C%20let%27s%20talk%20trading" target="_blank" rel="noopener">Let's talk trading</a>
+      <a class="btn btn-outline" href="/contact">All contact options</a>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer class="site-footer">
+  © 2026 Someswara · Visakhapatnam, India · <a href="https://instagram.com/srisomesh">Instagram</a> · <a href="/blueconnect">Project BlueConnect</a> · someswara.com
+</footer>
+<script>
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{threshold:.1});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+</script>
+
+</body>
+</html>

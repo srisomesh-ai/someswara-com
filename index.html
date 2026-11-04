@@ -3,666 +3,251 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Someswara — Entrepreneur · Trader · Artist</title>
-<meta name="description" content="Someswara (Sri Somesh) — entrepreneur, trader, singer and builder from Visakhapatnam, India.">
+<title>Someswara — Entrepreneur, Trader, Independent Filmmaker & Software Builder in Visakhapatnam, India</title>
+<meta name="description" content="Someswara (Sri Somesh) from Visakhapatnam, India — founder of BharatGPS, crypto trader, independent filmmaker and inventor of Project BlueConnect. Open to investors, clients and collaborations.">
+<link rel="canonical" href="https://someswara.com/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#FFFFFF;
-  --soft:#F5F5F7;         /* apple light gray */
-  --ink:#1D1D1F;          /* apple near-black */
-  --muted:#6E6E73;
-  --line:#E8E8ED;
-  --blue:#0071E3;         /* apple blue */
-  --blue-dark:#0051A8;
-  --radius:20px;
-  --shadow:0 4px 24px rgba(0,0,0,.06);
-  --shadow-hover:0 12px 40px rgba(0,0,0,.1);
+  --bg:#FAFAFC;--card:#FFFFFF;--ink:#17202A;--muted:#5F6B76;--line:#E7EAF0;
+  --blue:#1A73E8;--green:#1E8E3E;--orange:#E8710A;--purple:#8430CE;
+  --radius:24px;--shadow:0 2px 16px rgba(23,32,42,.06);--shadow-hover:0 14px 44px rgba(23,32,42,.12);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{
-  background:var(--bg);color:var(--ink);
-  font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
-  line-height:1.6;-webkit-font-smoothing:antialiased;
-}
+body{background:var(--bg);color:var(--ink);font-family:'Outfit',sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
 a{color:inherit}
 
-/* ---------- header ---------- */
-header{
-  position:sticky;top:0;z-index:80;
-  background:rgba(255,255,255,.8);backdrop-filter:blur(20px) saturate(1.8);
-  border-bottom:1px solid var(--line);
-}
-.header-in{
-  max-width:1040px;margin:0 auto;padding:0 22px;
-  display:flex;justify-content:space-between;align-items:center;height:56px;
-}
-.logo{font-weight:700;font-size:1.02rem;letter-spacing:-.02em;text-decoration:none}
-nav{display:flex;gap:2px}
-nav a{
-  text-decoration:none;color:var(--muted);font-size:.82rem;font-weight:500;
-  padding:7px 13px;border-radius:99px;transition:all .2s ease;
-}
-nav a:hover{color:var(--ink);background:var(--soft)}
-nav a.active{color:#fff;background:var(--ink)}
-@media(max-width:640px){nav a{padding:6px 9px;font-size:.76rem}}
+.site-header{position:sticky;top:0;z-index:80;background:rgba(250,250,252,.85);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+.header-in{max-width:1100px;margin:0 auto;padding:0 22px;display:flex;justify-content:space-between;align-items:center;height:60px}
+.logo{font-weight:800;font-size:1.08rem;text-decoration:none}
+.logo span{color:var(--blue)}
+nav ul{display:flex;gap:4px;list-style:none}
+nav a{text-decoration:none;color:var(--muted);font-size:.85rem;font-weight:600;padding:8px 14px;border-radius:12px;transition:all .2s}
+nav a:hover{color:var(--ink);background:#EEF1F6}
+nav a[aria-current="page"]{color:var(--blue);background:rgba(26,115,232,.1)}
+@media(max-width:680px){nav a{padding:6px 8px;font-size:.76rem}}
 
-/* ---------- pages ---------- */
-.page{display:none}
-.page.show{display:block;animation:pageIn .5s cubic-bezier(.25,.1,.25,1)}
-@keyframes pageIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-.wrap{max-width:1040px;margin:0 auto;padding:0 22px}
-
-/* reveal on scroll */
-.rv{opacity:0;transform:translateY(24px);transition:opacity .7s cubic-bezier(.25,.1,.25,1),transform .7s cubic-bezier(.25,.1,.25,1)}
+.rv{opacity:0;transform:translateY(22px);transition:opacity .65s ease,transform .65s ease}
 .rv.in{opacity:1;transform:none}
-@media(prefers-reduced-motion:reduce){.rv,.page.show{opacity:1;transform:none;animation:none;transition:none}}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
 
-/* ---------- HOME ---------- */
-.hero{text-align:center;padding:88px 22px 60px;max-width:820px;margin:0 auto}
-
-/* full-screen welcome */
-.hero-full{
-  min-height:calc(100svh - 56px);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:40px 22px 70px;position:relative;
-}
-.hand{
-  font-size:3.4rem;margin-bottom:18px;
-  animation:handWave 2.6s ease-in-out infinite;
-}
-@keyframes handWave{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.06)}}
-.rotator-line{
-  margin-top:20px;font-size:clamp(1.05rem,3vw,1.4rem);font-weight:600;color:var(--muted);
-  display:flex;gap:.45em;justify-content:center;align-items:baseline;flex-wrap:wrap;
-}
-.rotator{
-  display:inline-block;position:relative;height:1.5em;overflow:hidden;
-  text-align:left;min-width:7.5em;vertical-align:bottom;
-}
-.rotator span{
-  display:block;height:1.5em;line-height:1.5em;color:var(--blue);font-weight:700;
-  animation:rotateWords 10s cubic-bezier(.7,0,.3,1) infinite;
-}
-@keyframes rotateWords{
-  0%,16%{transform:translateY(0)}
-  20%,36%{transform:translateY(-1.5em)}
-  40%,56%{transform:translateY(-3em)}
-  60%,76%{transform:translateY(-4.5em)}
-  80%,96%{transform:translateY(-6em)}
-  100%{transform:translateY(-7.5em)}
-}
-@media(prefers-reduced-motion:reduce){.rotator span{animation:none}.hand{animation:none}}
-.hero-full h1{margin-top:14px}
-.hero-full p{margin-top:20px}
-.scroll-hint{
-  position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
-  font-size:1.6rem;color:var(--muted);text-decoration:none;
-  animation:hintBounce 1.8s ease-in-out infinite;
-}
-@keyframes hintBounce{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,8px)}}
-
-/* impact line on tiles */
-.impact{
-  margin-top:14px;padding:10px 14px;border-radius:12px;
-  background:var(--soft);font-size:.87rem;color:var(--ink);
-}
-.impact b{color:#28A745;font-weight:700}
-.hero .hi{
-  display:inline-block;font-size:.85rem;font-weight:600;color:var(--blue);
-  background:rgba(0,113,227,.08);border-radius:99px;padding:7px 18px;margin-bottom:22px;
-}
-.hero h1{
-  font-size:clamp(2.6rem,7vw,4.4rem);font-weight:800;letter-spacing:-.035em;line-height:1.06;
-}
-.hero h1 span{
-  background:linear-gradient(90deg,#0071E3,#00A2FF);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-.hero p{
-  margin-top:22px;color:var(--muted);font-size:1.15rem;max-width:560px;margin-inline:auto;
-}
-.hero .cta-row{margin-top:32px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-
-.btn{
-  display:inline-flex;align-items:center;gap:8px;text-decoration:none;
-  font-weight:600;font-size:.95rem;border-radius:99px;padding:13px 28px;
-  transition:all .22s cubic-bezier(.25,.1,.25,1);
-}
+/* split hero: H1 left, identity panel right */
+.hero{max-width:1100px;margin:0 auto;padding:70px 22px 40px;display:grid;grid-template-columns:1.15fr .85fr;gap:44px;align-items:center}
+@media(max-width:820px){.hero{grid-template-columns:1fr;text-align:center;padding-top:50px}}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:.8rem;font-weight:700;color:var(--blue);background:rgba(26,115,232,.1);border-radius:99px;padding:7px 16px;margin-bottom:18px}
+h1{font-size:clamp(2.2rem,5.6vw,3.6rem);font-weight:800;letter-spacing:-.03em;line-height:1.08}
+h1 em{font-style:normal;color:var(--blue)}
+h1 .loc{display:block;font-size:.4em;font-weight:600;color:var(--muted);margin-top:12px;letter-spacing:0}
+.hero .lede{margin-top:18px;color:var(--muted);font-size:1.08rem;max-width:520px}
+@media(max-width:820px){.hero .lede{margin-inline:auto}}
+.cta-row{margin-top:28px;display:flex;gap:12px;flex-wrap:wrap}
+@media(max-width:820px){.cta-row{justify-content:center}}
+.btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:.93rem;border-radius:14px;padding:13px 26px;transition:all .2s}
 .btn-primary{background:var(--blue);color:#fff}
-.btn-primary:hover{background:var(--blue-dark);transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,113,227,.3)}
-.btn-secondary{background:var(--soft);color:var(--ink)}
-.btn-secondary:hover{background:#EBEBF0;transform:translateY(-1px)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(26,115,232,.35)}
+.btn-ghost{background:#fff;border:1.5px solid var(--line);color:var(--ink)}
+.btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
 
-/* home cards */
-.home-cards{
-  display:grid;grid-template-columns:repeat(2,1fr);gap:18px;
-  max-width:1040px;margin:0 auto;padding:20px 22px 40px;
-}
-@media(max-width:700px){.home-cards{grid-template-columns:1fr}}
-.hcard{
-  display:block;text-decoration:none;
-  background:var(--soft);border-radius:var(--radius);padding:34px 30px;
-  transition:all .3s cubic-bezier(.25,.1,.25,1);
-}
-.hcard:hover{transform:translateY(-5px);box-shadow:var(--shadow-hover);background:#fff}
-.hcard .ic{
-  width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;
-  font-size:1.5rem;margin-bottom:18px;color:#fff;
-}
-.hcard.c1 .ic{background:linear-gradient(135deg,#34C759,#28A745)}
-.hcard.c2 .ic{background:linear-gradient(135deg,#0071E3,#00A2FF)}
-.hcard.c3 .ic{background:linear-gradient(135deg,#FF9F0A,#FF7B00)}
-.hcard.c4 .ic{background:linear-gradient(135deg,#AF52DE,#8944C4)}
-.hcard h3{font-size:1.3rem;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
-.hcard p{color:var(--muted);font-size:.94rem}
-.hcard .more{display:inline-block;margin-top:16px;color:var(--blue);font-weight:600;font-size:.9rem}
-.hcard:hover .more{text-decoration:underline}
+/* identity panel */
+.id-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:28px;box-shadow:var(--shadow)}
+.id-top{display:flex;align-items:center;gap:16px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.avatar{width:64px;height:64px;border-radius:20px;background:conic-gradient(from 40deg,#1A73E8,#1E8E3E,#E8710A,#8430CE,#1A73E8);display:flex;align-items:center;justify-content:center}
+.avatar span{width:56px;height:56px;border-radius:16px;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.4rem}
+.id-top b{display:block;font-size:1.05rem}
+.id-top small{color:var(--muted)}
+.id-rows{list-style:none;padding-top:14px}
+.id-rows li{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:.92rem;font-weight:500}
+.id-rows .dot{width:10px;height:10px;border-radius:50%}
+.d1{background:var(--green)} .d2{background:var(--blue)} .d3{background:var(--orange)} .d4{background:var(--purple)}
+.id-rows small{margin-left:auto;color:var(--muted);font-weight:400}
 
-/* about band */
-.band{
-  background:var(--soft);padding:64px 22px;text-align:center;margin-top:30px;
-}
-.band p{
-  font-size:clamp(1.25rem,3.2vw,1.7rem);font-weight:600;letter-spacing:-.02em;
-  max-width:760px;margin:0 auto;line-height:1.5;
-}
-.band p b{color:var(--blue)}
-.band .who{margin-top:14px;color:var(--muted);font-size:.9rem}
+/* sections with numbered H2 rail */
+section{max-width:1100px;margin:0 auto;padding:44px 22px 6px}
+.sec-row{display:grid;grid-template-columns:200px 1fr;gap:30px;align-items:start}
+@media(max-width:820px){.sec-row{grid-template-columns:1fr}}
+.sec-label{position:sticky;top:80px}
+.sec-label .no{font-size:.8rem;font-weight:800;color:var(--muted);letter-spacing:.14em}
+h2{font-size:1.5rem;font-weight:800;letter-spacing:-.02em;line-height:1.2;margin-top:6px}
+h2.hue-g{color:var(--green)} h2.hue-b{color:var(--blue)} h2.hue-o{color:var(--orange)} h2.hue-p{color:var(--purple)}
+.sec-label p{margin-top:8px;color:var(--muted);font-size:.88rem}
 
-/* ---------- section pages ---------- */
-.p-hero{text-align:center;padding:76px 22px 40px;max-width:760px;margin:0 auto}
-.p-tag{
-  display:inline-block;font-size:.8rem;font-weight:600;border-radius:99px;padding:6px 16px;margin-bottom:18px;
-}
-.p-hero h2{font-size:clamp(2.1rem,6vw,3.4rem);font-weight:800;letter-spacing:-.03em;line-height:1.1}
-.p-hero .sub{margin-top:16px;color:var(--muted);font-size:1.08rem}
+.sec-cards{display:grid;gap:14px}
+.scard{display:block;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow);transition:all .25s}
+.scard:hover{transform:translateX(6px);box-shadow:var(--shadow-hover)}
+h3{font-size:1.08rem;font-weight:700}
+.scard p{color:var(--muted);font-size:.9rem;margin-top:4px}
+.scard .go{display:inline-block;margin-top:10px;font-weight:700;font-size:.86rem}
+.go.g{color:var(--green)} .go.b{color:var(--blue)} .go.o{color:var(--orange)} .go.p{color:var(--purple)}
 
-.t-green .p-tag{background:rgba(52,199,89,.1);color:#28A745}
-.t-blue .p-tag{background:rgba(0,113,227,.08);color:var(--blue)}
-.t-orange .p-tag{background:rgba(255,159,10,.12);color:#E08600}
-.t-purple .p-tag{background:rgba(175,82,222,.1);color:#AF52DE}
+/* blueconnect feature */
+.feature{max-width:1100px;margin:36px auto 0;padding:0 22px}
+.feature-in{display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:center;background:linear-gradient(120deg,#0B2A44,#1A73E8);color:#EAF4FF;border-radius:var(--radius);padding:28px 30px;text-decoration:none;transition:transform .25s}
+.feature-in:hover{transform:translateY(-3px)}
+@media(max-width:700px){.feature-in{grid-template-columns:1fr;text-align:center}}
+.feature .em{font-size:2.3rem}
+.feature h3{color:#fff;font-size:1.2rem}
+.feature p{color:#BCD6F2;font-size:.9rem;margin-top:4px}
+.feature .go{font-weight:800;color:#8FC3FF;white-space:nowrap}
 
-/* stat pills */
-.stats{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
-  max-width:900px;margin:0 auto;padding:0 22px 10px;
-}
-@media(max-width:640px){.stats{grid-template-columns:1fr}}
-.stat{
-  background:#fff;border:1px solid var(--line);border-radius:var(--radius);
-  padding:24px;text-align:center;box-shadow:var(--shadow);
-}
-.stat b{display:block;font-size:1.25rem;font-weight:700;letter-spacing:-.02em}
-.stat span{color:var(--muted);font-size:.85rem}
+.band{max-width:1100px;margin:44px auto 0;padding:0 22px 60px;text-align:center}
+.band blockquote{font-size:clamp(1.15rem,2.8vw,1.5rem);font-weight:700;letter-spacing:-.015em;max-width:720px;margin:0 auto;line-height:1.5}
+.band blockquote b{color:var(--blue)}
+.band cite{display:block;margin-top:10px;color:var(--muted);font-size:.88rem;font-style:normal}
 
-/* tiles */
-.tiles{
-  display:grid;grid-template-columns:repeat(2,1fr);gap:18px;
-  max-width:1040px;margin:0 auto;padding:26px 22px 30px;
-}
-@media(max-width:700px){.tiles{grid-template-columns:1fr}}
-.tile{
-  background:#fff;border:1px solid var(--line);border-radius:var(--radius);
-  padding:30px;box-shadow:var(--shadow);
-  transition:all .3s cubic-bezier(.25,.1,.25,1);
-}
-.tile:hover{transform:translateY(-4px);box-shadow:var(--shadow-hover)}
-.tile.wide{grid-column:1/-1}
-.tile .mini{
-  display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-  border-radius:99px;padding:5px 12px;margin-bottom:14px;
-}
-.t-green .tile .mini{background:rgba(52,199,89,.1);color:#28A745}
-.t-blue .tile .mini{background:rgba(0,113,227,.08);color:var(--blue)}
-.t-orange .tile .mini{background:rgba(255,159,10,.12);color:#E08600}
-.t-purple .tile .mini{background:rgba(175,82,222,.1);color:#AF52DE}
-.tile h3{font-size:1.18rem;font-weight:700;letter-spacing:-.02em;margin-bottom:8px}
-.tile p{color:var(--muted);font-size:.93rem}
-.tile .visit{margin-top:14px;font-size:.9rem}
-.tile .visit a{color:var(--blue);font-weight:600;text-decoration:none}
-.tile .visit a:hover{text-decoration:underline}
-.tile .visit .soon{color:var(--muted);font-weight:600}
-
-.center-cta{text-align:center;padding:10px 22px 60px}
-
-/* socials */
-.socials{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;padding:0 22px 60px}
-.social{
-  display:inline-flex;align-items:center;gap:8px;text-decoration:none;
-  background:var(--soft);border-radius:99px;padding:11px 22px;
-  font-weight:600;font-size:.9rem;transition:all .2s;
-}
-.social:hover{background:#EBEBF0;transform:translateY(-1px)}
-
-footer{
-  border-top:1px solid var(--line);padding:32px 22px;text-align:center;
-  color:var(--muted);font-size:.85rem;
-}
-footer a{color:var(--blue);text-decoration:none}
-
-/* ---------- opportunity CTA banner ---------- */
-.invite{
-  max-width:1040px;margin:0 auto;padding:0 22px 60px;
-}
-.invite-in{
-  border-radius:var(--radius);padding:44px 34px;text-align:center;color:#fff;
-  box-shadow:var(--shadow-hover);
-}
-.t-green .invite-in{background:linear-gradient(135deg,#28A745,#1E7E34)}
-.t-blue .invite-in{background:linear-gradient(135deg,#0071E3,#0051A8)}
-.t-orange .invite-in{background:linear-gradient(135deg,#FF9F0A,#E07000)}
-.t-purple .invite-in{background:linear-gradient(135deg,#AF52DE,#7B2FB5)}
-.invite-in.home-grad{background:linear-gradient(135deg,#1D1D1F,#3A3A3E)}
-.invite-in h3{font-size:clamp(1.4rem,4vw,1.9rem);font-weight:800;letter-spacing:-.02em}
-.invite-in p{margin-top:10px;opacity:.9;max-width:560px;margin-inline:auto;font-size:.98rem}
-.invite-in .cta-row{margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn-white{background:#fff;color:var(--ink)}
-.btn-white:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
-.btn-outline{border:1.5px solid rgba(255,255,255,.7);color:#fff}
-.btn-outline:hover{background:rgba(255,255,255,.12)}
-
-/* ---------- contact page ---------- */
-.contact-cards{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:18px;
-  max-width:900px;margin:0 auto;padding:10px 22px 30px;
-}
-@media(max-width:700px){.contact-cards{grid-template-columns:1fr}}
-.ccard{
-  background:#fff;border:1px solid var(--line);border-radius:var(--radius);
-  padding:30px 24px;text-align:center;box-shadow:var(--shadow);text-decoration:none;
-  transition:all .3s cubic-bezier(.25,.1,.25,1);
-}
-.ccard:hover{transform:translateY(-4px);box-shadow:var(--shadow-hover)}
-.ccard .big{font-size:2rem;margin-bottom:10px}
-.ccard h3{font-size:1.05rem;font-weight:700;margin-bottom:4px}
-.ccard p{color:var(--muted);font-size:.86rem}
-.reasons{
-  max-width:900px;margin:0 auto;padding:10px 22px 60px;
-  display:grid;grid-template-columns:repeat(2,1fr);gap:14px;
-}
-@media(max-width:700px){.reasons{grid-template-columns:1fr}}
-.reason{
-  display:flex;gap:14px;align-items:flex-start;
-  background:var(--soft);border-radius:16px;padding:18px 20px;
-}
-.reason .em{font-size:1.3rem}
-.reason b{display:block;font-size:.95rem}
-.reason span{color:var(--muted);font-size:.86rem}
+.site-footer{border-top:1px solid var(--line);padding:28px 22px;text-align:center;color:var(--muted);font-size:.85rem}
+.site-footer a{color:var(--blue);text-decoration:none}
 </style>
 </head>
 <body>
 
-<header>
+<header class="site-header">
   <div class="header-in">
-    <a class="logo" href="#/">Someswara</a>
-    <nav id="nav">
-      <a href="#/">Home</a>
-      <a href="#/trader">Trader</a>
-      <a href="#/entrepreneur">Entrepreneur</a>
-      <a href="#/hobby">Hobby</a>
-      <a href="#/projects">Projects</a>
-      <a href="#/contact">Contact</a>
+    <a class="logo" href="/">Somes<span>wara</span></a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="/" aria-current="page">Home</a></li>
+        <li><a href="/trader">Trader</a></li>
+        <li><a href="/entrepreneur">Entrepreneur</a></li>
+        <li><a href="/hobby">Hobby</a></li>
+        <li><a href="/projects">Projects</a></li>
+        <li><a href="/contact">Contact</a></li>
+      </ul>
     </nav>
   </div>
 </header>
 
-<!-- ================= HOME ================= -->
-<div class="page" id="pg-home">
-  <div class="hero hero-full">
-    <div class="hand">🤝</div>
-    <span class="hi">Welcome — I'm Someswara</span>
-    <div class="rotator-line">
-      Planning <span class="rotator"><span>a business?</span><span>to trade?</span><span>an app?</span><span>a special song?</span><span>any solution?</span><span>a business?</span></span>
+<main>
+  <!-- split hero with single keyword-rich H1 -->
+  <div class="hero">
+    <div>
+      <span class="kicker">🤝 Hundreds of problems. One solution — me.</span>
+      <h1>Entrepreneur, Trader, Filmmaker & <em>Software Builder</em>
+        <span class="loc">Someswara (Sri Somesh) · Visakhapatnam, India</span>
+      </h1>
+      <p class="lede">Starting a business? Entering the markets? Building an app? Celebrating an occasion? Approach me — then see what I've already built.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="/contact">Approach me</a>
+        <a class="btn btn-ghost" href="/projects">See my works</a>
+      </div>
     </div>
-    <h1>Hundreds of problems.<br><span>One solution — me.</span></h1>
-    <p>Whether you're starting a business, entering the markets, building an app, celebrating an occasion or stuck on any problem — approach me. Then scroll down and see what I've already built.</p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="#/contact">Approach me</a>
-      <a class="btn btn-secondary" href="#home-works">See my works ↓</a>
-    </div>
-    <a class="scroll-hint" href="#home-works" aria-label="Scroll to my works">⌄</a>
+    <aside class="id-panel rv" aria-label="At a glance">
+      <div class="id-top">
+        <div class="avatar"><span>S</span></div>
+        <div><b>Someswara</b><small>Builder of businesses, tools & songs</small></div>
+      </div>
+      <ul class="id-rows">
+        <li><span class="dot d1"></span> Crypto F&O Trader <small>algo + manual</small></li>
+        <li><span class="dot d2"></span> Founder — BharatGPS <small>+ 2 SaaS products</small></li>
+        <li><span class="dot d3"></span> Independent Filmmaker <small>as "Sri Somesh"</small></li>
+        <li><span class="dot d4"></span> 10+ shipped projects <small>built by hand</small></li>
+      </ul>
+    </aside>
   </div>
 
-  <div class="home-cards" id="home-works">
-    <a class="hcard c1 rv" href="#/trader">
-      <div class="ic">📈</div>
-      <h3>Trader</h3>
-      <p>Crypto derivatives, funding-rate strategies and my self-built auto-trading robot.</p>
-      <span class="more">Learn more ›</span>
-    </a>
-    <a class="hcard c2 rv" href="#/entrepreneur">
-      <div class="ic">🚀</div>
-      <h3>Entrepreneur</h3>
-      <p>Founder of BharatGPS and builder of SaaS products serving businesses across India.</p>
-      <span class="more">Learn more ›</span>
-    </a>
-    <a class="hcard c3 rv" href="#/hobby">
-      <div class="ic">🎤</div>
-      <h3>Hobby</h3>
-      <p>Singing as Sri Somesh, writing lyrics and loving films — my creative side.</p>
-      <span class="more">Learn more ›</span>
-    </a>
-    <a class="hcard c4 rv" href="#/projects">
-      <div class="ic">🛠️</div>
-      <h3>My Projects</h3>
-      <p>Software products designed, coded and shipped by my own hands.</p>
-      <span class="more">Learn more ›</span>
+  <!-- 01 Trader -->
+  <section aria-labelledby="h-trader">
+    <div class="sec-row rv">
+      <div class="sec-label">
+        <div class="no">01 / TRADING</div>
+        <h2 class="hue-g" id="h-trader">Markets are my daily classroom</h2>
+        <p>Crypto perpetual futures, risk-first.</p>
+      </div>
+      <div class="sec-cards">
+        <a class="scard" href="/trader">
+          <h3>Funding-rate strategies & my own trading robot</h3>
+          <p>I fade over-leveraged crowds with strict stop-losses — and built Somu Trader, an auto-trading engine that enforces discipline by code, not emotion.</p>
+          <span class="go g">Explore my trading world →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 Entrepreneur -->
+  <section aria-labelledby="h-biz">
+    <div class="sec-row rv">
+      <div class="sec-label">
+        <div class="no">02 / BUSINESS</div>
+        <h2 class="hue-b" id="h-biz">I build businesses that solve real problems</h2>
+        <p>Live, revenue-generating products.</p>
+      </div>
+      <div class="sec-cards">
+        <a class="scard" href="/entrepreneur">
+          <h3>BharatGPS — GPS fleet tracking across India</h3>
+          <p>Live tracking, geofencing, school-bus solutions, CRM and HR — a complete ecosystem built and operated by my team in Visakhapatnam.</p>
+          <span class="go b">See my businesses →</span>
+        </a>
+        <a class="scard" href="/entrepreneur">
+          <h3>HamaraStaff & HamaraService</h3>
+          <p>Field-staff tracking SaaS and a home-services marketplace — portals plus Android apps, serving real customers daily.</p>
+          <span class="go b">Investors & partners welcome →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 Music -->
+  <section aria-labelledby="h-music">
+    <div class="sec-row rv">
+      <div class="sec-label">
+        <div class="no">03 / FILMS</div>
+        <h2 class="hue-o" id="h-music">When the laptop closes, the camera rolls</h2>
+        <p>Independent filmmaking as Sri Somesh.</p>
+      </div>
+      <div class="sec-cards">
+        <a class="scard" href="/hobby">
+          <h3>Independent films — written, directed and produced by me</h3>
+          <p>Storytelling is my oxygen. I make independent films hands-on, using modern AI-powered production techniques to do what big studios do — on my own.</p>
+          <span class="go o">See my film work →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 Projects -->
+  <section aria-labelledby="h-proj">
+    <div class="sec-row rv">
+      <div class="sec-label">
+        <div class="no">04 / SOFTWARE</div>
+        <h2 class="hue-p" id="h-proj">Designed, coded and shipped by hand</h2>
+        <p>Every product born from field experience.</p>
+      </div>
+      <div class="sec-cards">
+        <a class="scard" href="/projects">
+          <h3>CRMs, messengers, community apps, AR platforms</h3>
+          <p>TaskManager CRM, Kalisi messenger, Pavan Midway society app, ScanPlay-style AR experiences and more — need a solution? I deliver fast.</p>
+          <span class="go p">Browse all projects →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- BlueConnect feature -->
+  <div class="feature rv">
+    <a class="feature-in" href="/blueconnect">
+      <span class="em">🌊</span>
+      <span>
+        <h3>Ongoing invention: Project BlueConnect</h3>
+        <p>A lifeline for fishermen beyond the mobile network — SOS, GPS and free text messaging at sea. Working field-tested prototype.</p>
+      </span>
+      <span class="go">Read the story →</span>
     </a>
   </div>
 
   <div class="band rv">
-    <p>"I believe one person can live <b>many lives at once</b> — you just have to refuse to choose."</p>
-    <div class="who">— Someswara (Sri Somesh) · Visakhapatnam</div>
+    <blockquote>"I believe one person can live <b>many lives at once</b> — you just have to refuse to choose."</blockquote>
+    <cite>— Someswara (Sri Somesh) · Visakhapatnam</cite>
   </div>
+</main>
 
-  <div class="invite rv" style="padding-top:40px">
-    <div class="invite-in home-grad">
-      <h3>Open to opportunities 🤝</h3>
-      <p>Investors, clients, event organisers, collaborators or learners — whatever brings you here, I'd love to hear from you.</p>
-      <div class="cta-row">
-        <a class="btn btn-white" href="#/contact">Get in touch</a>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ================= TRADER ================= -->
-<div class="page t-green" id="pg-trader">
-  <div class="p-hero">
-    <span class="p-tag">Trader</span>
-    <h2>Markets are my daily classroom.</h2>
-    <p class="sub">I trade crypto perpetual futures on India-regulated exchanges — and build my own tools instead of borrowing anyone's signals.</p>
-  </div>
-
-  <div class="stats rv">
-    <div class="stat"><b>Crypto F&O</b><span>Perpetual futures — primary market</span></div>
-    <div class="stat"><b>Algo + Manual</b><span>Robot-assisted, human-judged</span></div>
-    <div class="stat"><b>Risk First</b><span>Stop-loss before entry, always</span></div>
-  </div>
-
-  <div class="tiles">
-    <div class="tile rv">
-      <span class="mini">Strategy</span>
-      <h3>Funding-Rate Fade</h3>
-      <p>When funding rates go extreme, the crowd is over-leveraged on one side. I fade the crowd — with strict stop-losses on every position.</p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Automation</span>
-      <h3>Somu Trader — My Robot</h3>
-      <p>A self-built auto-trading engine that scans round the clock, sizes lots from balance, places orders and verifies stop-losses. Discipline enforced by code, not emotion.</p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Risk Management</span>
-      <h3>Capital Protection</h3>
-      <p>Position size comes from account maths, never excitement. Surviving the market matters more than beating it.</p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Learning</span>
-      <h3>Always a Student</h3>
-      <p>Order flow, CVD, RSI, ATR, exchange basis spreads — I keep building dashboards to visualise what I learn.</p>
-    </div>
-  </div>
-
-  <div class="center-cta rv"><a class="btn btn-primary" href="#/projects">See my trading tools</a></div>
-
-  <div class="invite rv">
-    <div class="invite-in">
-      <h3>Interested in the markets? 📈</h3>
-      <p>Want to learn trading from my real experience, discuss strategies, or explore working together on trading tools and automation? I'm open to serious conversations.</p>
-      <div class="cta-row">
-        <a class="btn btn-white" href="#/contact">Let's talk trading</a>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ================= ENTREPRENEUR ================= -->
-<div class="page t-blue" id="pg-entrepreneur">
-  <div class="p-hero">
-    <span class="p-tag">Entrepreneur</span>
-    <h2>I build businesses that solve real problems.</h2>
-    <p class="sub">From GPS fleet tracking to home services and field-staff management — my products serve customers across India.</p>
-  </div>
-
-  <div class="tiles">
-    <div class="tile wide rv">
-      <span class="mini">Flagship · Founder</span>
-      <h3>BharatGPS — Sribharat GPS Tracker Pvt Ltd</h3>
-      <p>GPS fleet-tracking company from Visakhapatnam serving vehicles across multiple servers — live tracking, geofencing, school-bus solutions, route monitoring, technician field app, CRM and an in-house HR & payroll system. A complete ecosystem, built and operated by my team.</p>
-      <p class="impact"><b>✓ The difference:</b> Fleet owners see every vehicle live — thefts prevented, fuel misuse caught, driver discipline up.</p>
-      <p class="visit"><a href="https://bharatgps.com" target="_blank" rel="noopener">Visit bharatgps.com →</a></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">SaaS</span>
-      <h3>HamaraStaff</h3>
-      <p>Field-staff attendance & visit-tracking SaaS — GPS check-ins, visit proof, trials and subscriptions. Live at hamarastaff.com.</p>
-      <p class="impact"><b>✓ The difference:</b> No more fake field visits — every check-in is GPS-verified, payroll becomes transparent.</p>
-      <p class="visit"><a href="https://hamarastaff.com" target="_blank" rel="noopener">Visit hamarastaff.com →</a></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Marketplace</span>
-      <h3>HamaraService</h3>
-      <p>Home-services marketplace connecting customers with verified providers. Live at hamaraservice.com.</p>
-      <p class="impact"><b>✓ The difference:</b> Trusted help at home in a few taps — verified providers, fair pricing.</p>
-      <p class="visit"><a href="https://hamaraservice.com" target="_blank" rel="noopener">Visit hamaraservice.com →</a></p>
-    </div>
-    <div class="tile wide rv">
-      <span class="mini">Philosophy</span>
-      <h3>Build · Operate · Improve</h3>
-      <p>I don't just start businesses — I write the software, run the operations and talk to customers myself. Every product is born from field experience, not assumptions.</p>
-    </div>
-  </div>
-
-  <div class="center-cta rv"><a class="btn btn-primary" href="#/projects">Explore the products</a></div>
-
-  <div class="invite rv">
-    <div class="invite-in">
-      <h3>Investors & partners welcome 🚀</h3>
-      <p>My products are live, revenue-generating and growing. If you're an investor looking for opportunities, a business wanting these solutions, or a partner who wants to scale with me — let's build together.</p>
-      <div class="cta-row">
-        <a class="btn btn-white" href="#/contact">Discuss a partnership</a>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ================= HOBBY ================= -->
-<div class="page t-orange" id="pg-hobby">
-  <div class="p-hero">
-    <span class="p-tag">Hobby</span>
-    <h2>When the laptop closes, the music begins.</h2>
-    <p class="sub">I sing and write lyrics as Sri Somesh. Films and music are my oxygen outside work.</p>
-  </div>
-
-  <div class="tiles">
-    <div class="tile wide rv">
-      <span class="mini">🎵 Debut Single · August 2026</span>
-      <h3>"Nuvve Naa Vibe"</h3>
-      <p>My first Telugu single — written and performed by me, out on all major streaming platforms. Listen, download and leave your love on my music website.</p>
-      <p style="margin-top:16px"><a class="btn btn-primary" href="#MUSIC_SITE_LINK">Visit my music website</a></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Films</span>
-      <h3>Cinema Lover</h3>
-      <p>Telugu cinema is a lifelong love — its stories and songs inspire every lyric I write.</p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Coming Up</span>
-      <h3>Second Single — In Studio</h3>
-      <p>The next song is in the works. Follow my socials for teasers and the release date.</p>
-    </div>
-  </div>
-
-  <div class="socials rv">
-    <a class="social" href="https://instagram.com/srisomesh" target="_blank" rel="noopener">📸 Instagram</a>
-    <a class="social" href="https://youtube.com/@srisomesh" target="_blank" rel="noopener">▶️ YouTube</a>
-    <a class="social" href="https://open.spotify.com/search/sri%20somesh" target="_blank" rel="noopener">🎵 Spotify</a>
-    <a class="social" href="https://facebook.com/srisomesh" target="_blank" rel="noopener">👥 Facebook</a>
-  </div>
-
-  <div class="invite rv">
-    <div class="invite-in">
-      <h3>Make your occasion musical 🎤</h3>
-      <p>Want a custom song for your wedding, birthday, or special function? A live performance for your event? Or creative collaboration on music and lyrics? I'd love to create something for you.</p>
-      <div class="cta-row">
-        <a class="btn btn-white" href="#/contact">Book / request a song</a>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ================= PROJECTS ================= -->
-<div class="page t-purple" id="pg-projects">
-  <div class="p-hero">
-    <span class="p-tag">My Projects</span>
-    <h2>Designed, coded and shipped by hand.</h2>
-    <p class="sub">Every product below was conceived and built by me — solving problems I've seen with my own eyes.</p>
-  </div>
-
-  <div class="tiles">
-    <div class="tile wide rv">
-      <span class="mini">🌊 Ongoing Invention</span>
-      <h3>Project BlueConnect</h3>
-      <p>A lifeline for fishermen beyond the mobile network — low-cost SOS, live GPS and free custom text messaging for small fishing boats at sea with zero network coverage and zero monthly charges. Working field-tested prototype.</p>
-      <p class="impact"><b>✓ The difference:</b> A fisherman 25 km out at sea can call for help and even type a message — without any mobile network, for free.</p>
-      <p class="visit"><a href="/blueconnect">Read the full story →</a></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Fleet Tech</span>
-      <h3>BharatGPS Portal & Apps</h3>
-      <p>Multi-server GPS dashboards, Android app, technician field app, checkpoint route monitoring.</p>
-      <p class="impact"><b>✓ The difference:</b> One screen controls an entire fleet across servers.</p>
-      <p class="visit"><a href="https://bharatgps.com" target="_blank" rel="noopener">Visit bharatgps.com →</a></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">CRM</span>
-      <h3>TaskManager CRM</h3>
-      <p>Operations CRM — tasks, payments, claims with photo proof, balance sheets, exports, push alerts.</p>
-      <p class="impact"><b>✓ The difference:</b> My whole company runs on it daily — task to payment in one place, zero paperwork.</p>
-      <p class="visit"><span class="soon">Internal business tool 🔒</span></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Messenger</span>
-      <h3>Kalisi</h3>
-      <p>Privacy-first Android messenger — end-to-end encryption, voice calls, groups, status stories.</p>
-      <p class="impact"><b>✓ The difference:</b> Conversations that truly stay private — encrypted end to end.</p>
-      <p class="visit"><span class="soon">Launching soon 🚀</span></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Community</span>
-      <h3>Pavan Midway App</h3>
-      <p>Apartment community app for 140 flats — visitor QR gate passes, complaints, notices, push alerts.</p>
-      <p class="impact"><b>✓ The difference:</b> 140 families manage visitors and complaints without registers or paperwork.</p>
-      <p class="visit"><a href="https://linen-oyster-283741.hostingersite.com" target="_blank" rel="noopener">Visit the app →</a></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Trading</span>
-      <h3>Somu Trader</h3>
-      <p>Auto-trading robot — funding-fade algorithm, live positions, balance-based sizing, SL verification.</p>
-      <p class="impact"><b>✓ The difference:</b> Emotion removed from trading — discipline enforced by code, 24/7.</p>
-      <p class="visit"><span class="soon">Private trading tool 🔒</span></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">SaaS</span>
-      <h3>HamaraStaff & HamaraService</h3>
-      <p>Field-staff tracking SaaS and a home-services marketplace — portals plus Android apps.</p>
-      <p class="impact"><b>✓ The difference:</b> Two live products serving real businesses and homes every day.</p>
-      <p class="visit"><a href="https://hamarastaff.com" target="_blank" rel="noopener">hamarastaff.com →</a> &nbsp; <a href="https://hamaraservice.com" target="_blank" rel="noopener">hamaraservice.com →</a></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">HR</span>
-      <h3>BharatGPS HR System</h3>
-      <p>Attendance, payroll, commissions & payslips — planned as a multi-tenant SaaS.</p>
-      <p class="impact"><b>✓ The difference:</b> Salaries and commissions computed in minutes, not days of manual work.</p>
-      <p class="visit"><span class="soon">Internal · SaaS launch planned 🔒</span></p>
-    </div>
-    <div class="tile rv">
-      <span class="mini">Creative Tech</span>
-      <h3>AR Photo Experience</h3>
-      <p>Augmented-reality web platform bringing printed photos to life with video overlays via QR.</p>
-      <p class="impact"><b>✓ The difference:</b> A printed photo becomes a living memory people can replay anytime.</p>
-      <p class="visit"><span class="soon">Demo on request 💬</span></p>
-    </div>
-  </div>
-
-  <div class="invite rv">
-    <div class="invite-in">
-      <h3>Need a software solution? 🛠️</h3>
-      <p>Website, mobile app, CRM, automation, GPS tracking or any custom tool — I design and deliver practical solutions quickly, because I build for my own businesses every day.</p>
-      <div class="cta-row">
-        <a class="btn btn-white" href="#/contact">Request a solution</a>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ================= CONTACT ================= -->
-<div class="page t-blue" id="pg-contact">
-  <div class="p-hero">
-    <span class="p-tag">Contact</span>
-    <h2>Let's create an opportunity together.</h2>
-    <p class="sub">Whatever brought you here — trading, business, music or software — I personally read and reply to every message.</p>
-  </div>
-
-  <div class="contact-cards rv">
-    <a class="ccard" href="https://wa.me/917330984620?text=Hi%20Someswara%2C%20I%20found%20you%20through%20someswara.com" target="_blank" rel="noopener">
-      <div class="big">💬</div>
-      <h3>WhatsApp</h3>
-      <p>Fastest way to reach me</p>
-    </a>
-    <a class="ccard" href="mailto:someswararao.pyla@gmail.com">
-      <div class="big">✉️</div>
-      <h3>Email</h3>
-      <p>someswararao.pyla@gmail.com</p>
-    </a>
-    <a class="ccard" href="https://instagram.com/srisomesh" target="_blank" rel="noopener">
-      <div class="big">📸</div>
-      <h3>Instagram</h3>
-      <p>@srisomesh</p>
-    </a>
-  </div>
-
-  <div class="reasons rv">
-    <div class="reason"><span class="em">📈</span><div><b>Learn or collaborate on trading</b><span>Strategy discussions, tools, automation</span></div></div>
-    <div class="reason"><span class="em">🚀</span><div><b>Invest or partner in my businesses</b><span>BharatGPS, HamaraStaff, HamaraService & more</span></div></div>
-    <div class="reason"><span class="em">🎤</span><div><b>Book music for your occasion</b><span>Custom songs, live performance, lyrics</span></div></div>
-    <div class="reason"><span class="em">🛠️</span><div><b>Get a software solution built</b><span>Web, mobile, CRM, GPS, automation — delivered fast</span></div></div>
-  </div>
-</div>
-
-<footer>
-  © 2026 Someswara · Visakhapatnam, India · <a href="https://instagram.com/srisomesh">Instagram</a> · someswara.com
+<footer class="site-footer">
+  © 2026 Someswara · Visakhapatnam, India · <a href="https://instagram.com/srisomesh">Instagram</a> · <a href="/blueconnect">Project BlueConnect</a> · someswara.com
 </footer>
 
 <script>
-const pages={'':'pg-home','/':'pg-home','/trader':'pg-trader','/entrepreneur':'pg-entrepreneur','/hobby':'pg-hobby','/projects':'pg-projects','/contact':'pg-contact'};
-function route(){
-  let h=location.hash.replace('#','');
-  if(!h && location.pathname!=='/' ){
-    const p='/'+location.pathname.replace(/^\/+|\/+$/g,'');
-    if(pages[p]) h=p;
-  }
-  const id=pages[h]||'pg-home';
-  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('show',p.id===id));
-  document.querySelectorAll('#nav a').forEach(a=>{
-    const t=a.getAttribute('href').replace('#','');
-    a.classList.toggle('active',(pages[t]||'pg-home')===id);
-  });
-  window.scrollTo({top:0});
-  requestAnimationFrame(observeReveals);
-}
-window.addEventListener('hashchange',route);
-
-const io=new IntersectionObserver(es=>{
-  es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});
-},{threshold:.1});
-function observeReveals(){
-  document.querySelectorAll('.page.show .rv:not(.in)').forEach(el=>io.observe(el));
-}
-route();
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{threshold:.1});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
 </script>
 </body>
 </html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Software Projects — GPS Platforms, CRMs, Apps & Project BlueConnect | Someswara</title>
+<meta name="description" content="Software projects designed, coded and shipped by Someswara of Visakhapatnam — BharatGPS platforms, TaskManager CRM, Kalisi messenger, community apps, AR experiences and Project BlueConnect.">
+<meta name="author" content="Someswara (Sri Somesh)">
+<link rel="canonical" href="https://someswara.com/projects">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://someswara.com/projects">
+<meta property="og:title" content="Software Projects — GPS Platforms, CRMs, Apps & Project BlueConnect | Someswara">
+<meta property="og:description" content="Software projects designed, coded and shipped by Someswara of Visakhapatnam — BharatGPS platforms, TaskManager CRM, Kalisi messenger, community apps, AR experiences and Project BlueConnect.">
+<meta property="og:site_name" content="someswara.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FAFAFC;--card:#FFFFFF;--ink:#17202A;--muted:#5F6B76;--line:#E7EAF0;
+--headbg:rgba(250,250,252,.85);--navhover:#EEF1F6;--softbox:#F2F4F8;--good:#1E8E3E;
+--shadow:0 2px 16px rgba(23,32,42,.06);--shadow-hover:0 14px 44px rgba(23,32,42,.12);
+--accent:#8430CE;--accent-soft:rgba(132,48,206,.1);--invite-grad:linear-gradient(135deg,#8430CE,#4E1680)}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:'Outfit',sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.site-header{position:sticky;top:0;z-index:80;background:var(--headbg);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+.header-in{max-width:1100px;margin:0 auto;padding:0 22px;display:flex;justify-content:space-between;align-items:center;height:60px}
+.logo{font-weight:800;font-size:1.08rem;text-decoration:none}
+.logo span{color:var(--accent)}
+nav ul{display:flex;gap:4px;list-style:none}
+nav a{text-decoration:none;color:var(--muted);font-size:.85rem;font-weight:600;padding:8px 14px;border-radius:12px;transition:all .2s}
+nav a:hover{color:var(--ink);background:var(--navhover)}
+nav a[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
+@media(max-width:680px){nav a{padding:6px 7px;font-size:.73rem}}
+.rv{opacity:0;transform:translateY(22px);transition:opacity .65s ease,transform .65s ease}
+.rv.in{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
+.p-hero{max-width:860px;margin:0 auto;text-align:center;padding:72px 22px 36px}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:.8rem;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:99px;padding:7px 16px;margin-bottom:18px}
+h1{font-size:clamp(2rem,5.4vw,3.3rem);font-weight:800;letter-spacing:-.03em;line-height:1.1}
+h1 em{font-style:normal;color:var(--accent)}
+h1 .loc{display:block;font-size:.42em;font-weight:600;color:var(--muted);margin-top:12px;letter-spacing:0}
+.p-hero .lede{margin-top:18px;color:var(--muted);font-size:1.08rem;max-width:620px;margin-inline:auto}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:900px;margin:0 auto;padding:16px 22px 6px}
+@media(max-width:640px){.stats{grid-template-columns:1fr}}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;text-align:center;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:1.3rem;font-weight:800;color:var(--accent)}
+.stat span{color:var(--muted);font-size:.84rem}
+section{max-width:1100px;margin:0 auto;padding:36px 22px 6px}
+h2{font-size:clamp(1.4rem,3.6vw,1.9rem);font-weight:800;letter-spacing:-.02em;line-height:1.2}
+.sec-head{text-align:center;max-width:700px;margin:0 auto 24px}
+.sec-head p{margin-top:8px;color:var(--muted);font-size:.98rem}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding-top:6px}
+@media(max-width:700px){.tiles{grid-template-columns:1fr}}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:var(--shadow);transition:all .25s}
+.tile:hover{transform:translateY(-4px);box-shadow:var(--shadow-hover)}
+.tile.wide{grid-column:1/-1}
+.mini{display:inline-block;font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-radius:99px;padding:5px 12px;margin-bottom:12px;background:var(--accent-soft);color:var(--accent)}
+h3{font-size:1.1rem;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+.tile p{color:var(--muted);font-size:.92rem}
+.impact{margin-top:12px;padding:10px 14px;border-radius:12px;background:var(--softbox);font-size:.86rem;color:var(--ink)}
+.impact b{color:var(--good);font-weight:700}
+.visit{margin-top:12px;font-size:.9rem}
+.visit a{color:var(--accent);font-weight:700;text-decoration:none}
+.visit a:hover{text-decoration:underline}
+.visit .soon{color:var(--muted);font-weight:600}
+.invite{max-width:1100px;margin:0 auto;padding:36px 22px 64px}
+.invite-in{border-radius:22px;padding:40px 32px;text-align:center;color:#fff;background:var(--invite-grad);box-shadow:var(--shadow-hover)}
+.invite-in h2{color:#fff}
+.invite-in p{margin-top:10px;opacity:.92;max-width:580px;margin-inline:auto;font-size:.97rem}
+.cta-row{margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:.92rem;border-radius:14px;padding:12px 26px;transition:all .2s}
+.btn-white{background:#fff;color:#17202A}
+.btn-white:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.btn-outline{border:1.5px solid rgba(255,255,255,.7);color:#fff}
+.btn-outline:hover{background:rgba(255,255,255,.12)}
+.site-footer{border-top:1px solid var(--line);padding:28px 22px;text-align:center;color:var(--muted);font-size:.85rem}
+.site-footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-in">
+    <a class="logo" href="/">Somes<span>wara</span></a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/trader">Trader</a></li>
+        <li><a href="/entrepreneur">Entrepreneur</a></li>
+        <li><a href="/hobby">Films</a></li>
+        <li><a href="/projects" aria-current="page">Projects</a></li>
+        <li><a href="/contact">Contact</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<div class="p-hero">
+  <span class="kicker">🛠️ /projects · The workshop</span>
+  <h1>Designed, coded and <em>shipped by hand</em>
+    <span class="loc">Someswara · Visakhapatnam, India</span>
+  </h1>
+  <p class="lede">Every product below was conceived and built by me — solving problems I've seen with my own eyes. This is the proof behind every promise on this site.</p>
+</div>
+<section aria-labelledby="h-shipped">
+  <div class="sec-head rv"><h2 id="h-shipped">Shipped & in progress</h2><p>From fleet tech to AR — one builder, many builds.</p></div>
+  <div class="tiles">
+    <div class="tile wide rv"><span class="mini">🌊 Ongoing Invention</span><h3>Project BlueConnect</h3>
+      <p>A lifeline for fishermen beyond the mobile network — low-cost SOS, live GPS and free custom text messaging for small fishing boats with zero network coverage and zero monthly charges. Working field-tested prototype.</p>
+      <p class="impact"><b>✓ The difference:</b> A fisherman 25 km out at sea can call for help and even type a message — without any mobile network, for free.</p>
+      <p class="visit"><a href="/blueconnect">Read the full story →</a></p>
+    </div>
+    <div class="tile rv"><span class="mini">Fleet Tech</span><h3>BharatGPS Portal & Apps</h3>
+      <p>Multi-server GPS dashboards, Android app, technician field app, checkpoint route monitoring.</p>
+      <p class="impact"><b>✓ The difference:</b> One screen controls an entire fleet across servers.</p>
+      <p class="visit"><a href="https://bharatgps.com" target="_blank" rel="noopener">Visit bharatgps.com →</a></p>
+    </div>
+    <div class="tile rv"><span class="mini">CRM</span><h3>TaskManager CRM</h3>
+      <p>Operations CRM — tasks, payments, claims with photo proof, balance sheets, exports, push alerts.</p>
+      <p class="impact"><b>✓ The difference:</b> My whole company runs on it daily — task to payment in one place, zero paperwork.</p>
+      <p class="visit"><span class="soon">Internal business tool 🔒</span></p>
+    </div>
+    <div class="tile rv"><span class="mini">Messenger</span><h3>Kalisi</h3>
+      <p>Privacy-first Android messenger — end-to-end encryption, voice calls, groups, status stories.</p>
+      <p class="impact"><b>✓ The difference:</b> Conversations that truly stay private — encrypted end to end.</p>
+      <p class="visit"><span class="soon">Launching soon 🚀</span></p>
+    </div>
+    <div class="tile rv"><span class="mini">Community</span><h3>Pavan Midway App</h3>
+      <p>Apartment community app for 140 flats — visitor QR gate passes, complaints, notices, push alerts.</p>
+      <p class="impact"><b>✓ The difference:</b> 140 families manage visitors and complaints without registers or paperwork.</p>
+      <p class="visit"><a href="https://linen-oyster-283741.hostingersite.com" target="_blank" rel="noopener">Visit the app →</a></p>
+    </div>
+    <div class="tile rv"><span class="mini">Trading</span><h3>Somu Trader</h3>
+      <p>Auto-trading robot — funding-fade algorithm, live positions, balance-based sizing, SL verification.</p>
+      <p class="impact"><b>✓ The difference:</b> Emotion removed from trading — discipline enforced by code, 24/7.</p>
+      <p class="visit"><span class="soon">Private trading tool 🔒</span></p>
+    </div>
+    <div class="tile rv"><span class="mini">SaaS</span><h3>HamaraStaff & HamaraService</h3>
+      <p>Field-staff tracking SaaS and a home-services marketplace — portals plus Android apps.</p>
+      <p class="impact"><b>✓ The difference:</b> Two live products serving real businesses and homes every day.</p>
+      <p class="visit"><a href="https://hamarastaff.com" target="_blank" rel="noopener">hamarastaff.com →</a> &nbsp; <a href="https://hamaraservice.com" target="_blank" rel="noopener">hamaraservice.com →</a></p>
+    </div>
+    <div class="tile rv"><span class="mini">HR</span><h3>BharatGPS HR System</h3>
+      <p>Attendance, payroll, commissions & payslips — planned as a multi-tenant SaaS.</p>
+      <p class="impact"><b>✓ The difference:</b> Salaries and commissions computed in minutes, not days of manual work.</p>
+      <p class="visit"><span class="soon">Internal · SaaS launch planned 🔒</span></p>
+    </div>
+    <div class="tile rv"><span class="mini">Creative Tech</span><h3>AR Photo Experience</h3>
+      <p>Augmented-reality web platform bringing printed photos to life with video overlays via QR.</p>
+      <p class="impact"><b>✓ The difference:</b> A printed photo becomes a living memory people can replay anytime.</p>
+      <p class="visit"><span class="soon">Demo on request 💬</span></p>
+    </div>
+  </div>
+</section>
+<div class="invite">
+  <div class="invite-in rv">
+    <h2>Need a software solution? 🛠️</h2>
+    <p>Website, mobile app, CRM, automation, GPS tracking or any custom tool — I design and deliver practical solutions quickly, because I build for my own businesses every day.</p>
+    <div class="cta-row">
+      <a class="btn btn-white" href="https://wa.me/917330984620?text=Hi%20Someswara%2C%20I%20need%20a%20software%20solution" target="_blank" rel="noopener">Request a solution</a>
+      <a class="btn btn-outline" href="/contact">All contact options</a>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer class="site-footer">
+  © 2026 Someswara · Visakhapatnam, India · <a href="https://instagram.com/srisomesh">Instagram</a> · <a href="/blueconnect">Project BlueConnect</a> · someswara.com
+</footer>
+<script>
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{threshold:.1});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+</script>
+
+</body>
+</html>

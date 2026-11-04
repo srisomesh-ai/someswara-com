@@ -1,10 +1,9 @@
-# Clean URLs
+# Clean URLs — each section is its own real page
 RewriteEngine On
 
-# someswara.com/blueconnect -> blueconnect.html (article page)
 RewriteRule ^blueconnect/?$ /blueconnect.html [L]
-
-# SPA pages: someswara.com/trader -> index.html#/trader
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(trader|entrepreneur|hobby|projects|contact)/?$ /index.html [L]
+RewriteRule ^trader/?$ /trader.html [L]
+RewriteRule ^entrepreneur/?$ /entrepreneur.html [L]
+RewriteRule ^hobby/?$ /hobby.html [L]
+RewriteRule ^projects/?$ /projects.html [L]
+RewriteRule ^contact/?$ /contact.html [L]
