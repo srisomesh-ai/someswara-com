@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /previs/
+
+Sitemap: https://someswara.com/sitemap.xml

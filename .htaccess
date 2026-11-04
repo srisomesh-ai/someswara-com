@@ -1,5 +1,10 @@
-# Clean URLs: someswara.com/trader -> index.html#/trader
+# Clean URLs
 RewriteEngine On
+
+# someswara.com/blueconnect -> blueconnect.html (article page)
+RewriteRule ^blueconnect/?$ /blueconnect.html [L]
+
+# SPA pages: someswara.com/trader -> index.html#/trader
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(trader|entrepreneur|hobby|projects|contact)/?$ /index.html [L]
