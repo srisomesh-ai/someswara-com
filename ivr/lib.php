@@ -164,8 +164,8 @@ function sarvam_chat(array $turns): array {
             'model' => 'sarvam-105b',
             'messages' => $messages,
             'temperature' => 0.4,
-            'max_tokens' => 300,
-            'reasoning_effort' => 'none',
+            'max_tokens' => 700,
+            'reasoning_effort' => 'low',
         ], JSON_UNESCAPED_UNICODE));
     if ($r['code'] !== 200) return ['error' => sarvam_error($r, 'Thinking')];
     $text = (string)($r['data']['choices'][0]['message']['content'] ?? '');
