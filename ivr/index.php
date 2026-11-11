@@ -414,7 +414,7 @@ function onAudio(e) {
   }
   rec.push(buf);
   if (rms > limit) { speechMs += ms; silentMs = 0; } else silentMs += ms;
-  if (silentMs >= 900 || rec.length * ms >= 25000) {
+  if (silentMs >= 700 || rec.length * ms >= 25000) {
     const chunks = rec, enough = speechMs >= 250;
     inSpeech = false; rec = []; pre = [];
     if (enough) sendTurn(chunks);
@@ -440,13 +440,18 @@ function toWav(chunks, rate) {
   return new Blob([view], { type: 'audio/wav' });
 }
 
-async function speak(b64, startedAt) {
+async function speak(b64, startedAt, ms) {
   const bin = atob(b64); const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const audio = await ctx.decodeAudioData(bytes.buffer);
   if (!callId) return;
   const node = ctx.createBufferSource(); node.buffer = audio; node.connect(ctx.destination);
-  if (startedAt) $('speed').textContent = 'Reply speed ' + ((performance.now() - startedAt) / 1000).toFixed(1) + ' s';
+  if (startedAt) {
+    const sec = (n) => (n / 1000).toFixed(1);
+    let t = 'Reply speed ' + sec(performance.now() - startedAt) + ' s';
+    if (ms) t += ' (hear ' + sec(ms.hear) + ', think ' + sec(ms.think) + ', speak ' + sec(ms.speak) + ')';
+    $('speed').textContent = t;
+  }
   setPhase('speaking', 'Agent is speaking');
   node.onended = () => { if (callId) { pre = []; setPhase('listening', 'Listening. Speak now.'); } };
   node.start();
@@ -465,7 +470,7 @@ async function sendTurn(chunks) {
     addLine($('lines'), 'caller', d.heard);
     lastAgent = addLine($('lines'), 'agent', d.reply);
     $('flag').disabled = false;
-    await speak(d.audio, t0);
+    await speak(d.audio, t0, d.ms);
   } catch (err) {
     $('call-err').textContent = err.message;
     if (callId) setPhase('listening', 'Listening. Speak now.');

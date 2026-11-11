@@ -131,20 +131,25 @@ case 'call_turn':
     if ($f['size'] > 2 * 1024 * 1024) fail('That recording is too long.');
     if (file_get_contents($f['tmp_name'], false, null, 0, 4) !== 'RIFF') fail('Audio must be WAV.');
 
+    $t0 = microtime(true);
     $stt = sarvam_stt($f['tmp_name']);
+    $t1 = microtime(true);
     if (isset($stt['error'])) fail($stt['error'], 502);
     if ($stt['text'] === '') out(['heard' => '', 'reply' => null]);
 
     $call['turns'][] = ['who' => 'caller', 'text' => $stt['text']];
     $chat = sarvam_chat($call['turns']);
+    $t2 = microtime(true);
     if (isset($chat['error'])) fail($chat['error'], 502);
     $tts = sarvam_tts($chat['text'], $call['voice']);
+    $t3 = microtime(true);
     if (isset($tts['error'])) fail($tts['error'], 502);
 
     $call['turns'][] = ['who' => 'agent', 'text' => $chat['text']];
     $call['last'] = time();
     call_save($call);
-    out(['heard' => $stt['text'], 'reply' => $chat['text'], 'audio' => $tts['audio']]);
+    out(['heard' => $stt['text'], 'reply' => $chat['text'], 'audio' => $tts['audio'],
+        'ms' => ['hear' => (int)(($t1 - $t0) * 1000), 'think' => (int)(($t2 - $t1) * 1000), 'speak' => (int)(($t3 - $t2) * 1000)]]);
 
 case 'call_end':
     $call = open_call();
