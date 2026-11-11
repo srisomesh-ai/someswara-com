@@ -208,12 +208,28 @@ function sarvam_chat(array $turns): array {
     return ['text' => $text];
 }
 
+// What is shown in the transcript is not always safe to read aloud: symbols, brackets and
+// stray punctuation get spoken or cause odd pauses. This makes a clean copy for the voice only.
+function speech_text(string $t): string {
+    $t = preg_replace('~[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}\x{200D}]~u', '', $t);   // emoji
+    $t = str_replace(['₹', 'Rs.', 'Rs ', '%', '&', '@'], ['rupees ', 'rupees ', 'rupees ', ' percent', ' and ', ' at '], $t);
+    $t = str_replace(['"', '“', '”', '‘', '’', '(', ')', '[', ']', '{', '}', '<', '>', '|', '~', '^', '='], ' ', $t);
+    $t = str_replace(['…', '...', '..'], '.', $t);
+    $t = preg_replace('~\s+[-–—]+\s+~u', ', ', $t);       // a dash between words becomes a short pause
+    $t = str_replace(['–', '—', '/', '\\', ';', ':'], [', ', ', ', ' ', ' ', ',', ','], $t);
+    $t = preg_replace('~\s+([,.?!])~u', '$1', $t);            // no space before punctuation
+    $t = preg_replace('~([,.?!])[,.?!]+~u', '$1', $t);        // one mark at a time
+    $t = trim(preg_replace('~\s+~u', ' ', $t), " ,");
+    if ($t !== '' && !preg_match('~[.?!]$~u', $t)) $t .= '.';
+    return $t;
+}
+
 // Agent text to Telugu speech. Returns base64 audio (MP3, about a tenth the size of WAV).
 function sarvam_tts(string $text, string $speaker): array {
     $key = sarvam_key();
     $headers = ["api-subscription-key: $key", 'Content-Type: application/json'];
     $model = strpos($speaker, '_') !== false ? 'bulbul:v4-flash' : 'bulbul:v3';
-    $body = ['text' => mb_substr($text, 0, 2400), 'language_code' => 'te-IN', 'model' => $model,
+    $body = ['text' => mb_substr(speech_text($text), 0, 2400), 'language_code' => 'te-IN', 'model' => $model,
         'speaker' => $speaker, 'speech_sample_rate' => 24000, 'output_audio_codec' => 'mp3', 'pace' => 1.15];
     $r = http_post('https://api.sarvam.ai/text-to-speech', $headers, json_encode($body, JSON_UNESCAPED_UNICODE));
     if ($r['code'] === 400 || $r['code'] === 422) {
