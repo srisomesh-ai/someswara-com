@@ -4,7 +4,7 @@
 const DATA_DIR = __DIR__ . '/data';
 const MAX_CALLS = 500;
 const GREETING = 'నమస్తే, Bharat GPS Tracker కి call చేసినందుకు thanks. చెప్పండి, మీకు ఏ vehicle కి tracker కావాలి?';
-const VOICES = ['shubh', 'aditya', 'ritu', 'priya', 'neha', 'rahul', 'pooja', 'rohan', 'simran', 'kavya', 'amit', 'dev',
+const VOICES = ['kavitha_te_conversation', 'pooja_te_conversation', 'shubh', 'aditya', 'ritu', 'priya', 'neha', 'rahul', 'pooja', 'rohan', 'simran', 'kavya', 'amit', 'dev',
     'ishita', 'shreya', 'ratan', 'varun', 'manan', 'sumit', 'roopa', 'kabir', 'aayan', 'ashutosh', 'advait', 'anand',
     'tanya', 'tarun', 'sunny', 'mani', 'gokul', 'vijay', 'shruti', 'suhani', 'mohit', 'kavitha', 'rehan', 'soham', 'rupali'];
 
@@ -14,7 +14,11 @@ You are the phone sales assistant of Bharat GPS Tracker, a GPS vehicle tracker c
 How to speak:
 - Speak like a friendly local customer care person: everyday spoken Telugu mixed with the common English words people really use (tracker, vehicle, bike, car, installation, SIM, app, WhatsApp, location).
 - Write Telugu words in Telugu script and English words in English letters.
-- Reply in one or two short sentences. Ask only one question at a time.
+- Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
+- Begin most replies with a small natural reaction to what the caller just said, the way people do on the phone: సరే అండి, ఓకే, అవునా, అర్థమైంది, తప్పకుండా. Change it each time and never use the same one twice in a row.
+- Use spoken Telugu, never bookish or written-style Telugu. Say కావాలా, చెప్పండి, పంపిస్తాను, చూసుకోవచ్చు. Do not use words like అవసరము, దయచేసి, సంప్రదించండి, వినియోగదారు.
+- Be warm and relaxed, not like reading a script. Address the caller as అండి. Use సర్ or మేడమ్ only after the caller's voice or words make it clear.
+- If the caller only says hello or something unclear, respond naturally and gently repeat your question in different words.
 - No lists, no symbols, no emojis, no formatting. Write numbers in words.
 
 What to do on the call:
@@ -179,8 +183,9 @@ function sarvam_chat(array $turns): array {
 function sarvam_tts(string $text, string $speaker): array {
     $key = sarvam_key();
     $headers = ["api-subscription-key: $key", 'Content-Type: application/json'];
-    $body = ['text' => mb_substr($text, 0, 2400), 'language_code' => 'te-IN', 'model' => 'bulbul:v3',
-        'speaker' => $speaker, 'speech_sample_rate' => 22050];
+    $model = strpos($speaker, '_') !== false ? 'bulbul:v4-flash' : 'bulbul:v3';
+    $body = ['text' => mb_substr($text, 0, 2400), 'language_code' => 'te-IN', 'model' => $model,
+        'speaker' => $speaker, 'speech_sample_rate' => 24000];
     $r = http_post('https://api.sarvam.ai/text-to-speech', $headers, json_encode($body, JSON_UNESCAPED_UNICODE));
     if ($r['code'] === 400 || $r['code'] === 422) {
         // Older accounts name the language field differently.

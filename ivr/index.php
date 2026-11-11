@@ -332,7 +332,8 @@ function fillTable(tbody, calls) {
 function fillVoices(sel, voices, current) {
   sel.textContent = '';
   for (const v of voices) {
-    const o = document.createElement('option'); o.value = v; o.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+    const o = document.createElement('option'); o.value = v;
+    const name = v.split('_')[0]; o.textContent = name.charAt(0).toUpperCase() + name.slice(1) + (v.includes('_') ? ' (conversation)' : '');
     if (v === current) o.selected = true; sel.appendChild(o);
   }
 }
