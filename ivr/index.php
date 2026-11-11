@@ -212,7 +212,7 @@ tr:last-child td{border-bottom:none}
             <select id="set-lang"><option>Telugu</option><option disabled>Hindi (later)</option><option disabled>English (later)</option></select></div>
           <div class="field"><label for="set-voice">Voice</label><select id="set-voice"></select></div>
           <div class="field"><label for="set-key">Sarvam API key</label>
-            <input id="set-key" autocomplete="off" placeholder="Leave empty to keep the saved key">
+            <input id="set-key" autocomplete="off" placeholder="Paste your Sarvam API key">
             <span class="hint" id="key-state"></span></div>
           <div class="field"><label for="set-pw">New admin password</label>
             <input id="set-pw" type="password" autocomplete="new-password" placeholder="Leave empty to keep the current one"></div>
@@ -338,6 +338,10 @@ function fillVoices(sel, voices, current) {
   }
 }
 
+let keyMask = '';
+$('set-key').addEventListener('focus', (e) => { if (e.target.value === keyMask) e.target.value = ''; });
+$('set-key').addEventListener('blur', (e) => { if (e.target.value.trim() === '') e.target.value = keyMask; });
+
 async function loadOverview() {
   const d = await api('overview');
   $('s-calls').textContent = d.stats.calls;
@@ -348,7 +352,10 @@ async function loadOverview() {
   fillTable($('all'), d.calls);
   fillVoices($('voice'), d.voices, d.voice);
   fillVoices($('set-voice'), d.voices, d.voice);
-  $('key-state').textContent = d.has_key ? 'A key is saved.' : 'No key saved yet. Test calls need one.';
+  // Show the saved key masked, so it is clear it is still stored. The full key never leaves the server.
+  keyMask = d.has_key ? '••••••••••••' + d.key_hint : '';
+  $('set-key').value = keyMask;
+  $('key-state').textContent = d.has_key ? 'Key saved on the server, ending in ' + d.key_hint + '. Paste a new key only to replace it.' : 'No key saved yet. Test calls need one.';
 }
 async function showApp() {
   $('v-app').classList.remove('hide');
@@ -362,7 +369,8 @@ $('set-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('set-err').textContent = '';
   try {
-    await api('save_settings', { voice: $('set-voice').value, sarvam_key: $('set-key').value, password: $('set-pw').value });
+    const typed = $('set-key').value.trim();
+    await api('save_settings', { voice: $('set-voice').value, sarvam_key: typed === keyMask ? '' : typed, password: $('set-pw').value });
     $('set-key').value = ''; $('set-pw').value = '';
     await loadOverview();
     toast('Saved.');

@@ -88,6 +88,7 @@ case 'overview':
     }
     out([
         'has_key' => sarvam_key() !== '',
+        'key_hint' => sarvam_key() !== '' ? substr(sarvam_key(), -4) : '',
         'voice' => current_voice(),
         'voices' => VOICES,
         'stats' => ['calls' => $count, 'leads' => 0, 'staff' => 0, 'avg_seconds' => $count ? (int)round($secs / $count) : 0],
