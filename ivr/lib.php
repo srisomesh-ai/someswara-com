@@ -185,7 +185,7 @@ function sarvam_tts(string $text, string $speaker): array {
     $headers = ["api-subscription-key: $key", 'Content-Type: application/json'];
     $model = strpos($speaker, '_') !== false ? 'bulbul:v4-flash' : 'bulbul:v3';
     $body = ['text' => mb_substr($text, 0, 2400), 'language_code' => 'te-IN', 'model' => $model,
-        'speaker' => $speaker, 'speech_sample_rate' => 24000, 'output_audio_codec' => 'mp3'];
+        'speaker' => $speaker, 'speech_sample_rate' => 24000, 'output_audio_codec' => 'mp3', 'pace' => 1.15];
     $r = http_post('https://api.sarvam.ai/text-to-speech', $headers, json_encode($body, JSON_UNESCAPED_UNICODE));
     if ($r['code'] === 400 || $r['code'] === 422) {
         // If compressed audio is refused, fall back to the default WAV.
