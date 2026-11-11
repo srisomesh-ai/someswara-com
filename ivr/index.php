@@ -415,7 +415,8 @@ function onAudio(e) {
   rec.push(buf);
   if (rms > limit) { speechMs += ms; silentMs = 0; } else silentMs += ms;
   if (silentMs >= 700 || rec.length * ms >= 25000) {
-    const chunks = rec, enough = speechMs >= 250;
+    // Drop most of the trailing silence so the upload is smaller.
+    const chunks = rec.slice(0, rec.length - Math.max(0, Math.floor((silentMs - 170) / ms))), enough = speechMs >= 250;
     inSpeech = false; rec = []; pre = [];
     if (enough) sendTurn(chunks);
   }
@@ -449,7 +450,10 @@ async function speak(b64, startedAt, ms) {
   if (startedAt) {
     const sec = (n) => (n / 1000).toFixed(1);
     let t = 'Reply speed ' + sec(performance.now() - startedAt) + ' s';
-    if (ms) t += ' (hear ' + sec(ms.hear) + ', think ' + sec(ms.think) + ', speak ' + sec(ms.speak) + ')';
+    if (ms) {
+      const net = Math.max(0, performance.now() - startedAt - ms.hear - ms.think - ms.speak);
+      t += ' (hear ' + sec(ms.hear) + ', think ' + sec(ms.think) + ', speak ' + sec(ms.speak) + ', network ' + sec(net) + ')';
+    }
     $('speed').textContent = t;
   }
   setPhase('speaking', 'Agent is speaking');

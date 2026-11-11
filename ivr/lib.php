@@ -179,18 +179,17 @@ function sarvam_chat(array $turns): array {
     return ['text' => $text];
 }
 
-// Agent text to Telugu speech. Returns base64 WAV.
+// Agent text to Telugu speech. Returns base64 audio (MP3, about a tenth the size of WAV).
 function sarvam_tts(string $text, string $speaker): array {
     $key = sarvam_key();
     $headers = ["api-subscription-key: $key", 'Content-Type: application/json'];
     $model = strpos($speaker, '_') !== false ? 'bulbul:v4-flash' : 'bulbul:v3';
     $body = ['text' => mb_substr($text, 0, 2400), 'language_code' => 'te-IN', 'model' => $model,
-        'speaker' => $speaker, 'speech_sample_rate' => 24000];
+        'speaker' => $speaker, 'speech_sample_rate' => 24000, 'output_audio_codec' => 'mp3'];
     $r = http_post('https://api.sarvam.ai/text-to-speech', $headers, json_encode($body, JSON_UNESCAPED_UNICODE));
     if ($r['code'] === 400 || $r['code'] === 422) {
-        // Older accounts name the language field differently.
-        $body['target_language_code'] = $body['language_code'];
-        unset($body['language_code']);
+        // If compressed audio is refused, fall back to the default WAV.
+        unset($body['output_audio_codec']);
         $r2 = http_post('https://api.sarvam.ai/text-to-speech', $headers, json_encode($body, JSON_UNESCAPED_UNICODE));
         if ($r2['code'] === 200) $r = $r2;
     }
