@@ -60,8 +60,9 @@ function need_key(): void {
 }
 
 function current_voice(): string {
-    $v = (string)(settings()['voice'] ?? '');
-    return in_array($v, VOICES, true) ? $v : VOICES[0];
+    $list = voices_for(lang());   // each language remembers its own voice
+    $v = (string)(settings()[lang() === 'hi' ? 'voice_hi' : 'voice'] ?? '');
+    return in_array($v, $list, true) ? $v : $list[0];
 }
 
 function open_call(): array {
@@ -91,7 +92,8 @@ case 'overview':
         'has_key' => sarvam_key() !== '',
         'key_hint' => sarvam_key() !== '' ? substr(sarvam_key(), -4) : '',
         'voice' => current_voice(),
-        'voices' => VOICES,
+        'voices' => voices_for(lang()),
+        'lang' => lang(),
         'stats' => ['calls' => $count, 'leads' => 0, 'staff' => 0, 'avg_seconds' => $count ? (int)round($secs / $count) : 0],
         'calls' => array_map('call_summary', array_slice($all, 0, 50)),
     ]);
@@ -100,8 +102,11 @@ case 'save_settings':
     $s = settings();
     $key = trim((string)($_POST['sarvam_key'] ?? ''));
     if ($key !== '') $s['sarvam_key'] = $key;
+    $lang = (string)($_POST['lang'] ?? '');
+    if (isset(LANGS[$lang])) $s['lang'] = $lang;
+    $cur = isset(LANGS[$s['lang'] ?? '']) ? $s['lang'] : 'te';
     $voice = (string)($_POST['voice'] ?? '');
-    if (in_array($voice, VOICES, true)) $s['voice'] = $voice;
+    if (in_array($voice, voices_for($cur), true)) $s[$cur === 'hi' ? 'voice_hi' : 'voice'] = $voice;
     $pw = (string)($_POST['password'] ?? '');
     if ($pw !== '') {
         if (strlen($pw) < 8) fail('Use a password of at least 8 characters.');
@@ -114,10 +119,11 @@ case 'call_start':
     need_key();
     $voice = current_voice();
     $typed = ($_POST['mode'] ?? '') === 'type';
+    $lang = lang();
     $greeting = training()['greeting'];
     $audio = null;
     if (!$typed || ($_POST['speak'] ?? '') === '1') {
-        $tts = sarvam_tts($greeting, $voice);
+        $tts = sarvam_tts($greeting, $voice, $lang);
         if (isset($tts['error'])) fail($tts['error'], 502);
         $audio = $tts['audio'];
     }
@@ -126,6 +132,7 @@ case 'call_start':
         'started' => time(),
         'last' => time(),
         'voice' => $voice,
+        'lang' => $lang,
         'typed' => $typed,
         'turns' => [['who' => 'agent', 'text' => $greeting]],
     ];
@@ -147,10 +154,10 @@ case 'call_turn':
     if ($stt['text'] === '') out(['heard' => '', 'reply' => null]);
 
     $call['turns'][] = ['who' => 'caller', 'text' => $stt['text']];
-    $chat = sarvam_chat($call['turns']);
+    $chat = sarvam_chat($call['turns'], $call['lang'] ?? 'te');
     $t2 = microtime(true);
     if (isset($chat['error'])) fail($chat['error'], 502);
-    $tts = sarvam_tts($chat['text'], $call['voice']);
+    $tts = sarvam_tts($chat['text'], $call['voice'], $call['lang'] ?? 'te');
     $t3 = microtime(true);
     if (isset($tts['error'])) fail($tts['error'], 502);
 
@@ -167,12 +174,12 @@ case 'call_text':   // the caller's line typed instead of spoken
     if ($text === '') fail('Type something first.');
     $call['turns'][] = ['who' => 'caller', 'text' => $text, 'typed' => true];
     $t1 = microtime(true);
-    $chat = sarvam_chat($call['turns']);
+    $chat = sarvam_chat($call['turns'], $call['lang'] ?? 'te');
     $t2 = microtime(true);
     if (isset($chat['error'])) fail($chat['error'], 502);
     $audio = null;
     if (($_POST['speak'] ?? '') === '1') {
-        $tts = sarvam_tts($chat['text'], $call['voice']);
+        $tts = sarvam_tts($chat['text'], $call['voice'], $call['lang'] ?? 'te');
         if (isset($tts['error'])) fail($tts['error'], 502);
         $audio = $tts['audio'];
     }
@@ -224,7 +231,7 @@ case 'training_save':
         if ($q !== '' && $a !== '') $examples[] = ['q' => $q, 'a' => $a];
     }
     $t = read_json('training.json');
-    $t['greeting'] = clean_line($_POST['greeting'] ?? '', 400);
+    $t[lang() === 'hi' ? 'greeting_hi' : 'greeting'] = clean_line($_POST['greeting'] ?? '', 400);
     $t['rules'] = array_slice($rules, 0, 40);
     $t['examples'] = array_slice($examples, 0, 60);
     write_json('training.json', $t);

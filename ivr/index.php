@@ -176,7 +176,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
           </div>
           <div class="two">
             <div class="field"><label for="lang">Language</label>
-              <select id="lang"><option>Telugu</option><option disabled>Hindi (later)</option><option disabled>English (later)</option></select></div>
+              <select id="lang"><option value="te">Telugu</option><option value="hi">Hindi</option><option disabled>English (later)</option></select></div>
             <div class="field"><label for="voice">Voice</label><select id="voice"></select></div>
           </div>
           <label class="check hide" id="speak-wrap"><input id="speak-on" type="checkbox" checked> Also play her replies in her voice</label>
@@ -247,7 +247,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       <div class="card">
         <form id="set-form" class="form">
           <div class="field"><label for="set-lang">Language</label>
-            <select id="set-lang"><option>Telugu</option><option disabled>Hindi (later)</option><option disabled>English (later)</option></select></div>
+            <select id="set-lang"><option value="te">Telugu</option><option value="hi">Hindi</option><option disabled>English (later)</option></select></div>
           <div class="field"><label for="set-voice">Voice</label><select id="set-voice"></select></div>
           <div class="field"><label for="set-key">Sarvam API key</label>
             <input id="set-key" autocomplete="off" placeholder="Paste your Sarvam API key">
@@ -268,7 +268,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       </div>
       <div class="card stack">
         <h2>1. Greeting</h2>
-        <label class="lbl" for="t-greet">The first thing she says when the call connects</label>
+        <label class="lbl" for="t-greet">The first thing she says when the call connects <span id="t-greet-lang"></span></label>
         <textarea id="t-greet" rows="3"></textarea>
       </div>
       <div class="card stack">
@@ -412,7 +412,8 @@ function fillVoices(sel, voices, current) {
   sel.textContent = '';
   for (const v of voices) {
     const o = document.createElement('option'); o.value = v;
-    const name = v.split('_')[0]; o.textContent = name.charAt(0).toUpperCase() + name.slice(1) + (v.includes('_') ? ' (conversation)' : '');
+    const parts = v.split('_'), name = parts[0];
+    o.textContent = name.charAt(0).toUpperCase() + name.slice(1) + (parts.length > 1 ? ' (' + parts[parts.length - 1] + ')' : '');
     if (v === current) o.selected = true; sel.appendChild(o);
   }
 }
@@ -431,6 +432,7 @@ async function loadOverview() {
   fillTable($('all'), d.calls);
   fillVoices($('voice'), d.voices, d.voice);
   fillVoices($('set-voice'), d.voices, d.voice);
+  $('lang').value = d.lang; $('set-lang').value = d.lang;
   // Show the saved key masked, so it is clear it is still stored. The full key never leaves the server.
   keyMask = d.has_key ? '••••••••••••' + d.key_hint : '';
   $('set-key').value = keyMask;
@@ -443,6 +445,13 @@ async function showApp() {
 
 async function saveVoice(v) { try { await api('save_settings', { voice: v }); $('voice').value = v; $('set-voice').value = v; } catch (err) { toast(err.message); } }
 $('voice').addEventListener('change', (e) => saveVoice(e.target.value));
+// Changing the language switches her speaking style, greeting and the list of voices. A call in progress keeps its language.
+async function saveLang(v) {
+  try { await api('save_settings', { lang: v }); await loadOverview(); toast('Language changed. Pick a voice and start a new test.'); }
+  catch (err) { toast(err.message); }
+}
+$('lang').addEventListener('change', (e) => saveLang(e.target.value));
+$('set-lang').addEventListener('change', (e) => saveLang(e.target.value));
 
 $('set-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -690,6 +699,7 @@ function pairBox(capA, a, capB, b) {
 
 function renderTraining() {
   $('t-greet').value = tr.greeting;
+  $('t-greet-lang').textContent = tr.lang === 'hi' ? '(Hindi calls)' : '(Telugu calls)';
 
   const rules = $('t-rules'); rules.textContent = '';
   if (!tr.rules.length) rules.appendChild(el('div', 'empty', 'No rules yet.'));

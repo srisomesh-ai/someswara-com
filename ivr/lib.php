@@ -4,6 +4,9 @@
 const DATA_DIR = __DIR__ . '/data';
 const MAX_CALLS = 500;
 const GREETING = 'నమస్తే, Bharat GPS Tracker కి call చేసినందుకు thanks. చెప్పండి, మీకు ఏ vehicle కి tracker కావాలి?';
+const GREETING_HI = 'नमस्ते, Bharat GPS Tracker में call करने के लिए धन्यवाद. बताइए, आपको किस vehicle के लिए tracker चाहिए?';
+const LANGS = ['te' => ['name' => 'Telugu', 'code' => 'te-IN'], 'hi' => ['name' => 'Hindi', 'code' => 'hi-IN']];
+const VOICES_HI = ['aparna_hi_customer', 'aarti_hi_customer', 'shubh_hi_customer'];   // Sarvam's Hindi customer-care voices
 const VOICES = ['kavitha_te_conversation', 'pooja_te_conversation', 'shubh', 'aditya', 'ritu', 'priya', 'neha', 'rahul', 'pooja', 'rohan', 'simran', 'kavya', 'amit', 'dev',
     'ishita', 'shreya', 'ratan', 'varun', 'manan', 'sumit', 'roopa', 'kabir', 'aayan', 'ashutosh', 'advait', 'anand',
     'tanya', 'tarun', 'sunny', 'mani', 'gokul', 'vijay', 'shruti', 'suhani', 'mohit', 'kavitha', 'rehan', 'soham', 'rupali'];
@@ -31,6 +34,23 @@ What to do on the call:
 - If the caller asks whether you are a person or a machine, say honestly that you are the AI assistant of Bharat GPS Tracker.
 TXT;
 
+// The same instructions for a Hindi call: only the speaking style and the language rule differ.
+const SPEAK_HI = <<<'TXT'
+How to speak:
+- Speak like a friendly customer care person: everyday spoken Hindi mixed with the common English words people really use (tracker, vehicle, bike, car, installation, SIM, app, WhatsApp, location). The simple Hindi of a phone call, never formal or news-reader Hindi.
+- Write Hindi words in Devanagari script and English words in English letters.
+- Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
+- Begin most replies with a small natural reaction to what the caller just said, the way people do on the phone: जी, अच्छा जी, ठीक है, बिल्कुल, हाँ जी. Change it each time and never use the same one twice in a row.
+- Use spoken words: चाहिए, बताइए, देख लीजिए, भेज देते हैं. Do not use words like कृपया, आवश्यकता, संपर्क करें, उपभोक्ता.
+- Be warm and relaxed, not like reading a script. Address the caller as आप and जी. Use सर or मैडम only after the caller's voice or words make it clear.
+- Speak for the company as हम (हम भेज देते हैं, हम बता देते हैं), so you never need a masculine or feminine verb for yourself.
+- If the caller only says hello or something unclear, respond naturally and gently repeat your question in different words.
+- No lists, no symbols, no emojis, no formatting. Write numbers in words.
+
+TXT;
+const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
+const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
+
 date_default_timezone_set('Asia/Kolkata');
 if (!is_dir(DATA_DIR)) @mkdir(DATA_DIR, 0755, true);
 
@@ -49,6 +69,8 @@ function write_json(string $file, $data): void {
 }
 
 function settings(): array { return read_json('settings.json'); }
+function lang(): string { $l = (string)(settings()['lang'] ?? 'te'); return isset(LANGS[$l]) ? $l : 'te'; }
+function voices_for(string $lang): array { return $lang === 'hi' ? array_merge(VOICES_HI, array_slice(VOICES, 2)) : VOICES; }
 function is_setup(): bool { return !empty(settings()['password_hash']); }
 
 // ---------- login ----------
@@ -119,23 +141,30 @@ function clean_line($s, int $max): string {
 
 function training(): array {
     $t = read_json('training.json');
-    $greeting = clean_line($t['greeting'] ?? '', 400);
+    $hi = lang() === 'hi';   // each language keeps its own greeting; rules and examples are shared
+    $greeting = clean_line($t[$hi ? 'greeting_hi' : 'greeting'] ?? '', 400);
     return [
-        'greeting' => $greeting !== '' ? $greeting : GREETING,
+        'lang' => lang(),
+        'greeting' => $greeting !== '' ? $greeting : ($hi ? GREETING_HI : GREETING),
         'rules' => array_values(array_filter((array)($t['rules'] ?? []), 'is_string')),
         'examples' => array_values(array_filter((array)($t['examples'] ?? []), 'is_array')),
         'corrections' => array_values(array_filter((array)($t['corrections'] ?? []), 'is_array')),
     ];
 }
 
-function system_prompt(): string {
+function system_prompt(string $lang = 'te'): string {
     $t = training();
     $p = SYSTEM_PROMPT;
+    if ($lang === 'hi') {
+        $a = strpos($p, 'How to speak:'); $b = strpos($p, 'What to do on the call:');
+        $p = substr($p, 0, $a) . SPEAK_HI . "\n" . substr($p, $b);
+        $p = str_replace(OTHER_LANG_TE, OTHER_LANG_HI, $p);
+    }
     if (!$t['rules'] && !$t['examples']) return $p;
     $p .= "\n\nThe owner of the business has trained you with the rules and examples below. If any of them conflicts with the instructions above, follow the owner's.";
     if ($t['rules']) $p .= "\n\nOwner's rules. Follow every one on every call:\n- " . implode("\n- ", $t['rules']);
     if ($t['examples']) {
-        $p .= "\n\nHow the owner wants you to answer. Copy the style and the idea, not the exact words:";
+        $p .= "\n\nHow the owner wants you to answer. Copy the style and the idea, not the exact words. An example may be written in another language; always reply in " . LANGS[$lang]['name'] . ":";
         foreach ($t['examples'] as $e) $p .= "\nCustomer: " . ($e['q'] ?? '') . "\nYou: " . ($e['a'] ?? '');
     }
     return $p;
@@ -182,9 +211,9 @@ function sarvam_stt(string $wavPath): array {
 }
 
 // Conversation so far to the agent's next line.
-function sarvam_chat(array $turns): array {
+function sarvam_chat(array $turns, string $lang = 'te'): array {
     $messages = [
-        ['role' => 'system', 'content' => system_prompt()],
+        ['role' => 'system', 'content' => system_prompt($lang)],
         ['role' => 'user', 'content' => '(The call has just connected.)'],
     ];
     foreach ($turns as $t) {
@@ -224,12 +253,12 @@ function speech_text(string $t): string {
     return $t;
 }
 
-// Agent text to Telugu speech. Returns base64 audio (MP3, about a tenth the size of WAV).
-function sarvam_tts(string $text, string $speaker): array {
+// Agent text to speech in the call's language. Returns base64 audio (MP3, about a tenth the size of WAV).
+function sarvam_tts(string $text, string $speaker, string $lang = 'te'): array {
     $key = sarvam_key();
     $headers = ["api-subscription-key: $key", 'Content-Type: application/json'];
     $model = strpos($speaker, '_') !== false ? 'bulbul:v4-flash' : 'bulbul:v3';
-    $body = ['text' => mb_substr(speech_text($text), 0, 2400), 'language_code' => 'te-IN', 'model' => $model,
+    $body = ['text' => mb_substr(speech_text($text), 0, 2400), 'language_code' => LANGS[$lang]['code'] ?? 'te-IN', 'model' => $model,
         'speaker' => $speaker, 'speech_sample_rate' => 24000, 'output_audio_codec' => 'mp3', 'pace' => 1.15];
     $r = http_post('https://api.sarvam.ai/text-to-speech', $headers, json_encode($body, JSON_UNESCAPED_UNICODE));
     if ($r['code'] === 400 || $r['code'] === 422) {
