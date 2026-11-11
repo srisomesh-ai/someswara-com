@@ -77,6 +77,31 @@ tr:last-child td{border-bottom:none}
 .link{border:none;background:none;padding:8px 0;font-weight:600;text-decoration:underline;min-height:44px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1A1A1A;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;max-width:90vw;z-index:9}
 .form{display:flex;flex-direction:column;gap:14px;max-width:460px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.seg{display:flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+.seg button{flex:1 1 0;min-height:48px;border:none;background:#fff;font-weight:600}
+.seg button.on{background:var(--accent);color:#fff;font-weight:700}
+.check{display:flex;align-items:center;gap:12px;min-height:44px;font-weight:500}
+.check input{width:22px;height:22px;accent-color:var(--accent)}
+.btn-send,.btn-save{min-height:48px;padding:0 22px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:700}
+.btn-save{min-height:44px;border-radius:8px}
+.mark{display:block;margin-top:6px;min-height:44px;padding:0;border:none;background:none;font-size:13px;font-weight:600;color:var(--accent-dark);text-decoration:underline;text-align:left}
+.stack{display:flex;flex-direction:column;gap:12px}
+.hint14{font-size:14px;color:var(--muted)}
+textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8px;border:1px solid var(--line2);resize:vertical;background:#fff}
+.item{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:8px;background:var(--bg)}
+.item span{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.txt{min-height:44px;padding:0 12px;border:none;background:none;font-weight:600;text-decoration:underline}
+.txt.red{color:var(--accent-dark);text-decoration:none}
+.ex{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.ex.dashed{border-style:dashed;border-color:var(--line2)}
+.pair{display:flex;flex-wrap:wrap;gap:12px}
+.pair>div{flex:1 1 240px;min-width:0}
+.cap{font-size:12px;font-weight:700;color:var(--muted)}
+.cap.red{color:var(--accent-dark)}
+.bubble{margin-top:4px;padding:10px 12px;border-radius:8px;background:var(--soft);overflow-wrap:anywhere}
+.bubble.red{background:var(--accent-soft)}
+.badge{padding:4px 10px;border-radius:999px;background:#FFF1D6;color:#6B4700;font-weight:600;font-size:13px;white-space:nowrap}
 @media (max-width:760px){
   .side{border-right:none;border-bottom:1px solid var(--line);padding:16px 12px 8px}
   .brand{padding-bottom:12px}
@@ -118,7 +143,7 @@ tr:last-child td{border-bottom:none}
       <button type="button" data-view="overview" data-scroll="test">Test calls</button>
       <button type="button" data-view="history">Call history</button>
       <button type="button" data-view="soon" data-step="4" data-name="Leads">Leads</button>
-      <button type="button" data-view="soon" data-step="2" data-name="Sales script">Sales script</button>
+      <button type="button" data-view="training">Training</button>
       <button type="button" data-view="soon" data-step="2" data-name="Products and prices">Products and prices</button>
       <button type="button" data-view="settings">Voice and language</button>
       <button type="button" data-view="soon" data-step="4" data-name="Staff transfer">Staff transfer</button>
@@ -141,15 +166,24 @@ tr:last-child td{border-bottom:none}
       <div class="row" id="test">
         <div class="card">
           <h2>Start a test call</h2>
+          <div class="field">
+            <span class="lbl">How do you want to test?</span>
+            <div class="seg" role="group" aria-label="Test mode">
+              <button type="button" id="mode-talk" class="on" aria-pressed="true">Talk</button>
+              <button type="button" id="mode-type" aria-pressed="false">Type</button>
+            </div>
+            <div class="hint">Type is for noisy places and for training. Talk is for checking how she sounds.</div>
+          </div>
           <div class="two">
             <div class="field"><label for="lang">Language</label>
               <select id="lang"><option>Telugu</option><option disabled>Hindi (later)</option><option disabled>English (later)</option></select></div>
             <div class="field"><label for="voice">Voice</label><select id="voice"></select></div>
           </div>
+          <label class="check hide" id="speak-wrap"><input id="speak-on" type="checkbox" checked> Also play her replies in her voice</label>
           <button type="button" class="btn-primary" id="talk">
-            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+            <svg id="talk-icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
             <span id="talk-label">Talk to the agent here</span></button>
-          <div class="hint">Uses this device's microphone. No phone number needed.</div>
+          <div class="hint" id="talk-hint">Uses this device's microphone. No phone number needed.</div>
           <div id="call-err" class="err" role="alert"></div>
           <div class="rule"></div>
           <div class="field">
@@ -166,9 +200,13 @@ tr:last-child td{border-bottom:none}
           <div class="thead"><h2>Live transcript</h2><span class="hint" id="speed"></span></div>
           <div class="status" id="status" role="status"></div>
           <div class="lines" id="lines"><div class="empty">Start a test call and the conversation appears here.</div></div>
-          <div class="inline" style="margin-top:auto">
-            <button type="button" class="btn" id="end" disabled>End call</button>
-            <button type="button" class="btn" id="flag" disabled>Mark a wrong answer</button>
+          <div class="stack" style="margin-top:auto">
+            <form class="inline hide" id="type-form">
+              <label class="sr" for="typed">Type what the customer says</label>
+              <input id="typed" type="text" autocomplete="off" placeholder="Type what the customer says">
+              <button type="submit" class="btn-send" id="send">Send</button>
+            </form>
+            <div><button type="button" class="btn" id="end" disabled>End call</button></div>
           </div>
         </div>
       </div>
@@ -219,6 +257,46 @@ tr:last-child td{border-bottom:none}
           <div id="set-err" class="err" role="alert"></div>
           <button class="btn-primary" type="submit">Save</button>
         </form>
+      </div>
+    </div>
+
+    <!-- Training -->
+    <div id="view-training" class="hide" style="display:flex;flex-direction:column;gap:24px">
+      <div class="head">
+        <div><h1>Training</h1><div class="sub">What you save here is used from the very next call</div></div>
+        <div class="right"><button type="button" class="btn-save" id="t-save">Save changes</button></div>
+      </div>
+      <div class="card stack">
+        <h2>1. Greeting</h2>
+        <label class="lbl" for="t-greet">The first thing she says when the call connects</label>
+        <textarea id="t-greet" rows="3"></textarea>
+      </div>
+      <div class="card stack">
+        <h2>2. Rules</h2>
+        <div class="hint14">Write in simple English or Telugu, one rule per line. She follows every rule on every call.</div>
+        <div id="t-rules" class="stack"></div>
+        <form class="inline" id="t-rule-form">
+          <label class="sr" for="t-rule">New rule</label>
+          <input id="t-rule" type="text" autocomplete="off" placeholder="Type a new rule">
+          <button type="submit" class="btn">Add rule</button>
+        </form>
+      </div>
+      <div class="card stack">
+        <h2>3. Example answers</h2>
+        <div class="hint14">Show her how your best staff member would answer. She copies the style, not the exact words.</div>
+        <div id="t-examples" class="stack"></div>
+        <form class="ex dashed" id="t-ex-form">
+          <div class="pair">
+            <div class="field"><label for="t-q">When the customer says</label><input id="t-q" type="text" autocomplete="off" placeholder="Type what the customer says"></div>
+            <div class="field"><label for="t-a">She should reply</label><input id="t-a" type="text" autocomplete="off" placeholder="Type the reply in your own words"></div>
+          </div>
+          <button type="submit" class="btn" style="align-self:flex-start">Add example</button>
+        </form>
+      </div>
+      <div class="card stack">
+        <div class="thead"><h2>4. Corrections from test calls</h2><span class="badge hide" id="t-badge"></span></div>
+        <div class="hint14">Every answer you mark as wrong in a test call comes here. Type what she should have said and it becomes a new example.</div>
+        <div id="t-corr" class="stack"></div>
       </div>
     </div>
 
@@ -284,12 +362,13 @@ $('logout').addEventListener('click', async () => { await endCall(); await api('
 
 // ---------- views ----------
 function show(view) {
-  for (const v of ['overview', 'history', 'settings', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
+  for (const v of ['overview', 'history', 'settings', 'training', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
 }
 document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('.nav button').forEach((x) => x.classList.remove('on'));
   b.classList.add('on');
   show(b.dataset.view);
+  if (b.dataset.view === 'training') loadTraining();
   if (b.dataset.view === 'soon') {
     $('soon-title').textContent = b.dataset.name;
     $('soon-text').textContent = b.dataset.name + ' is step ' + b.dataset.step + ' of the build. It is not built yet.';
@@ -377,11 +456,23 @@ $('set-form').addEventListener('submit', async (e) => {
   } catch (err) { $('set-err').textContent = err.message; }
 });
 
-function addLine(box, who, text, flagged) {
+function addLine(box, who, text, flagged, opt) {
   const empty = box.querySelector('.empty'); if (empty) empty.remove();
   const div = document.createElement('div'); div.className = 'line ' + who + (flagged ? ' flag' : '');
-  const s = document.createElement('small'); s.textContent = who === 'agent' ? 'Agent' : 'Caller';
+  const s = document.createElement('small'); s.textContent = who === 'agent' ? 'Agent' : (opt && opt.typed ? 'Caller (typed)' : 'Caller');
   div.appendChild(s); div.appendChild(document.createTextNode(esc(text)));
+  if (opt && opt.turn != null) {
+    // Under each of her replies in a live test: mark it wrong, then correct it on the Training page.
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'mark'; b.textContent = 'Mark wrong and correct it';
+    b.addEventListener('click', async () => {
+      if (b.dataset.done) return document.querySelector('.nav [data-view="training"]').click();
+      try {
+        await api('call_flag', { call_id: flagId, turn: opt.turn });
+        div.classList.add('flag'); b.dataset.done = '1'; b.textContent = 'Marked wrong. Correct it in Training';
+      } catch (err) { toast(err.message); }
+    });
+    div.appendChild(b);
+  }
   box.appendChild(div); box.scrollTop = box.scrollHeight;
   return div;
 }
@@ -392,7 +483,7 @@ async function openCall(id) {
     document.querySelector('.nav [data-view="history"]').click();
     $('detail-title').textContent = 'Call on ' + when(d.call.started) + ', ' + mmss(d.call.seconds);
     $('detail-lines').textContent = '';
-    for (const l of d.call.lines) addLine($('detail-lines'), l.who, l.text, l.flagged);
+    for (const l of d.call.lines) addLine($('detail-lines'), l.who, l.text, l.flagged, { typed: l.typed });
     $('detail').classList.remove('hide');
     $('detail').scrollIntoView({ behavior: 'smooth' });
   } catch (err) { toast(err.message); }
@@ -400,8 +491,9 @@ async function openCall(id) {
 $('detail-close').addEventListener('click', () => $('detail').classList.add('hide'));
 
 // ---------- browser test call ----------
-// One turn at a time: the agent speaks, then the microphone listens until the caller pauses.
-let ctx = null, stream = null, proc = null, callId = null, flagId = null, lastAgent = null;
+// One turn at a time. Talk: the agent speaks, then the microphone listens until the caller pauses.
+// Type: the caller's line is typed, and her reply is shown (and spoken, if the tick box is on).
+let ctx = null, stream = null, proc = null, callId = null, flagId = null, mode = 'talk', busy = false;
 let phase = 'idle';            // idle | busy | speaking | listening
 let pre = [], rec = [], inSpeech = false, silentMs = 0, speechMs = 0, noise = 0.005;
 
@@ -449,23 +541,30 @@ function toWav(chunks, rate) {
   return new Blob([view], { type: 'audio/wav' });
 }
 
+function showSpeed(startedAt, ms) {
+  if (!startedAt) return;
+  const sec = (n) => (n / 1000).toFixed(1);
+  let t = 'Reply speed ' + sec(performance.now() - startedAt) + ' s';
+  if (ms) {
+    const net = Math.max(0, performance.now() - startedAt - ms.hear - ms.think - ms.speak);
+    t += ' (' + (ms.hear ? 'hear ' + sec(ms.hear) + ', ' : '') + 'think ' + sec(ms.think) + ', speak ' + sec(ms.speak) + ', network ' + sec(net) + ')';
+  }
+  $('speed').textContent = t;
+}
+
 async function speak(b64, startedAt, ms) {
   const bin = atob(b64); const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   const audio = await ctx.decodeAudioData(bytes.buffer);
   if (!callId) return;
   const node = ctx.createBufferSource(); node.buffer = audio; node.connect(ctx.destination);
-  if (startedAt) {
-    const sec = (n) => (n / 1000).toFixed(1);
-    let t = 'Reply speed ' + sec(performance.now() - startedAt) + ' s';
-    if (ms) {
-      const net = Math.max(0, performance.now() - startedAt - ms.hear - ms.think - ms.speak);
-      t += ' (hear ' + sec(ms.hear) + ', think ' + sec(ms.think) + ', speak ' + sec(ms.speak) + ', network ' + sec(net) + ')';
-    }
-    $('speed').textContent = t;
-  }
+  showSpeed(startedAt, ms);
   setPhase('speaking', 'Agent is speaking');
-  node.onended = () => { if (callId) { pre = []; setPhase('listening', 'Listening. Speak now.'); } };
+  node.onended = () => {
+    if (!callId) return;
+    if (mode === 'type') setPhase('typing', '');
+    else { pre = []; setPhase('listening', 'Listening. Speak now.'); }
+  };
   node.start();
 }
 
@@ -480,8 +579,7 @@ async function sendTurn(chunks) {
     if (!callId) return;
     if (!d.reply) return setPhase('listening', 'Did not catch that. Please say it again.');
     addLine($('lines'), 'caller', d.heard);
-    lastAgent = addLine($('lines'), 'agent', d.reply);
-    $('flag').disabled = false;
+    addLine($('lines'), 'agent', d.reply, false, { turn: d.turn });
     await speak(d.audio, t0, d.ms);
   } catch (err) {
     $('call-err').textContent = err.message;
@@ -489,42 +587,86 @@ async function sendTurn(chunks) {
   }
 }
 
+function setMode(m) {
+  if (callId) return;
+  mode = m;
+  $('mode-talk').classList.toggle('on', m === 'talk'); $('mode-talk').setAttribute('aria-pressed', m === 'talk');
+  $('mode-type').classList.toggle('on', m === 'type'); $('mode-type').setAttribute('aria-pressed', m === 'type');
+  $('speak-wrap').classList.toggle('hide', m !== 'type');
+  $('talk-icon').classList.toggle('hide', m !== 'talk');
+  $('talk-label').textContent = m === 'talk' ? 'Talk to the agent here' : 'Start typing test';
+  $('talk-hint').textContent = m === 'talk' ? "Uses this device's microphone. No phone number needed."
+    : "No microphone needed. Type the customer's lines and read her replies.";
+}
+$('mode-talk').addEventListener('click', () => setMode('talk'));
+$('mode-type').addEventListener('click', () => setMode('type'));
+
 async function startCall() {
   $('call-err').textContent = '';
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('call-err').textContent = 'This browser cannot use the microphone.'; return; }
-  $('talk').disabled = true; $('talk-label').textContent = 'Connecting';
+  const typing = mode === 'type', sound = !typing || $('speak-on').checked;
+  if (!typing && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) { $('call-err').textContent = 'This browser cannot use the microphone.'; return; }
+  $('talk').disabled = true; $('mode-talk').disabled = true; $('mode-type').disabled = true; $('talk-label').textContent = 'Connecting';
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
-    await ctx.resume();
-    const src = ctx.createMediaStreamSource(stream);
-    proc = ctx.createScriptProcessor(4096, 1, 1);
-    const mute = ctx.createGain(); mute.gain.value = 0;
-    proc.onaudioprocess = onAudio;
-    src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+    if (!typing) stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+    if (sound) { ctx = new (window.AudioContext || window.webkitAudioContext)(); await ctx.resume(); }
+    if (!typing) {
+      const src = ctx.createMediaStreamSource(stream);
+      proc = ctx.createScriptProcessor(4096, 1, 1);
+      const mute = ctx.createGain(); mute.gain.value = 0;
+      proc.onaudioprocess = onAudio;
+      src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+    }
 
     setPhase('busy', 'Connecting');
-    const d = await api('call_start', {});
+    const d = await api('call_start', typing ? { mode: 'type', speak: sound ? '1' : '0' } : { mode: 'talk' });
     callId = flagId = d.call_id;
     $('lines').textContent = ''; $('speed').textContent = '';
-    lastAgent = addLine($('lines'), 'agent', d.text);
-    $('talk-label').textContent = 'Call in progress';
-    $('end').disabled = false; $('flag').disabled = false;
-    await speak(d.audio);
+    addLine($('lines'), 'agent', d.text);
+    $('talk-label').textContent = typing ? 'Typing test in progress' : 'Call in progress';
+    $('end').disabled = false;
+    $('type-form').classList.toggle('hide', !typing);
+    if (d.audio && ctx) await speak(d.audio); else setPhase('typing', '');
+    if (typing) $('typed').focus();
   } catch (err) {
     $('call-err').textContent = err.name === 'NotAllowedError' ? 'Microphone permission was refused. Allow it and try again.' : err.message;
     await endCall();
   }
 }
 
+$('type-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('typed').value.trim();
+  if (!callId || busy || !text) return;
+  busy = true; $('send').disabled = true; $('call-err').textContent = '';
+  $('typed').value = '';
+  addLine($('lines'), 'caller', text, false, { typed: true });
+  const t0 = performance.now();
+  setPhase('busy', 'Thinking');
+  try {
+    const d = await api('call_text', { call_id: callId, text, speak: ctx && $('speak-on').checked ? '1' : '0' });
+    if (callId) {
+      addLine($('lines'), 'agent', d.reply, false, { turn: d.turn });
+      if (d.audio && ctx) await speak(d.audio, t0, d.ms);
+      else { showSpeed(t0, d.ms); setPhase('typing', ''); }
+    }
+  } catch (err) {
+    $('call-err').textContent = err.message;
+    if (callId) setPhase('typing', '');
+  }
+  busy = false; $('send').disabled = false;
+  if (callId) $('typed').focus();
+});
+
 async function endCall() {
   const id = callId; callId = null;
   if (proc) { proc.onaudioprocess = null; proc.disconnect(); proc = null; }
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   if (ctx) { try { await ctx.close(); } catch (e) {} ctx = null; }
-  inSpeech = false; rec = []; pre = [];
+  inSpeech = false; rec = []; pre = []; busy = false;
   setPhase('idle', id ? 'Call ended.' : '');
-  $('talk').disabled = false; $('talk-label').textContent = 'Talk to the agent here';
+  $('talk').disabled = false; $('mode-talk').disabled = false; $('mode-type').disabled = false; $('send').disabled = false;
+  $('type-form').classList.add('hide');
+  setMode(mode);
   $('end').disabled = true;
   if (id) {
     try { await api('call_end', { call_id: id }); await loadOverview(); } catch (e) {}
@@ -533,13 +675,89 @@ async function endCall() {
 
 $('talk').addEventListener('click', startCall);
 $('end').addEventListener('click', endCall);
-$('flag').addEventListener('click', async () => {
-  if (!lastAgent || !flagId) return toast('Start a call first.');
+
+// ---------- training ----------
+let tr = { greeting: '', rules: [], examples: [], corrections: [] };
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function txtBtn(label, red, fn) { const b = el('button', 'txt' + (red ? ' red' : ''), label); b.type = 'button'; b.addEventListener('click', fn); return b; }
+function pairBox(capA, a, capB, b) {
+  const pair = el('div', 'pair');
+  const left = el('div'); left.appendChild(el('div', 'cap', capA)); left.appendChild(el('div', 'bubble', a));
+  const right = el('div'); right.appendChild(el('div', 'cap red', capB)); right.appendChild(el('div', 'bubble red', b));
+  pair.appendChild(left); pair.appendChild(right);
+  return pair;
+}
+
+function renderTraining() {
+  $('t-greet').value = tr.greeting;
+
+  const rules = $('t-rules'); rules.textContent = '';
+  if (!tr.rules.length) rules.appendChild(el('div', 'empty', 'No rules yet.'));
+  tr.rules.forEach((r, i) => {
+    const row = el('div', 'item'); row.appendChild(el('span', '', r));
+    row.appendChild(txtBtn('Remove', true, () => { tr.rules.splice(i, 1); saveTraining('Rule removed.'); }));
+    rules.appendChild(row);
+  });
+
+  const exs = $('t-examples'); exs.textContent = '';
+  if (!tr.examples.length) exs.appendChild(el('div', 'empty', 'No examples yet.'));
+  tr.examples.forEach((x, i) => {
+    const card = el('div', 'ex');
+    card.appendChild(pairBox('When the customer says', x.q, 'She replies like this', x.a));
+    const acts = el('div'); acts.style.display = 'flex'; acts.style.gap = '6px';
+    acts.appendChild(txtBtn('Edit', false, () => {
+      $('t-q').value = x.q; $('t-a').value = x.a; tr.examples.splice(i, 1); renderTraining();
+      $('t-a').focus(); toast('Change it below and tap Add example.');
+    }));
+    acts.appendChild(txtBtn('Remove', true, () => { tr.examples.splice(i, 1); saveTraining('Example removed.'); }));
+    card.appendChild(acts); exs.appendChild(card);
+  });
+
+  const corr = $('t-corr'); corr.textContent = '';
+  const n = tr.corrections.length;
+  $('t-badge').classList.toggle('hide', !n); $('t-badge').textContent = n + ' waiting for you';
+  if (!n) corr.appendChild(el('div', 'empty', 'Nothing waiting. Mark a wrong reply in a test call and it comes here.'));
+  tr.corrections.forEach((c) => {
+    const card = el('div', 'ex');
+    const q = el('div'); q.appendChild(el('div', 'cap', 'Customer said')); q.appendChild(el('div', '', c.q || '(start of the call)')); card.appendChild(q);
+    const said = el('div'); said.appendChild(el('div', 'cap red', 'She said (marked wrong)')); said.appendChild(el('div', 'bubble red', c.said)); card.appendChild(said);
+    const f = el('div', 'field'); const lab = el('label', '', 'What she should have said'); lab.htmlFor = 'fix-' + c.id;
+    const ta = el('textarea'); ta.id = 'fix-' + c.id; ta.rows = 2; ta.placeholder = 'Type the right answer';
+    f.appendChild(lab); f.appendChild(ta); card.appendChild(f);
+    const acts = el('div', 'inline');
+    const save = el('button', 'btn btn-outline', 'Save as example'); save.type = 'button';
+    save.addEventListener('click', () => fixCorrection('correction_save', { id: c.id, answer: ta.value }, 'Saved as a new example.'));
+    const ign = el('button', 'btn', 'Ignore'); ign.type = 'button';
+    ign.addEventListener('click', () => fixCorrection('correction_ignore', { id: c.id }, 'Ignored.'));
+    acts.appendChild(save); acts.appendChild(ign); card.appendChild(acts);
+    corr.appendChild(card);
+  });
+}
+
+async function loadTraining() {
+  try { tr = await api('training_get'); renderTraining(); } catch (err) { toast(err.message); }
+}
+async function saveTraining(msg) {
   try {
-    await api('call_flag', { call_id: flagId });
-    lastAgent.classList.add('flag');
-    toast('Marked. It shows in the call history.');
+    tr = await api('training_save', { greeting: $('t-greet').value, rules: JSON.stringify(tr.rules), examples: JSON.stringify(tr.examples) });
+    renderTraining(); toast(msg || 'Saved. She uses it from the next call.');
   } catch (err) { toast(err.message); }
+}
+async function fixCorrection(action, body, msg) {
+  try { const greet = $('t-greet').value; tr = await api(action, body); renderTraining(); $('t-greet').value = greet; toast(msg); }
+  catch (err) { toast(err.message); }
+}
+$('t-save').addEventListener('click', () => saveTraining());
+$('t-rule-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = $('t-rule').value.trim(); if (!v) return;
+  tr.rules.push(v); $('t-rule').value = ''; saveTraining('Rule added.');
+});
+$('t-ex-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = $('t-q').value.trim(), a = $('t-a').value.trim();
+  if (!q || !a) return toast('Fill both boxes.');
+  tr.examples.push({ q, a }); $('t-q').value = ''; $('t-a').value = ''; saveTraining('Example added.');
 });
 
 boot().catch((err) => { document.body.textContent = err.message; });

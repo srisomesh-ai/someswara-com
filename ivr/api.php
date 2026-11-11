@@ -15,7 +15,8 @@ function out($data, int $code = 200): void {
 function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code); }
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
-$writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_end', 'call_flag'];
+$writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
+    'training_save', 'correction_save', 'correction_ignore'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -112,17 +113,24 @@ case 'save_settings':
 case 'call_start':
     need_key();
     $voice = current_voice();
-    $tts = sarvam_tts(GREETING, $voice);
-    if (isset($tts['error'])) fail($tts['error'], 502);
+    $typed = ($_POST['mode'] ?? '') === 'type';
+    $greeting = training()['greeting'];
+    $audio = null;
+    if (!$typed || ($_POST['speak'] ?? '') === '1') {
+        $tts = sarvam_tts($greeting, $voice);
+        if (isset($tts['error'])) fail($tts['error'], 502);
+        $audio = $tts['audio'];
+    }
     $call = [
         'id' => bin2hex(random_bytes(8)),
         'started' => time(),
         'last' => time(),
         'voice' => $voice,
-        'turns' => [['who' => 'agent', 'text' => GREETING]],
+        'typed' => $typed,
+        'turns' => [['who' => 'agent', 'text' => $greeting]],
     ];
     call_save($call);
-    out(['call_id' => $call['id'], 'text' => GREETING, 'audio' => $tts['audio']]);
+    out(['call_id' => $call['id'], 'text' => $greeting, 'audio' => $audio]);
 
 case 'call_turn':
     need_key();
@@ -149,8 +157,31 @@ case 'call_turn':
     $call['turns'][] = ['who' => 'agent', 'text' => $chat['text']];
     $call['last'] = time();
     call_save($call);
-    out(['heard' => $stt['text'], 'reply' => $chat['text'], 'audio' => $tts['audio'],
+    out(['heard' => $stt['text'], 'reply' => $chat['text'], 'audio' => $tts['audio'], 'turn' => count($call['turns']) - 1,
         'ms' => ['hear' => (int)(($t1 - $t0) * 1000), 'think' => (int)(($t2 - $t1) * 1000), 'speak' => (int)(($t3 - $t2) * 1000)]]);
+
+case 'call_text':   // the caller's line typed instead of spoken
+    need_key();
+    $call = open_call();
+    $text = clean_line($_POST['text'] ?? '', 500);
+    if ($text === '') fail('Type something first.');
+    $call['turns'][] = ['who' => 'caller', 'text' => $text, 'typed' => true];
+    $t1 = microtime(true);
+    $chat = sarvam_chat($call['turns']);
+    $t2 = microtime(true);
+    if (isset($chat['error'])) fail($chat['error'], 502);
+    $audio = null;
+    if (($_POST['speak'] ?? '') === '1') {
+        $tts = sarvam_tts($chat['text'], $call['voice']);
+        if (isset($tts['error'])) fail($tts['error'], 502);
+        $audio = $tts['audio'];
+    }
+    $t3 = microtime(true);
+    $call['turns'][] = ['who' => 'agent', 'text' => $chat['text']];
+    $call['last'] = time();
+    call_save($call);
+    out(['reply' => $chat['text'], 'audio' => $audio, 'turn' => count($call['turns']) - 1,
+        'ms' => ['hear' => 0, 'think' => (int)(($t2 - $t1) * 1000), 'speak' => (int)(($t3 - $t2) * 1000)]]);
 
 case 'call_end':
     $call = open_call();
@@ -158,15 +189,66 @@ case 'call_end':
     call_save($call);
     out(['ok' => true]);
 
-case 'call_flag':
+case 'call_flag':   // mark one of her replies as wrong; it then waits in Training for the right answer
     $call = call_find((string)($_POST['call_id'] ?? ''));
     if (!$call) fail('Call not found.', 404);
-    for ($i = count($call['turns']) - 1; $i >= 0; $i--) {
-        if ($call['turns'][$i]['who'] === 'agent') { $call['turns'][$i]['flagged'] = true; break; }
+    $i = (int)($_POST['turn'] ?? -1);
+    if (!isset($call['turns'][$i]) || $call['turns'][$i]['who'] !== 'agent') fail('Reply not found.', 404);
+    if (empty($call['turns'][$i]['flagged'])) {
+        $call['turns'][$i]['flagged'] = true;
+        $call['flagged'] = true;
+        call_save($call);
+        $q = '';
+        for ($j = $i - 1; $j >= 0; $j--) {
+            if ($call['turns'][$j]['who'] === 'caller') { $q = $call['turns'][$j]['text']; break; }
+        }
+        $t = read_json('training.json');
+        $t['corrections'][] = ['id' => bin2hex(random_bytes(6)), 'q' => $q, 'said' => $call['turns'][$i]['text'], 'created' => time()];
+        $t['corrections'] = array_slice($t['corrections'], -100);
+        write_json('training.json', $t);
     }
-    $call['flagged'] = true;
-    call_save($call);
     out(['ok' => true]);
+
+case 'training_get':
+    out(training());
+
+case 'training_save':
+    $rules = []; $examples = [];
+    foreach ((array)json_decode((string)($_POST['rules'] ?? '[]'), true) as $r) {
+        $r = clean_line(is_string($r) ? $r : '', 300);
+        if ($r !== '') $rules[] = $r;
+    }
+    foreach ((array)json_decode((string)($_POST['examples'] ?? '[]'), true) as $e) {
+        if (!is_array($e)) continue;
+        $q = clean_line($e['q'] ?? '', 300); $a = clean_line($e['a'] ?? '', 500);
+        if ($q !== '' && $a !== '') $examples[] = ['q' => $q, 'a' => $a];
+    }
+    $t = read_json('training.json');
+    $t['greeting'] = clean_line($_POST['greeting'] ?? '', 400);
+    $t['rules'] = array_slice($rules, 0, 40);
+    $t['examples'] = array_slice($examples, 0, 60);
+    write_json('training.json', $t);
+    out(training());
+
+case 'correction_save':   // the right answer for a marked reply becomes a new example
+case 'correction_ignore':
+    $t = read_json('training.json');
+    $id = (string)($_POST['id'] ?? '');
+    $found = null; $rest = [];
+    foreach ((array)($t['corrections'] ?? []) as $c) {
+        if (is_array($c) && ($c['id'] ?? '') === $id) $found = $c; else $rest[] = $c;
+    }
+    if (!$found) fail('Correction not found.', 404);
+    if ($action === 'correction_save') {
+        $a = clean_line($_POST['answer'] ?? '', 500);
+        if ($a === '') fail('Type what she should have said.');
+        $q = clean_line($found['q'] ?? '', 300);
+        $t['examples'][] = ['q' => $q !== '' ? $q : '(start of the call)', 'a' => $a];
+        $t['examples'] = array_slice($t['examples'], -60);
+    }
+    $t['corrections'] = $rest;
+    write_json('training.json', $t);
+    out(training());
 
 case 'call_get':
     $call = call_find((string)($_GET['id'] ?? ''));

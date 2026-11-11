@@ -112,6 +112,35 @@ function call_summary(array $c): array {
     ];
 }
 
+// ---------- training (greeting, owner's rules, example answers, corrections) ----------
+function clean_line($s, int $max): string {
+    return mb_substr(trim(preg_replace('~\s+~u', ' ', (string)$s)), 0, $max);
+}
+
+function training(): array {
+    $t = read_json('training.json');
+    $greeting = clean_line($t['greeting'] ?? '', 400);
+    return [
+        'greeting' => $greeting !== '' ? $greeting : GREETING,
+        'rules' => array_values(array_filter((array)($t['rules'] ?? []), 'is_string')),
+        'examples' => array_values(array_filter((array)($t['examples'] ?? []), 'is_array')),
+        'corrections' => array_values(array_filter((array)($t['corrections'] ?? []), 'is_array')),
+    ];
+}
+
+function system_prompt(): string {
+    $t = training();
+    $p = SYSTEM_PROMPT;
+    if (!$t['rules'] && !$t['examples']) return $p;
+    $p .= "\n\nThe owner of the business has trained you with the rules and examples below. If any of them conflicts with the instructions above, follow the owner's.";
+    if ($t['rules']) $p .= "\n\nOwner's rules. Follow every one on every call:\n- " . implode("\n- ", $t['rules']);
+    if ($t['examples']) {
+        $p .= "\n\nHow the owner wants you to answer. Copy the style and the idea, not the exact words:";
+        foreach ($t['examples'] as $e) $p .= "\nCustomer: " . ($e['q'] ?? '') . "\nYou: " . ($e['a'] ?? '');
+    }
+    return $p;
+}
+
 // ---------- HTTP ----------
 function http_post(string $url, array $headers, $body, int $timeout = 40): array {
     $ch = curl_init($url);
@@ -155,7 +184,7 @@ function sarvam_stt(string $wavPath): array {
 // Conversation so far to the agent's next line.
 function sarvam_chat(array $turns): array {
     $messages = [
-        ['role' => 'system', 'content' => SYSTEM_PROMPT],
+        ['role' => 'system', 'content' => system_prompt()],
         ['role' => 'user', 'content' => '(The call has just connected.)'],
     ];
     foreach ($turns as $t) {
