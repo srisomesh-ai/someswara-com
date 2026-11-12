@@ -101,6 +101,11 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
 .cap.red{color:var(--accent-dark)}
 .bubble{margin-top:4px;padding:10px 12px;border-radius:8px;background:var(--soft);overflow-wrap:anywhere}
 .bubble.red{background:var(--accent-soft)}
+.opt{display:flex;align-items:flex-start;gap:12px}
+.opt input{width:22px;height:22px;margin-top:2px;flex:none;accent-color:var(--accent)}
+.opt b{font-weight:600}
+.opt small{display:block;font-size:14px;color:var(--muted)}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 .badge{padding:4px 10px;border-radius:999px;background:#FFF1D6;color:#6B4700;font-weight:600;font-size:13px;white-space:nowrap}
 @media (max-width:760px){
   .side{border-right:none;border-bottom:1px solid var(--line);padding:16px 12px 8px}
@@ -146,6 +151,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       <button type="button" data-view="training">Training</button>
       <button type="button" data-view="soon" data-step="2" data-name="Products and prices">Products and prices</button>
       <button type="button" data-view="settings">Voice and language</button>
+      <button type="button" data-view="phone">Phone line</button>
       <button type="button" data-view="soon" data-step="4" data-name="Staff transfer">Staff transfer</button>
       <button type="button" data-view="settings">Settings</button>
     </nav>
@@ -300,6 +306,40 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       </div>
     </div>
 
+    <!-- Phone line -->
+    <div id="view-phone" class="hide" style="display:flex;flex-direction:column;gap:20px">
+      <div class="head"><div><h1>Phone line</h1><div class="sub">Connect an Exotel number so real calls reach the agent</div></div></div>
+      <div class="card stack">
+        <div class="thead"><h2>1. Connect Exotel to the agent</h2><span class="pill" id="p-status">No phone call received yet</span></div>
+        <div class="field">
+          <label for="p-url">Address for the Exotel Voicebot applet</label>
+          <div class="inline">
+            <input id="p-url" type="text" readonly style="background:var(--bg);font-size:14px">
+            <button type="button" class="btn-save" id="p-copy">Copy</button>
+          </div>
+          <span class="hint">Keep this address private. Anyone who has it can send calls to the agent.</span>
+        </div>
+        <ol class="steps">
+          <li>In Exotel, open App Bazaar and create a new app.</li>
+          <li>Add the Voicebot applet and paste the address above.</li>
+          <li>Assign the app to your test number and call it.</li>
+        </ol>
+        <div><button type="button" class="btn" id="p-new">Make a new address</button></div>
+      </div>
+      <div class="card stack">
+        <h2>2. Who she answers</h2>
+        <label class="opt"><input id="p-test" type="radio" name="p-mode" value="test" checked>
+          <span><b>Test numbers only</b><small>Other callers hear a short message that the team will call back.</small></span></label>
+        <div class="field" style="padding-left:34px">
+          <label for="p-nums">Your test mobile numbers, one per line</label>
+          <textarea id="p-nums" rows="2" inputmode="tel" placeholder="Your mobile number"></textarea>
+        </div>
+        <label class="opt"><input id="p-all" type="radio" name="p-mode" value="all">
+          <span><b>Everyone who calls this number</b><small>Switch to this only when she is ready for customers.</small></span></label>
+        <div><button type="button" class="btn-save" id="p-save">Save</button></div>
+      </div>
+    </div>
+
     <!-- Not built yet -->
     <div id="view-soon" class="hide" style="display:flex;flex-direction:column;gap:24px">
       <div class="head"><div><h1 id="soon-title">Coming soon</h1></div></div>
@@ -368,13 +408,14 @@ $('logout').addEventListener('click', async () => { await endCall(); await api('
 
 // ---------- views ----------
 function show(view) {
-  for (const v of ['overview', 'history', 'settings', 'training', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
+  for (const v of ['overview', 'history', 'settings', 'training', 'phone', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
 }
 document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('.nav button').forEach((x) => x.classList.remove('on'));
   b.classList.add('on');
   show(b.dataset.view);
   if (b.dataset.view === 'training') loadTraining();
+  if (b.dataset.view === 'phone') loadPhone();
   if (b.dataset.view === 'soon') {
     $('soon-title').textContent = b.dataset.name;
     $('soon-text').textContent = b.dataset.name + ' is step ' + b.dataset.step + ' of the build. It is not built yet.';
@@ -400,10 +441,10 @@ function fillTable(tbody, calls) {
   for (const c of calls) {
     const tr = document.createElement('tr');
     tr.appendChild(cell(when(c.started)));
-    tr.appendChild(cell('Browser test'));
+    tr.appendChild(cell(c.phone ? (c.from || 'Phone call') : 'Browser test'));
     tr.appendChild(cell(c.asked || 'Caller did not speak'));
     const res = document.createElement('td'); const pill = document.createElement('span');
-    pill.className = 'pill' + (c.flagged ? ' bad' : ''); pill.textContent = c.flagged ? 'Wrong answer marked' : 'Test call';
+    pill.className = 'pill' + (c.flagged ? ' bad' : ''); pill.textContent = c.flagged ? 'Wrong answer marked' : !c.phone ? 'Test call' : c.answered ? 'Phone call' : 'Not answered, call back';
     res.appendChild(pill); tr.appendChild(res);
     tr.appendChild(cell(mmss(c.seconds)));
     const rev = document.createElement('td'); const btn = document.createElement('button');
@@ -817,6 +858,28 @@ async function endCall() {
 
 $('talk').addEventListener('click', startCall);
 $('end').addEventListener('click', endCall);
+
+// ---------- phone line ----------
+function renderPhone(p) {
+  $('p-url').value = p.url;
+  $('p-status').textContent = p.last ? 'Last phone call: ' + when(p.last) : 'No phone call received yet';
+  $('p-test').checked = p.mode !== 'all'; $('p-all').checked = p.mode === 'all';
+  $('p-nums').value = p.tests;
+}
+async function loadPhone() { try { renderPhone(await api('phone_get')); } catch (err) { toast(err.message); } }
+$('p-copy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('p-url').value); }
+  catch (e) { $('p-url').select(); document.execCommand('copy'); }
+  toast('Address copied.');
+});
+$('p-new').addEventListener('click', async () => {
+  if (!confirm('Make a new address? The old one stops working, and you must paste the new one into Exotel.')) return;
+  try { renderPhone(await api('phone_newkey', {})); toast('New address made. Paste it into Exotel.'); } catch (err) { toast(err.message); }
+});
+$('p-save').addEventListener('click', async () => {
+  try { renderPhone(await api('phone_save', { mode: $('p-all').checked ? 'all' : 'test', tests: $('p-nums').value })); toast('Saved.'); }
+  catch (err) { toast(err.message); }
+});
 
 // ---------- training ----------
 let tr = { greeting: '', rules: [], examples: [], corrections: [] };

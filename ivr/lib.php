@@ -4,6 +4,13 @@
 const DATA_DIR = __DIR__ . '/data';
 const MAX_CALLS = 500;
 const LIVE_URL = 'wss://call.someswara.com/live';   // the live call server on the VPS (ivr/live/)
+const PHONE_URL = 'wss://call.someswara.com/phone'; // where Exotel sends real phone calls on that server
+// Said to a caller whose number is not on the test list while the line is in "test numbers only".
+const BUSY_TE = 'నమస్తే, Bharat GPS Tracker కి call చేసినందుకు thanks. మా team మీకు వెంటనే call back చేస్తారు.';
+const BUSY_HI = 'नमस्ते, Bharat GPS Tracker में call करने के लिए धन्यवाद. हमारी team आपको जल्दी call back करेगी.';
+// Said on a phone call when a reply could not be prepared, so the caller is not left in silence.
+const RETRY_TE = 'క్షమించండి, ఒకసారి మళ్ళీ చెప్తారా?';
+const RETRY_HI = 'माफ़ कीजिए, एक बार फिर बताइए?';
 const GREETING = 'నమస్తే, Bharat GPS Tracker కి call చేసినందుకు thanks. చెప్పండి, మీకు ఏ vehicle కి tracker కావాలి?';
 const GREETING_HI = 'नमस्ते, Bharat GPS Tracker में call करने के लिए धन्यवाद. बताइए, आपको किस vehicle के लिए tracker चाहिए?';
 const LANGS = ['te' => ['name' => 'Telugu', 'code' => 'te-IN'], 'hi' => ['name' => 'Hindi', 'code' => 'hi-IN']];
@@ -132,6 +139,22 @@ function call_summary(array $c): array {
         'seconds' => max(0, $end - $c['started']),
         'flagged' => !empty($c['flagged']),
         'turns' => count($c['turns']),
+        'phone' => !empty($c['phone']),
+        'from' => (string)($c['from'] ?? ''),
+        'answered' => !isset($c['answered']) || $c['answered'],
+    ];
+}
+
+// ---------- phone line ----------
+// A phone number as its last ten digits, so +91, 0 and spaces do not matter when comparing.
+function phone_digits($n): string { return substr(preg_replace('~\D~', '', (string)$n), -10); }
+
+function phone_view(array $s): array {
+    return [
+        'url' => PHONE_URL . '?key=' . ($s['phone_key'] ?? ''),
+        'mode' => ($s['phone_mode'] ?? 'test') === 'all' ? 'all' : 'test',
+        'tests' => implode("\n", (array)($s['phone_tests'] ?? [])),
+        'last' => (int)($s['phone_last'] ?? 0),
     ];
 }
 

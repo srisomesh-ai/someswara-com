@@ -49,8 +49,9 @@ async function tts(cfg, text, signal) {
   const body = {
     text: speechText(text).slice(0, 2400), language_code: cfg.lang_code,
     model: cfg.voice.includes('_') ? 'bulbul:v4-flash' : 'bulbul:v3',
-    speaker: cfg.voice, speech_sample_rate: 24000, output_audio_codec: 'mp3', pace: 1.15,
+    speaker: cfg.voice, speech_sample_rate: cfg.pcm_rate || 24000, pace: 1.15,
   };
+  if (!cfg.pcm_rate) body.output_audio_codec = 'mp3';   // browser gets MP3; a phone line gets the default WAV
   const post = () => fetch(S_HTTP + '/text-to-speech', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'api-subscription-key': cfg.key },
     body: JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
@@ -67,20 +68,20 @@ async function tts(cfg, text, signal) {
   return audio;
 }
 
-function wav(pcm) {
+function wav(pcm, rate) {
   const h = Buffer.alloc(44);
   h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVEfmt ', 8);
   h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22);
-  h.writeUInt32LE(16000, 24); h.writeUInt32LE(32000, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34);
+  h.writeUInt32LE(rate, 24); h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34);
   h.write('data', 36); h.writeUInt32LE(pcm.length, 40);
   return Buffer.concat([h, pcm]);
 }
 
 // Whole-utterance speech-to-text, used when the streaming connection is not available.
-async function sttRest(cfg, pcm) {
+async function sttRest(cfg, pcm, rate) {
   const fd = new FormData();
   fd.append('model', 'saaras:v3'); fd.append('mode', 'codemix');
-  fd.append('file', new Blob([wav(pcm)], { type: 'audio/wav' }), 'caller.wav');
+  fd.append('file', new Blob([wav(pcm, rate)], { type: 'audio/wav' }), 'caller.wav');
   const r = await fetch(S_HTTP + '/speech-to-text', { method: 'POST', headers: { 'api-subscription-key': cfg.key }, body: fd, signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('Listening failed (' + r.status + ')');
   return String((await r.json()).transcript || '').trim();
@@ -124,7 +125,10 @@ async function chatOnce(cfg, messages, signal) {
 const cleanReply = (raw) => raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/[*#`_]/g, '');
 
 // ---------- one call ----------
-function send(S, msg) { if (S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(msg)); }
+function send(S, msg) {
+  if (S.out) return S.out(msg);              // a phone call has its own way of sending (see phoneOut)
+  if (S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(msg));
+}
 
 async function syncCall(S, ended) {
   try { await ivr('live_sync', { token: S.token, turns: JSON.stringify(S.turns), ended: ended ? '1' : '0' }); }
@@ -134,7 +138,7 @@ async function syncCall(S, ended) {
 // Streaming speech-to-text: audio goes up while the caller talks, so the words are ready when they stop.
 function openStt(S) {
   if (S.closed || (S.stt && S.stt.readyState <= WebSocket.OPEN)) return;
-  const q = new URLSearchParams({ 'language-code': S.cfg.lang_code, model: 'saaras:v3', mode: 'codemix', sample_rate: '16000', input_audio_codec: 'pcm_s16le', flush_signal: 'true' });
+  const q = new URLSearchParams({ 'language-code': S.cfg.lang_code, model: 'saaras:v3', mode: 'codemix', sample_rate: String(S.rate), input_audio_codec: 'pcm_s16le', flush_signal: 'true' });
   const stt = new WebSocket(S_WS + '/speech-to-text/ws?' + q, { headers: { 'api-subscription-key': S.cfg.key } });
   S.stt = stt;
   stt.on('message', (raw) => {
@@ -161,7 +165,7 @@ function audioIn(S, buf) {
   if (!S.capturing || S.pcmBytes + buf.length > MAX_UTTERANCE_BYTES) return;
   S.pcm.push(buf); S.pcmBytes += buf.length;
   if (S.sttLive && S.stt.readyState === WebSocket.OPEN) {
-    S.stt.send(JSON.stringify({ audio: { data: buf.toString('base64'), sample_rate: '16000', encoding: 'audio/wav' } }));
+    S.stt.send(JSON.stringify({ audio: { data: buf.toString('base64'), sample_rate: String(S.rate), encoding: 'audio/wav' } }));
   }
 }
 
@@ -178,8 +182,8 @@ async function speechEnd(S) {
     while (!S.afterFlush && Date.now() - t0 < 1200 && !(S.parts.length && Date.now() - t0 > 350)) await sleep(25);
     text = S.parts.join(' ').trim();
   }
-  if (!text && pcm.length >= 8000) {
-    try { text = await sttRest(S.cfg, pcm); }
+  if (!text && pcm.length >= S.rate / 2) {
+    try { text = await sttRest(S.cfg, pcm, S.rate); }
     catch (e) { if (g === S.gen) send(S, { type: 'error', message: e.message }); return; }
   }
   if (g !== S.gen) { if (text) S.carry = (S.carry + ' ' + text).trim(); return; }   // they started talking again: keep the words for the next turn
@@ -252,22 +256,40 @@ async function reply(S, hearMs) {
   }
 }
 
+function newState(ws, token, cfg, rate) {
+  return { ws, token, cfg, rate, gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
+    pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve() };
+}
+
+function greet(S) {
+  send(S, { type: 'ready', call_id: S.cfg.call_id, text: S.cfg.greeting });
+  const ctrl = new AbortController(); S.abort = ctrl;
+  const g = S.gen;
+  S.replying = tts(S.cfg, S.cfg.greeting, ctrl.signal)
+    .then((a) => { if (g === S.gen) send(S, { type: 'audio', audio: a }); })
+    .catch((e) => { if (g === S.gen) send(S, { type: 'error', message: e.message }); });
+}
+
+async function endState(S) {
+  if (S.closed) return;
+  S.closed = true; S.gen++;
+  if (S.abort) S.abort.abort();
+  if (S.stt) try { S.stt.close(); } catch (e) { /* already closed */ }
+  await S.replying;
+  await syncCall(S, true);
+  log('call', S.cfg.call_id, 'ended,', S.turns.length, 'lines');
+}
+
+// ---------- a test call from the dashboard ----------
 async function startCall(ws, token) {
   let cfg;
   try { cfg = await ivr('live_config', { token }); }
   catch (e) { ws.send(JSON.stringify({ type: 'error', message: 'Could not start the live call: ' + e.message })); ws.close(); return; }
 
-  const S = { ws, token, cfg, gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '',
-    pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve() };
+  const S = newState(ws, token, cfg, 16000);
   log('call', cfg.call_id, 'started,', cfg.lang_code, cfg.voice);
-  send(S, { type: 'ready', call_id: cfg.call_id, text: cfg.greeting });
   openStt(S);
-
-  const ctrl = new AbortController(); S.abort = ctrl;
-  const g = S.gen;
-  S.replying = tts(cfg, cfg.greeting, ctrl.signal)
-    .then((a) => { if (g === S.gen) send(S, { type: 'audio', audio: a }); })
-    .catch((e) => { if (g === S.gen) send(S, { type: 'error', message: e.message }); });
+  greet(S);
 
   const limit = setTimeout(() => ws.close(), MAX_CALL_MS);
   ws.on('message', (data, isBinary) => {
@@ -278,15 +300,98 @@ async function startCall(ws, token) {
     else if (m.type === 'speech_cancel') { S.capturing = false; S.pcm = []; S.pcmBytes = 0; }
     else if (m.type === 'end') ws.close();
   });
-  ws.on('close', async () => {
-    clearTimeout(limit);
-    S.closed = true; S.gen++;
-    if (S.abort) S.abort.abort();
-    if (S.stt) try { S.stt.close(); } catch (e) { /* already closed */ }
-    await S.replying;
-    await syncCall(S, true);
-    log('call', cfg.call_id, 'ended,', S.turns.length, 'lines');
+  ws.on('close', () => { clearTimeout(limit); endState(S); });
+}
+
+// ---------- a real phone call (Exotel Voicebot applet) ----------
+// Exotel opens a connection per call and sends the caller's voice as small pieces of plain audio.
+// There is no browser here to notice when the caller starts and stops talking, so this server does it.
+function wavPcm(b64) {
+  const b = Buffer.from(b64, 'base64');
+  const i = b.indexOf('data');
+  return b.toString('ascii', 0, 4) === 'RIFF' && i >= 0 ? b.subarray(i + 8) : b;
+}
+
+function phoneOut(S, msg) {
+  if (msg.type === 'audio') {
+    let pcm = wavPcm(msg.audio);
+    const pad = (320 - pcm.length % 320) % 320;          // Exotel wants pieces in multiples of 320 bytes, at least 3200
+    if (pad) pcm = Buffer.concat([pcm, Buffer.alloc(pad)]);
+    if (pcm.length < 3200) pcm = Buffer.concat([pcm, Buffer.alloc(3200 - pcm.length)]);
+    for (let i = 0; i < pcm.length;) {
+      const end = pcm.length - (i + 3200) < 3200 ? pcm.length : i + 3200;
+      if (S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify({ event: 'media', stream_sid: S.sid, media: { payload: pcm.subarray(i, end).toString('base64') } }));
+      i = end;
+    }
+    S.playUntil = Math.max(Date.now(), S.playUntil) + pcm.length / (S.rate * 2) * 1000;
+  } else if (msg.type === 'error') {
+    log('call', S.cfg.call_id, 'problem:', msg.message);
+    if (S.cfg.retry_text && !S.retrying) {               // do not leave the caller in silence
+      S.retrying = true;
+      tts(S.cfg, S.cfg.retry_text, AbortSignal.timeout(15000)).then((a) => phoneOut(S, { type: 'audio', audio: a })).catch(() => {}).finally(() => { S.retrying = false; });
+    }
+  }
+}
+
+function phoneAudio(S, pcm) {
+  const n = pcm.length >> 1, V = S.vad;
+  if (!n) return;
+  let sum = 0;
+  for (let i = 0; i < n; i++) { const v = pcm.readInt16LE(i * 2) / 32768; sum += v * v; }
+  const rms = Math.sqrt(sum / n), ms = n / S.rate * 1000;
+  const talking = Date.now() < S.playUntil;              // while she speaks, only a clearly louder voice interrupts her
+  const limit = talking ? Math.max(0.06, V.noise * 8) : Math.max(0.02, V.noise * 3.5);
+  if (!V.on) {
+    V.pre.push(pcm); V.preMs += ms;
+    while (V.preMs > 400 && V.pre.length > 1) V.preMs -= (V.pre.shift().length >> 1) / S.rate * 1000;
+    if (rms > limit) V.loudMs += ms; else { V.loudMs = 0; if (!talking) V.noise = V.noise * 0.95 + rms * 0.05; }
+    if (V.loudMs >= (talking ? 240 : 60)) {
+      V.on = true; V.loudMs = 0; V.speech = ms; V.silent = 0; V.total = 0;
+      if (S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify({ event: 'clear', stream_sid: S.sid }));   // stop her mid-sentence
+      S.playUntil = 0;
+      speechStart(S);
+      for (const p of V.pre) audioIn(S, p);
+      V.pre = []; V.preMs = 0;
+    }
+    return;
+  }
+  audioIn(S, pcm); V.total += ms;
+  if (rms > limit) { V.speech += ms; V.silent = 0; } else V.silent += ms;
+  if (V.silent >= 600 || V.total >= 25000) {
+    V.on = false;
+    if (V.speech >= 250) speechEnd(S).catch((e) => log('turn crashed:', e.message));
+    else { S.capturing = false; S.pcm = []; S.pcmBytes = 0; }
+  }
+}
+
+function phoneCall(ws, key) {
+  let S = null, starting = false;
+  const limit = setTimeout(() => ws.close(), MAX_CALL_MS);
+  ws.on('message', async (data) => {
+    let m; try { m = JSON.parse(data.toString()); } catch (e) { return; }
+    if (m.event === 'start' && !S && !starting) {
+      starting = true;
+      const st = m.start || {};
+      const rate = +(st.media_format && st.media_format.sample_rate) === 16000 ? 16000 : 8000;
+      let cfg;
+      try { cfg = await ivr('phone_config', { key, from: String(st.from || ''), to: String(st.to || ''), call_sid: String(st.call_sid || '') }); }
+      catch (e) { log('phone call refused:', e.message); ws.close(); return; }
+      cfg.pcm_rate = rate;
+      S = newState(ws, cfg.token, cfg, rate);
+      S.sid = m.stream_sid || st.stream_sid; S.playUntil = 0; S.retrying = false;
+      S.vad = { on: false, noise: 0.005, loudMs: 0, speech: 0, silent: 0, total: 0, pre: [], preMs: 0 };
+      S.out = (msg) => phoneOut(S, msg);
+      log('call', cfg.call_id, 'phone call started,', cfg.allowed ? 'answering' : 'not a test number', cfg.lang_code, cfg.voice, rate + ' Hz');
+      if (ws.readyState !== WebSocket.OPEN) { endState(S); return; }
+      if (cfg.allowed) openStt(S);
+      greet(S);
+      // Not a number she answers yet: say the call-back message, then hang up.
+      if (!cfg.allowed) S.replying.then(() => setTimeout(() => ws.close(), Math.max(0, S.playUntil - Date.now()) + 800));
+    } else if (m.event === 'media' && S && S.cfg.allowed && !S.closed) {
+      phoneAudio(S, Buffer.from((m.media && m.media.payload) || '', 'base64'));
+    } else if (m.event === 'stop') ws.close();
   });
+  ws.on('close', () => { clearTimeout(limit); if (S) endState(S); });
 }
 
 // ---------- server ----------
@@ -300,6 +405,12 @@ server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://x');
   const token = url.searchParams.get('token') || '';
   const refuse = (code) => { socket.write('HTTP/1.1 ' + code + '\r\n\r\n'); socket.destroy(); };
+  if (url.pathname === '/phone') {            // Exotel: no browser origin, the secret key in the address is the pass
+    const key = url.searchParams.get('key') || '';
+    if (!/^[a-f0-9]{32}$/.test(key)) return refuse('400 Bad Request');
+    if (wss.clients.size >= MAX_CALLS) return refuse('503 Busy');
+    return wss.handleUpgrade(req, socket, head, (ws) => phoneCall(ws, key));
+  }
   if (url.pathname !== '/live' || !/^[a-f0-9]{48}$/.test(token)) return refuse('400 Bad Request');
   if (!ORIGINS.includes(req.headers.origin || '')) return refuse('403 Forbidden');
   if (wss.clients.size >= MAX_CALLS) return refuse('503 Busy');

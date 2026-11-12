@@ -16,7 +16,7 @@ function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
 $writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
-    'training_save', 'correction_save', 'correction_ignore', 'live_token'];
+    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -55,6 +55,30 @@ if ($action === 'login') {
 // ---------- live call server ----------
 // The VPS has no login of its own. The dashboard hands the browser a one-time token (live_token, below);
 // the VPS trades it here for what the call needs, and reports the transcript back with the same token.
+// A real phone call has reached the live call server. The secret key in the address Exotel was given is the pass.
+if ($action === 'phone_config') {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
+    $s = settings();
+    if (empty($s['phone_key']) || !hash_equals((string)$s['phone_key'], (string)($_POST['key'] ?? ''))) fail('Bad key.', 403);
+    if (sarvam_key() === '') fail('Add your Sarvam API key in Settings first.');
+    $from = phone_digits($_POST['from'] ?? '');
+    $allowed = ($s['phone_mode'] ?? 'test') === 'all' || ($from !== '' && in_array($from, (array)($s['phone_tests'] ?? []), true));
+    $lang = lang(); $voice = current_voice();
+    $greeting = $allowed ? training()['greeting'] : ($lang === 'hi' ? BUSY_HI : BUSY_TE);
+    $call = ['id' => bin2hex(random_bytes(8)), 'started' => time(), 'last' => time(), 'voice' => $voice, 'lang' => $lang,
+        'live' => true, 'phone' => true, 'from' => $from, 'answered' => $allowed, 'turns' => [['who' => 'agent', 'text' => $greeting]]];
+    call_save($call);
+    $all = array_filter(read_json('live.json'), fn($r) => is_array($r) && ($r['exp'] ?? 0) > time());
+    $tok = bin2hex(random_bytes(24));
+    $all[$tok] = ['exp' => time() + 7200, 'call_id' => $call['id']];   // lets the server report this call's transcript
+    write_json('live.json', $all);
+    $s['phone_last'] = time();
+    write_json('settings.json', $s);
+    out(['allowed' => $allowed, 'token' => $tok, 'key' => sarvam_key(), 'lang' => $lang, 'lang_code' => LANGS[$lang]['code'],
+        'voice' => $voice, 'greeting' => $greeting, 'prompt' => system_prompt($lang), 'call_id' => $call['id'],
+        'retry_text' => $lang === 'hi' ? RETRY_HI : RETRY_TE]);
+}
+
 if ($action === 'live_config' || $action === 'live_sync') {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
     $tok = (string)($_POST['token'] ?? '');
@@ -154,6 +178,29 @@ case 'save_settings':
     }
     write_json('settings.json', $s);
     out(['ok' => true]);
+
+case 'phone_get':
+    $s = settings();
+    if (empty($s['phone_key'])) { $s['phone_key'] = bin2hex(random_bytes(16)); write_json('settings.json', $s); }
+    out(phone_view($s));
+
+case 'phone_newkey':   // the old address stops working at once
+    $s = settings();
+    $s['phone_key'] = bin2hex(random_bytes(16));
+    write_json('settings.json', $s);
+    out(phone_view($s));
+
+case 'phone_save':
+    $s = settings();
+    $s['phone_mode'] = ($_POST['mode'] ?? '') === 'all' ? 'all' : 'test';
+    $tests = [];
+    foreach (preg_split('~[\r\n,]+~', (string)($_POST['tests'] ?? '')) as $line) {
+        $n = phone_digits($line);
+        if (strlen($n) === 10 && !in_array($n, $tests, true)) $tests[] = $n;
+    }
+    $s['phone_tests'] = array_slice($tests, 0, 20);
+    write_json('settings.json', $s);
+    out(phone_view($s));
 
 case 'live_token':   // a one-time pass for the browser to open a call on the live call server
     need_key();

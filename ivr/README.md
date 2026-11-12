@@ -37,3 +37,9 @@ sentence, and the caller can interrupt.
 - Logs: `journalctl -u bgt-call -n 50`
 - It stores nothing. Per call it trades a one-time token with `api.php` for the Sarvam key, voice,
   language and instructions, and sends the transcript back the same way.
+
+## Phone line (Exotel)
+Real calls reach the same live server at `PHONE_URL` (`lib.php`). The dashboard's Phone line page shows
+the full address with its secret key; it goes into an Exotel Voicebot applet (default 8000 Hz).
+`phone_config` in `api.php` checks the key and the caller's number: in "test numbers only" other callers
+hear a call-back message and the call ends. Phone calls are saved in the call log with the caller's number.
