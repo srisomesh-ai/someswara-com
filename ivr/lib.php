@@ -221,21 +221,26 @@ function sarvam_chat(array $turns, string $lang = 'te'): array {
         $messages[] = ['role' => $t['who'] === 'agent' ? 'assistant' : 'user', 'content' => $t['text']];
     }
     $key = sarvam_key();
-    $r = http_post('https://api.sarvam.ai/v1/chat/completions',
-        ["Authorization: Bearer $key", "api-subscription-key: $key", 'Content-Type: application/json'],
-        json_encode([
-            'model' => 'sarvam-105b',
-            'messages' => $messages,
-            'temperature' => 0.4,
-            'max_tokens' => 700,
-            'reasoning_effort' => 'low',
-        ], JSON_UNESCAPED_UNICODE), 20);
-    if ($r['code'] !== 200) return ['error' => sarvam_error($r, 'Thinking')];
-    $text = (string)($r['data']['choices'][0]['message']['content'] ?? '');
-    $text = preg_replace('~<think>.*?</think>~su', '', $text);
-    $text = trim(preg_replace('~\s+~u', ' ', str_replace(['*', '#', '`', '_'], '', $text)));
-    if ($text === '') return ['error' => 'Thinking failed: the model sent an empty reply.'];
-    return ['text' => $text];
+    // The main model thinks before it answers, and that thinking uses up the same word allowance.
+    // When the allowance ran out mid-thought the answer came back empty, so give it plenty of room.
+    $ask = function (array $extra) use ($key, $messages): array {
+        $r = http_post('https://api.sarvam.ai/v1/chat/completions',
+            ["Authorization: Bearer $key", "api-subscription-key: $key", 'Content-Type: application/json'],
+            json_encode($extra + ['messages' => $messages, 'temperature' => 0.4, 'max_tokens' => 2000], JSON_UNESCAPED_UNICODE), 20);
+        if ($r['code'] !== 200) return ['error' => sarvam_error($r, 'Thinking')];
+        $text = (string)($r['data']['choices'][0]['message']['content'] ?? '');
+        $text = preg_replace('~<think>.*?(</think>|$)~su', '', $text);
+        $text = trim(preg_replace('~\s+~u', ' ', str_replace(['*', '#', '`', '_'], '', $text)));
+        return ['text' => $text, 'why' => (string)($r['data']['choices'][0]['finish_reason'] ?? '')];
+    };
+    $first = $ask(['model' => 'sarvam-105b', 'reasoning_effort' => 'low']);
+    if (isset($first['error'])) return $first;
+    if ($first['text'] !== '') return ['text' => $first['text']];
+    // Still empty: ask Sarvam's conversation model once before giving up.
+    $second = $ask(['model' => 'sarvam-105b-conversations']);
+    if (!isset($second['error']) && $second['text'] !== '') return ['text' => $second['text']];
+    $why = $first['why'] === 'length' ? 'it ran out of room while thinking' : ($first['why'] !== '' ? 'reason given: ' . $first['why'] : 'no reason given');
+    return ['error' => "Thinking failed: the model sent an empty reply ($why)."];
 }
 
 // What is shown in the transcript is not always safe to read aloud: symbols, brackets and
