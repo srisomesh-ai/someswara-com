@@ -223,22 +223,23 @@ function sarvam_chat(array $turns, string $lang = 'te'): array {
     $key = sarvam_key();
     // The main model thinks before it answers, and that thinking uses up the same word allowance.
     // When the allowance ran out mid-thought the answer came back empty, so give it plenty of room.
-    $ask = function (array $extra) use ($key, $messages): array {
+    $ask = function (array $extra, int $limit) use ($key, $messages): array {
         $r = http_post('https://api.sarvam.ai/v1/chat/completions',
             ["Authorization: Bearer $key", "api-subscription-key: $key", 'Content-Type: application/json'],
-            json_encode($extra + ['messages' => $messages, 'temperature' => 0.4, 'max_tokens' => 2000], JSON_UNESCAPED_UNICODE), 20);
+            json_encode($extra + ['messages' => $messages, 'temperature' => 0.4, 'max_tokens' => 2000], JSON_UNESCAPED_UNICODE), $limit);
         if ($r['code'] !== 200) return ['error' => sarvam_error($r, 'Thinking')];
         $text = (string)($r['data']['choices'][0]['message']['content'] ?? '');
         $text = preg_replace('~<think>.*?(</think>|$)~su', '', $text);
         $text = trim(preg_replace('~\s+~u', ' ', str_replace(['*', '#', '`', '_'], '', $text)));
         return ['text' => $text, 'why' => (string)($r['data']['choices'][0]['finish_reason'] ?? '')];
     };
-    $first = $ask(['model' => 'sarvam-105b', 'reasoning_effort' => 'low']);
+    // Sarvam's conversation model goes first: it answers directly, so it is the quick one.
+    $quick = $ask(['model' => 'sarvam-105b-conversations'], 12);
+    if (!isset($quick['error']) && $quick['text'] !== '') return ['text' => $quick['text']];
+    // If it fails or says nothing, fall back to the main model, which thinks first and is slower.
+    $first = $ask(['model' => 'sarvam-105b', 'reasoning_effort' => 'low'], 20);
     if (isset($first['error'])) return $first;
     if ($first['text'] !== '') return ['text' => $first['text']];
-    // Still empty: ask Sarvam's conversation model once before giving up.
-    $second = $ask(['model' => 'sarvam-105b-conversations']);
-    if (!isset($second['error']) && $second['text'] !== '') return ['text' => $second['text']];
     $why = $first['why'] === 'length' ? 'it ran out of room while thinking' : ($first['why'] !== '' ? 'reason given: ' . $first['why'] : 'no reason given');
     return ['error' => "Thinking failed: the model sent an empty reply ($why)."];
 }

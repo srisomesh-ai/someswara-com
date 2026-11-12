@@ -322,10 +322,10 @@ async function api(action, body) {
   else if (body) { opt.headers['X-IVR'] = '1'; opt.body = body instanceof FormData ? body : new URLSearchParams(body); }
   // Never wait forever: give up after a minute and say so.
   const stop = new AbortController(); opt.signal = stop.signal;
-  const timer = setTimeout(() => stop.abort(), 60000);
+  const timer = setTimeout(() => stop.abort(), 80000);
   let r;
   try { r = await fetch(url, opt); }
-  catch (e) { throw new Error(e.name === 'AbortError' ? 'No answer from the server after one minute. Please try again.' : 'Could not reach the server. Check the internet connection.'); }
+  catch (e) { throw new Error(e.name === 'AbortError' ? 'No answer from the server after 80 seconds. Please try again.' : 'Could not reach the server. Check the internet connection.'); }
   finally { clearTimeout(timer); }
   let d;
   try { d = await r.json(); } catch (e) { throw new Error('Server error (' + r.status + ')'); }
@@ -512,7 +512,16 @@ let ctx = null, stream = null, proc = null, callId = null, flagId = null, mode =
 let phase = 'idle';            // idle | busy | speaking | listening
 let pre = [], rec = [], inSpeech = false, silentMs = 0, speechMs = 0, noise = 0.005;
 
-function setPhase(p, msg) { phase = p; $('status').textContent = msg || ''; }
+// While she is thinking, count the seconds so it is clear the call is alive and how long it is taking.
+let thinkTimer = null;
+function setPhase(p, msg) {
+  phase = p; $('status').textContent = msg || '';
+  clearInterval(thinkTimer); thinkTimer = null;
+  if (msg === 'Thinking') {
+    const t0 = Date.now();
+    thinkTimer = setInterval(() => { $('status').textContent = 'Thinking, ' + Math.round((Date.now() - t0) / 1000) + ' s'; }, 1000);
+  }
+}
 
 function onAudio(e) {
   if (phase !== 'listening') return;
