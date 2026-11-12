@@ -56,6 +56,7 @@ if (!logged_in()) fail('Log in first.', 401);
 
 // ---------- admin actions ----------
 function need_key(): void {
+    session_write_close();
     if (sarvam_key() === '') fail('Add your Sarvam API key in Settings first.');
 }
 

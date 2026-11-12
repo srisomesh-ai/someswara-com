@@ -194,6 +194,7 @@ function sarvam_error(array $r, string $what): string {
     if ($r['code'] === 429) return 'Sarvam says the credits or the rate limit are used up.';
     $e = $r['data']['error'] ?? null;
     $msg = is_array($e) ? ($e['message'] ?? '') : (is_string($e) ? $e : '');
+    if ($msg === '' && $r['code'] === 0 && stripos($r['err'], 'timed out') !== false) return "$what took too long: Sarvam did not answer in time. Please try again.";
     if ($msg === '') $msg = $r['err'] !== '' ? $r['err'] : "HTTP {$r['code']}";
     return "$what failed: $msg";
 }
@@ -205,7 +206,7 @@ function sarvam_key(): string { return (string)(settings()['sarvam_key'] ?? '');
 function sarvam_stt(string $wavPath): array {
     $r = http_post('https://api.sarvam.ai/speech-to-text',
         ['api-subscription-key: ' . sarvam_key()],
-        ['model' => 'saaras:v3', 'mode' => 'codemix', 'file' => new CURLFile($wavPath, 'audio/wav', 'caller.wav')]);
+        ['model' => 'saaras:v3', 'mode' => 'codemix', 'file' => new CURLFile($wavPath, 'audio/wav', 'caller.wav')], 15);
     if ($r['code'] !== 200) return ['error' => sarvam_error($r, 'Listening')];
     return ['text' => trim((string)($r['data']['transcript'] ?? ''))];
 }
@@ -228,7 +229,7 @@ function sarvam_chat(array $turns, string $lang = 'te'): array {
             'temperature' => 0.4,
             'max_tokens' => 700,
             'reasoning_effort' => 'low',
-        ], JSON_UNESCAPED_UNICODE));
+        ], JSON_UNESCAPED_UNICODE), 20);
     if ($r['code'] !== 200) return ['error' => sarvam_error($r, 'Thinking')];
     $text = (string)($r['data']['choices'][0]['message']['content'] ?? '');
     $text = preg_replace('~<think>.*?</think>~su', '', $text);
@@ -260,7 +261,7 @@ function sarvam_tts(string $text, string $speaker, string $lang = 'te'): array {
     $model = strpos($speaker, '_') !== false ? 'bulbul:v4-flash' : 'bulbul:v3';
     $body = ['text' => mb_substr(speech_text($text), 0, 2400), 'language_code' => LANGS[$lang]['code'] ?? 'te-IN', 'model' => $model,
         'speaker' => $speaker, 'speech_sample_rate' => 24000, 'output_audio_codec' => 'mp3', 'pace' => 1.15];
-    $r = http_post('https://api.sarvam.ai/text-to-speech', $headers, json_encode($body, JSON_UNESCAPED_UNICODE));
+    $r = http_post('https://api.sarvam.ai/text-to-speech', $headers, json_encode($body, JSON_UNESCAPED_UNICODE), 15);
     if ($r['code'] === 400 || $r['code'] === 422) {
         // If compressed audio is refused, fall back to the default WAV.
         unset($body['output_audio_codec']);

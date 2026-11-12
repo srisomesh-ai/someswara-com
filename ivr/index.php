@@ -320,7 +320,13 @@ async function api(action, body) {
   let url = 'api.php?action=' + action;
   if (body && body.__get) { url += '&' + new URLSearchParams(body.__get); opt.method = 'GET'; }
   else if (body) { opt.headers['X-IVR'] = '1'; opt.body = body instanceof FormData ? body : new URLSearchParams(body); }
-  const r = await fetch(url, opt);
+  // Never wait forever: give up after a minute and say so.
+  const stop = new AbortController(); opt.signal = stop.signal;
+  const timer = setTimeout(() => stop.abort(), 60000);
+  let r;
+  try { r = await fetch(url, opt); }
+  catch (e) { throw new Error(e.name === 'AbortError' ? 'No answer from the server after one minute. Please try again.' : 'Could not reach the server. Check the internet connection.'); }
+  finally { clearTimeout(timer); }
   let d;
   try { d = await r.json(); } catch (e) { throw new Error('Server error (' + r.status + ')'); }
   if (!r.ok) { const e = new Error(d.error || 'Something went wrong'); e.code = r.status; throw e; }
