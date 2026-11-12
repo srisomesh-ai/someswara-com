@@ -51,9 +51,9 @@ echo "OK: Node.js $(node -v)"
 say "Installing the call server in $DIR"
 id bgtcall >/dev/null 2>&1 || useradd --system --home-dir "$DIR" --shell /usr/sbin/nologin bgtcall
 mkdir -p "$DIR"
-curl -fsSL "$SRC/server.js" -o "$DIR/server.js.new"
-node --check "$DIR/server.js.new" || stop "the downloaded server file is not valid. Nothing was changed."
-mv "$DIR/server.js.new" "$DIR/server.js"
+curl -fsSL "$SRC/server.js" -o "$DIR/server.new.js"
+node --check "$DIR/server.new.js" || stop "the downloaded server file is not valid. Nothing was changed."
+mv "$DIR/server.new.js" "$DIR/server.js"
 [ -d "$DIR/node_modules/ws" ] || (cd "$DIR" && npm install --silent --no-audit --no-fund --no-save ws@8)
 chown -R bgtcall:bgtcall "$DIR"
 
