@@ -16,7 +16,7 @@ function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
 $writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
-    'training_save', 'correction_save', 'correction_ignore'];
+    'training_save', 'correction_save', 'correction_ignore', 'live_token'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -50,6 +50,45 @@ if ($action === 'login') {
     login_failed();
     sleep(1);
     fail('Wrong password.', 401);
+}
+
+// ---------- live call server ----------
+// The VPS has no login of its own. The dashboard hands the browser a one-time token (live_token, below);
+// the VPS trades it here for what the call needs, and reports the transcript back with the same token.
+if ($action === 'live_config' || $action === 'live_sync') {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
+    $tok = (string)($_POST['token'] ?? '');
+    $all = read_json('live.json');
+    if (!preg_match('~^[a-f0-9]{48}$~', $tok) || !isset($all[$tok]) || ($all[$tok]['exp'] ?? 0) < time()) fail('Bad token.', 403);
+    if ($action === 'live_config') {
+        if (!empty($all[$tok]['call_id'])) fail('Token already used.', 403);
+        if (sarvam_key() === '') fail('Add your Sarvam API key in Settings first.');
+        $lang = lang(); $voice = current_voice(); $greeting = training()['greeting'];
+        $call = ['id' => bin2hex(random_bytes(8)), 'started' => time(), 'last' => time(), 'voice' => $voice, 'lang' => $lang,
+            'live' => true, 'turns' => [['who' => 'agent', 'text' => $greeting]]];
+        call_save($call);
+        $all[$tok]['call_id'] = $call['id'];
+        write_json('live.json', $all);
+        out(['key' => sarvam_key(), 'lang' => $lang, 'lang_code' => LANGS[$lang]['code'], 'voice' => $voice,
+            'greeting' => $greeting, 'prompt' => system_prompt($lang), 'call_id' => $call['id']]);
+    }
+    $call = call_find((string)($all[$tok]['call_id'] ?? ''));
+    if (!$call) fail('Call not found.', 404);
+    $turns = [];
+    foreach ((array)json_decode((string)($_POST['turns'] ?? '[]'), true) as $t) {
+        if (!is_array($t)) continue;
+        $text = clean_line($t['text'] ?? '', 1000);
+        if ($text === '') continue;
+        $row = ['who' => ($t['who'] ?? '') === 'agent' ? 'agent' : 'caller', 'text' => $text];
+        $old = $call['turns'][count($turns)] ?? null;          // keep a "marked wrong" already made on this line
+        if ($old && !empty($old['flagged']) && $old['text'] === $text) $row['flagged'] = true;
+        $turns[] = $row;
+    }
+    if ($turns) $call['turns'] = array_slice($turns, 0, 200);
+    $call['last'] = time();
+    if (($_POST['ended'] ?? '') === '1' && empty($call['ended'])) $call['ended'] = time();
+    call_save($call);
+    out(['ok' => true]);
 }
 
 if (!logged_in()) fail('Log in first.', 401);
@@ -115,6 +154,14 @@ case 'save_settings':
     }
     write_json('settings.json', $s);
     out(['ok' => true]);
+
+case 'live_token':   // a one-time pass for the browser to open a call on the live call server
+    need_key();
+    $all = array_filter(read_json('live.json'), fn($r) => is_array($r) && ($r['exp'] ?? 0) > time());
+    $tok = bin2hex(random_bytes(24));
+    $all[$tok] = ['exp' => time() + 7200];
+    write_json('live.json', $all);
+    out(['url' => LIVE_URL, 'token' => $tok]);
 
 case 'call_start':
     need_key();

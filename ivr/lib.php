@@ -3,6 +3,7 @@
 
 const DATA_DIR = __DIR__ . '/data';
 const MAX_CALLS = 500;
+const LIVE_URL = 'wss://call.someswara.com/live';   // the live call server on the VPS (ivr/live/)
 const GREETING = 'నమస్తే, Bharat GPS Tracker కి call చేసినందుకు thanks. చెప్పండి, మీకు ఏ vehicle కి tracker కావాలి?';
 const GREETING_HI = 'नमस्ते, Bharat GPS Tracker में call करने के लिए धन्यवाद. बताइए, आपको किस vehicle के लिए tracker चाहिए?';
 const LANGS = ['te' => ['name' => 'Telugu', 'code' => 'te-IN'], 'hi' => ['name' => 'Hindi', 'code' => 'hi-IN']];

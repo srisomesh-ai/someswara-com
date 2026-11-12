@@ -592,6 +592,119 @@ async function speak(b64, startedAt, ms) {
   node.start();
 }
 
+// ---------- live call ----------
+// When the live call server answers, Talk uses it: audio streams both ways, she starts speaking as soon
+// as her first sentence is ready, and talking over her stops her. If it does not answer, Talk falls back
+// to the one-turn-at-a-time way above.
+let live = null;
+
+function pcm16(buf, rate) {
+  const ratio = rate / 16000, n = Math.floor(buf.length / ratio), out = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * ratio), b = Math.max(a + 1, Math.floor((i + 1) * ratio));
+    let s = 0; for (let j = a; j < b && j < buf.length; j++) s += buf[j];
+    s = Math.max(-1, Math.min(1, s / (b - a)));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return out.buffer;
+}
+
+function liveStopAudio() {
+  for (const n of live.sources) { try { n.onended = null; n.stop(); } catch (e) {} }
+  live.sources = []; live.queueEnd = 0;
+}
+
+function onLiveAudio(e) {
+  if (!live || live.ws.readyState !== 1) return;
+  const buf = new Float32Array(e.inputBuffer.getChannelData(0));
+  let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  const rms = Math.sqrt(sum / buf.length), ms = buf.length / ctx.sampleRate * 1000;
+  const talking = live.sources.length > 0;      // while she speaks, only a clearly louder voice interrupts her
+  const limit = talking ? Math.max(0.05, noise * 8) : Math.max(0.015, noise * 3.5);
+  if (!inSpeech) {
+    pre.push(buf); if (pre.length > 4) pre.shift();
+    if (rms > limit) live.loud++; else { live.loud = 0; if (!talking) noise = noise * 0.95 + rms * 0.05; }
+    if (live.loud >= (talking ? 3 : 1)) {
+      inSpeech = true; live.loud = 0; speechMs = ms; silentMs = 0; live.spokenMs = 0; live.accept = false;
+      liveStopAudio();
+      live.ws.send(JSON.stringify({ type: 'speech_start' }));
+      for (const p of pre) live.ws.send(pcm16(p, ctx.sampleRate));
+      pre = [];
+      setPhase('listening', 'Listening');
+    }
+    return;
+  }
+  live.ws.send(pcm16(buf, ctx.sampleRate));
+  live.spokenMs += ms;
+  if (rms > limit) { speechMs += ms; silentMs = 0; } else silentMs += ms;
+  if (silentMs >= 600 || live.spokenMs >= 25000) {
+    inSpeech = false; pre = [];
+    if (speechMs >= 250) { live.t0 = performance.now(); live.ws.send(JSON.stringify({ type: 'speech_end' })); setPhase('busy', 'Thinking'); }
+    else { live.accept = true; live.ws.send(JSON.stringify({ type: 'speech_cancel' })); setPhase('listening', 'Listening. Speak now.'); }
+  }
+}
+
+async function livePlay(b64) {
+  const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const audio = await ctx.decodeAudioData(bytes.buffer);
+  if (!live || !live.accept) return;
+  const node = ctx.createBufferSource(); node.buffer = audio; node.connect(ctx.destination);
+  const at = Math.max(ctx.currentTime + 0.02, live.queueEnd);   // sentences play one after another without a gap
+  node.start(at); live.queueEnd = at + audio.duration; live.sources.push(node);
+  setPhase('speaking', 'Agent is speaking');
+  node.onended = () => {
+    if (!live) return;
+    live.sources = live.sources.filter((x) => x !== node);
+    if (!live.sources.length && !inSpeech && phase === 'speaking') setPhase('listening', 'Listening. Speak now.');
+  };
+}
+
+function onLiveMessage(ev) {
+  if (!live) return;
+  let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+  if (m.type === 'ready') {
+    callId = flagId = m.call_id;
+    addLine($('lines'), 'agent', m.text);
+    $('talk-label').textContent = 'Live call in progress'; $('end').disabled = false;
+  } else if (m.type === 'heard') {
+    live.accept = true;                          // audio from here on belongs to the new reply
+    addLine($('lines'), 'caller', m.text);
+  } else if (m.type === 'audio') {
+    if (!live.accept) return;
+    if (m.ms) showSpeed(live.t0, m.ms);
+    live.chain = live.chain.then(() => livePlay(m.audio)).catch(() => {});
+  } else if (m.type === 'reply_done') {
+    addLine($('lines'), 'agent', m.text, false, { turn: m.turn });
+  } else if (m.type === 'nothing') {
+    live.accept = true; setPhase('listening', 'Did not catch that. Please say it again.');
+  } else if (m.type === 'error') {
+    live.accept = true; $('call-err').textContent = m.message; setPhase('listening', 'Listening. Speak now.');
+  }
+}
+
+// Returns true when the live server took the call, false to fall back to the turn-by-turn way.
+async function startLive() {
+  let t;
+  try { t = await api('live_token', {}); }
+  catch (err) { if (err.code === 400) throw err; return false; }
+  const ws = new WebSocket(t.url + '?token=' + t.token);
+  const opened = await new Promise((res) => {
+    const timer = setTimeout(() => res(false), 5000);
+    ws.onopen = () => { clearTimeout(timer); res(true); };
+    ws.onerror = ws.onclose = () => { clearTimeout(timer); res(false); };
+  });
+  if (!opened) { ws.onopen = ws.onerror = ws.onclose = null; try { ws.close(); } catch (e) {} return false; }
+  live = { ws, t0: 0, queueEnd: 0, sources: [], loud: 0, spokenMs: 0, accept: true, chain: Promise.resolve() };
+  $('lines').textContent = ''; $('speed').textContent = '';
+  ws.onmessage = onLiveMessage;
+  ws.onerror = null;
+  ws.onclose = () => { if (live) { if (!$('call-err').textContent && !callId) $('call-err').textContent = 'The live call server closed the call.'; endCall(); } };
+  proc.onaudioprocess = onLiveAudio;
+  setPhase('busy', 'Connecting');
+  return true;
+}
+
 async function sendTurn(chunks) {
   const t0 = performance.now();
   setPhase('busy', 'Thinking');
@@ -639,6 +752,8 @@ async function startCall() {
       const mute = ctx.createGain(); mute.gain.value = 0;
       proc.onaudioprocess = onAudio;
       src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+      setPhase('busy', 'Connecting');
+      if (await startLive()) return;
     }
 
     setPhase('busy', 'Connecting');
@@ -683,6 +798,8 @@ $('type-form').addEventListener('submit', async (e) => {
 
 async function endCall() {
   const id = callId; callId = null;
+  const wasLive = !!live;
+  if (live) { const w = live.ws; liveStopAudio(); live = null; try { w.send(JSON.stringify({ type: 'end' })); w.close(); } catch (e) {} }
   if (proc) { proc.onaudioprocess = null; proc.disconnect(); proc = null; }
   if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
   if (ctx) { try { await ctx.close(); } catch (e) {} ctx = null; }
@@ -693,7 +810,8 @@ async function endCall() {
   setMode(mode);
   $('end').disabled = true;
   if (id) {
-    try { await api('call_end', { call_id: id }); await loadOverview(); } catch (e) {}
+    // A live call is closed and saved by the live server itself; give it a moment before refreshing the list.
+    try { if (wasLive) await new Promise((r) => setTimeout(r, 700)); else await api('call_end', { call_id: id }); await loadOverview(); } catch (e) {}
   }
 }
 

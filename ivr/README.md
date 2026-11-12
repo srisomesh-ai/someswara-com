@@ -25,3 +25,15 @@ the real phone line will be.
 - The folder can be moved to another path or site as it is. Copy `data/` to keep the
   settings and call log.
 - Not built yet: products and prices, script editor, phone line, leads, staff transfer.
+
+## Live call server (ivr/live/)
+Talk tests use a small Node server on a VPS when it is reachable (`LIVE_URL` in `lib.php`), and fall
+back to the turn-by-turn PHP path when it is not. The live server keeps one open connection per call:
+audio streams to Sarvam speech-to-text while the caller talks, the reply streams back sentence by
+sentence, and the caller can interrupt.
+
+- Install or update on the VPS (as root): `curl -fsSL https://someswara.com/ivr/live/install.sh | bash`
+- Remove: `curl -fsSL https://someswara.com/ivr/live/install.sh | bash -s -- remove`
+- Logs: `journalctl -u bgt-call -n 50`
+- It stores nothing. Per call it trades a one-time token with `api.php` for the Sarvam key, voice,
+  language and instructions, and sends the transcript back the same way.
