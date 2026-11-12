@@ -347,7 +347,7 @@ function phoneAudio(S, pcm) {
     if (rms > limit) V.loudMs += ms; else { V.loudMs = 0; if (!talking) V.noise = V.noise * 0.95 + rms * 0.05; }
     if (V.loudMs >= (talking ? 240 : 60)) {
       V.on = true; V.loudMs = 0; V.speech = ms; V.silent = 0; V.total = 0;
-      if (S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify({ event: 'clear', stream_sid: S.sid }));   // stop her mid-sentence
+      S.clear();                                         // stop her mid-sentence
       S.playUntil = 0;
       speechStart(S);
       for (const p of V.pre) audioIn(S, p);
@@ -381,6 +381,7 @@ function phoneCall(ws, key) {
       S.sid = m.stream_sid || st.stream_sid; S.playUntil = 0; S.retrying = false;
       S.vad = { on: false, noise: 0.005, loudMs: 0, speech: 0, silent: 0, total: 0, pre: [], preMs: 0 };
       S.out = (msg) => phoneOut(S, msg);
+      S.clear = () => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event: 'clear', stream_sid: S.sid })); };
       log('call', cfg.call_id, 'phone call started,', cfg.allowed ? 'answering' : 'not a test number', cfg.lang_code, cfg.voice, rate + ' Hz');
       if (ws.readyState !== WebSocket.OPEN) { endState(S); return; }
       if (cfg.allowed) openStt(S);
@@ -394,9 +395,108 @@ function phoneCall(ws, key) {
   ws.on('close', () => { clearTimeout(limit); if (S) endState(S); });
 }
 
+// ---------- a real phone call (Vobiz) ----------
+// Vobiz first asks an "Answer URL" what to do with a call. We answer: stream it to this server.
+// The caller's voice then arrives in the telephone format (mu-law) and her voice goes back as plain audio.
+const vobizPending = new Map();              // call id -> { from, to } between the Answer URL and the stream
+
+const MULAW = (() => {                        // mu-law byte -> 16-bit sample
+  const t = new Int16Array(256);
+  for (let i = 0; i < 256; i++) {
+    const u = ~i & 0xff, v = (((u & 0x0f) << 3) + 0x84) << ((u & 0x70) >> 4);
+    t[i] = (u & 0x80) ? 0x84 - v : v - 0x84;
+  }
+  return t;
+})();
+function mulawToPcm(buf) {
+  const out = Buffer.alloc(buf.length * 2);
+  for (let i = 0; i < buf.length; i++) out.writeInt16LE(MULAW[buf[i]], i * 2);
+  return out;
+}
+
+const xmlSafe = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function vobizAnswer(req, res, url) {
+  let body = '';
+  req.on('data', (c) => { if (body.length < 10000) body += c; });
+  req.on('end', () => {
+    const key = url.searchParams.get('key') || '';
+    if (!/^[a-f0-9]{32}$/.test(key)) { res.writeHead(404); res.end(); return; }
+    let form = new URLSearchParams(body);
+    try { if (body.trim().startsWith('{')) form = new URLSearchParams(Object.entries(JSON.parse(body)).map(([k, v]) => [k, String(v)])); } catch (e) { /* not JSON */ }
+    const pick = (...names) => {             // field names differ in letter case between providers
+      for (const src of [form, url.searchParams]) for (const [k, v] of src) if (names.includes(k.toLowerCase())) return v;
+      return '';
+    };
+    const from = pick('from'), to = pick('to'), call = pick('calluuid', 'call_uuid', 'callid');
+    if (call) {
+      vobizPending.set(call, { from, to });
+      setTimeout(() => vobizPending.delete(call), 60000);
+    }
+    const ws = 'wss://' + (req.headers.host || 'call.someswara.com') + '/vobiz?' + new URLSearchParams({ key, from, to, call });
+    res.writeHead(200, { 'Content-Type': 'application/xml' });
+    res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Stream bidirectional="true" audioTrack="inbound" keepCallAlive="true" contentType="audio/x-mulaw;rate=8000">'
+      + xmlSafe(ws) + '</Stream><Hangup/></Response>');
+  });
+}
+
+function vobizOut(S, msg) {
+  if (msg.type === 'audio') {
+    const pcm = wavPcm(msg.audio), step = S.rate * 2 * 20 / 1000;   // 20 ms pieces
+    for (let i = 0; i < pcm.length; i += step) {
+      if (S.ws.readyState !== WebSocket.OPEN) return;
+      S.ws.send(JSON.stringify({ event: 'playAudio', streamId: S.sid, media: { contentType: 'audio/x-l16', sampleRate: S.rate, payload: pcm.subarray(i, i + step).toString('base64') } }));
+    }
+    S.ws.send(JSON.stringify({ event: 'checkpoint', streamId: S.sid, name: 'tts' }));
+    S.playUntil = Math.max(Date.now(), S.playUntil) + pcm.length / (S.rate * 2) * 1000;
+  } else if (msg.type === 'error') {
+    log('call', S.cfg.call_id, 'problem:', msg.message);
+    if (S.cfg.retry_text && !S.retrying) {
+      S.retrying = true;
+      tts(S.cfg, S.cfg.retry_text, AbortSignal.timeout(15000)).then((a) => vobizOut(S, { type: 'audio', audio: a })).catch(() => {}).finally(() => { S.retrying = false; });
+    }
+  }
+}
+
+function vobizCall(ws, key, q) {
+  let S = null, starting = false, mulaw = true;
+  const limit = setTimeout(() => ws.close(), MAX_CALL_MS);
+  ws.on('message', async (data) => {
+    let m; try { m = JSON.parse(data.toString()); } catch (e) { return; }
+    if (m.event === 'start' && !S && !starting) {
+      starting = true;
+      const st = m.start || {}, fmt = st.mediaFormat || {};
+      mulaw = !/l16/i.test(String(fmt.encoding || 'audio/x-mulaw'));
+      const rate = +fmt.sampleRate === 16000 ? 16000 : 8000;
+      const known = vobizPending.get(st.callId || q.call) || {};
+      let cfg;
+      try { cfg = await ivr('phone_config', { key, from: q.from || known.from || '', to: q.to || known.to || '', call_sid: String(st.callId || q.call || '') }); }
+      catch (e) { log('phone call refused:', e.message); ws.close(); return; }
+      cfg.pcm_rate = rate;
+      S = newState(ws, cfg.token, cfg, rate);
+      S.sid = m.streamId || st.streamId; S.playUntil = 0; S.retrying = false;
+      S.vad = { on: false, noise: 0.005, loudMs: 0, speech: 0, silent: 0, total: 0, pre: [], preMs: 0 };
+      S.out = (msg) => vobizOut(S, msg);
+      S.clear = () => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event: 'clearAudio', streamId: S.sid })); };
+      log('call', cfg.call_id, 'Vobiz call started,', cfg.allowed ? 'answering' : 'not a test number', cfg.lang_code, cfg.voice, rate + ' Hz', mulaw ? 'mu-law' : 'L16');
+      if (ws.readyState !== WebSocket.OPEN) { endState(S); return; }
+      if (cfg.allowed) openStt(S);
+      greet(S);
+      if (!cfg.allowed) S.replying.then(() => setTimeout(() => ws.close(), Math.max(0, S.playUntil - Date.now()) + 800));
+    } else if (m.event === 'media' && S && S.cfg.allowed && !S.closed) {
+      const raw = Buffer.from((m.media && m.media.payload) || '', 'base64');
+      phoneAudio(S, mulaw ? mulawToPcm(raw) : raw);
+    } else if (m.event === 'stop') ws.close();
+  });
+  ws.on('close', () => { clearTimeout(limit); if (S) endState(S); });
+}
+
 // ---------- server ----------
 const server = http.createServer((req, res) => {
-  if (req.url === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok'); return; }
+  const url = new URL(req.url, 'http://x');
+  if (url.pathname === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok'); return; }
+  if (url.pathname === '/vobiz/answer') return vobizAnswer(req, res, url);
+  if (url.pathname === '/vobiz/hangup') { req.resume(); res.writeHead(204); res.end(); return; }
   res.writeHead(404); res.end();
 });
 const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
@@ -410,6 +510,13 @@ server.on('upgrade', (req, socket, head) => {
     if (!/^[a-f0-9]{32}$/.test(key)) return refuse('400 Bad Request');
     if (wss.clients.size >= MAX_CALLS) return refuse('503 Busy');
     return wss.handleUpgrade(req, socket, head, (ws) => phoneCall(ws, key));
+  }
+  if (url.pathname === '/vobiz') {
+    const key = url.searchParams.get('key') || '';
+    if (!/^[a-f0-9]{32}$/.test(key)) return refuse('400 Bad Request');
+    if (wss.clients.size >= MAX_CALLS) return refuse('503 Busy');
+    const q = { from: url.searchParams.get('from') || '', to: url.searchParams.get('to') || '', call: url.searchParams.get('call') || '' };
+    return wss.handleUpgrade(req, socket, head, (ws) => vobizCall(ws, key, q));
   }
   if (url.pathname !== '/live' || !/^[a-f0-9]{48}$/.test(token)) return refuse('400 Bad Request');
   if (!ORIGINS.includes(req.headers.origin || '')) return refuse('403 Forbidden');

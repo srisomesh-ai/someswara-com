@@ -5,6 +5,7 @@ const DATA_DIR = __DIR__ . '/data';
 const MAX_CALLS = 500;
 const LIVE_URL = 'wss://call.someswara.com/live';   // the live call server on the VPS (ivr/live/)
 const PHONE_URL = 'wss://call.someswara.com/phone'; // where Exotel sends real phone calls on that server
+const VOBIZ_URL = 'https://call.someswara.com/vobiz/answer';   // the "Answer URL" for a Vobiz application
 // Said to a caller whose number is not on the test list while the line is in "test numbers only".
 const BUSY_TE = 'నమస్తే, Bharat GPS Tracker కి call చేసినందుకు thanks. మా team మీకు వెంటనే call back చేస్తారు.';
 const BUSY_HI = 'नमस्ते, Bharat GPS Tracker में call करने के लिए धन्यवाद. हमारी team आपको जल्दी call back करेगी.';
@@ -152,6 +153,7 @@ function phone_digits($n): string { return substr(preg_replace('~\D~', '', (stri
 function phone_view(array $s): array {
     return [
         'url' => PHONE_URL . '?key=' . ($s['phone_key'] ?? ''),
+        'vobiz_url' => VOBIZ_URL . '?key=' . ($s['phone_key'] ?? ''),
         'mode' => ($s['phone_mode'] ?? 'test') === 'all' ? 'all' : 'test',
         'tests' => implode("\n", (array)($s['phone_tests'] ?? [])),
         'last' => (int)($s['phone_last'] ?? 0),
