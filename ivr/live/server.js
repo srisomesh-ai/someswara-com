@@ -139,6 +139,79 @@ async function chatOnce(cfg, messages, signal) {
 // What she may say aloud: her private thinking and a "remember this rule" tag are taken out.
 const cleanReply = (raw) => raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/\[\[RULE:[\s\S]*?(\]\]|$)/g, '').replace(/[*#`_]/g, '');
 
+// ---------- sir or madam ----------
+// How high the caller's voice is, measured on short slices of what they said. A phone line removes the
+// lowest tones, so the repeat pattern of the sound wave is used instead; that survives the line.
+function voicePitch(pcm, rate) {
+  const step = rate >= 16000 ? 2 : 1, sr = rate / step, n = Math.min(pcm.length >> 1, rate * 2) / step | 0;   // the first two seconds are enough
+  const x = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = pcm.readInt16LE(i * step * 2) / 32768;
+  const W = Math.round(sr * 0.04), H = Math.round(sr * 0.03), lo = Math.floor(sr / 300), hi = Math.ceil(sr / 75);
+  const out = [], r = new Float32Array(hi + 2);
+  for (let s = 0; s + W + hi < n; s += H) {
+    let e = 0;
+    for (let i = 0; i < W; i++) e += x[s + i] * x[s + i];
+    if (e / W < 0.0004) continue;                         // too quiet to be speech
+    let best = 0;
+    for (let lag = lo; lag <= hi + 1; lag++) {
+      let a = 0, b = 0;
+      for (let i = 0; i < W; i++) { const y = x[s + i + lag] || 0; a += x[s + i] * y; b += y * y; }
+      r[lag] = a / Math.sqrt(e * b + 1e-9);
+      if (lag <= hi && r[lag] > best) best = r[lag];
+    }
+    if (best < 0.6) continue;                             // not a clear voiced sound
+    for (let lag = lo + 1; lag <= hi; lag++) {
+      if (r[lag] >= 0.9 * best && r[lag] >= r[lag - 1] && r[lag] >= r[lag + 1]) { out.push(sr / lag); break; }
+    }
+  }
+  return out;
+}
+
+// Decide only when the voice is clearly low or clearly high; in between she stays with the neutral word.
+function hearGender(S, pcm) {
+  try {
+    S.pitch.push(...voicePitch(pcm, S.rate));
+    if (S.pitch.length > 600) S.pitch = S.pitch.slice(-600);
+    if (S.pitch.length < 25) return;
+    const mid = [...S.pitch].sort((a, b) => a - b)[S.pitch.length >> 1];
+    const was = S.gender;
+    S.gender = mid < 150 ? 'm' : mid > 185 ? 'f' : '';
+    if (S.gender !== was) log('call', S.cfg.call_id, 'caller voice about', Math.round(mid), 'Hz:', S.gender === 'm' ? 'sir' : S.gender === 'f' ? 'madam' : 'not sure');
+  } catch (e) { /* never let this stop a call */ }
+}
+
+// ---------- quick acknowledgement ----------
+// The moment the caller stops, she says a tiny "ok sir" while the real answer is still being prepared,
+// so there is no dead silence. These few clips are made once and kept ready.
+const ACKS = {
+  te: { m: ['ఓకే సర్', 'సరే సర్', 'అలాగే సర్'], f: ['ఓకే మేడమ్', 'సరే మేడమ్', 'అలాగే మేడమ్'], '': ['ఓకే అండి', 'సరే అండి', 'అలాగే అండి'] },
+  hi: { m: ['ओके सर', 'जी सर', 'ठीक है सर'], f: ['ओके मैडम', 'जी मैडम', 'ठीक है मैडम'], '': ['ओके जी', 'जी', 'ठीक है जी'] },
+  en: { m: ['Okay sir', 'Sure sir', 'Alright sir'], f: ['Okay madam', 'Sure madam', 'Alright madam'], '': ['Okay', 'Sure', 'Alright'] },
+};
+const clips = new Map();
+const clipKey = (cfg, lang, text) => [(cfg.voices && cfg.voices[lang]) || cfg.voice, cfg.pcm_rate || 'mp3', text].join('|');
+
+function warmAcks(S, lang) {
+  if (!ACKS[lang] || !S.cfg.prompts) return;
+  if (clips.size > 300) clips.clear();
+  for (const g of ['', 'm', 'f']) for (const text of ACKS[lang][g]) {
+    const k = clipKey(S.cfg, lang, text);
+    if (clips.has(k)) continue;
+    clips.set(k, null);                                   // being made
+    tts(S.cfg, text, AbortSignal.timeout(15000), lang).then((a) => clips.set(k, a)).catch(() => clips.delete(k));
+  }
+}
+
+// Plays one if it is ready and returns the words; never waits for one.
+function sayAck(S) {
+  const list = ACKS[S.lang] && ACKS[S.lang][S.gender];
+  if (!list || !S.cfg.prompts) return '';
+  const text = list[S.ackN++ % list.length], clip = clips.get(clipKey(S.cfg, S.lang, text));
+  if (!clip) { warmAcks(S, S.lang); return ''; }
+  send(S, { type: 'audio', audio: clip });
+  return text;
+}
+
 // ---------- one call ----------
 function send(S, msg) {
   if (S.out) return S.out(msg);              // a phone call has its own way of sending (see phoneOut)
@@ -211,13 +284,18 @@ async function speechEnd(S) {
   if (S.cfg.prompts) S.lang = detectLang(text, S.sttLang, S.lang);   // answer in the language they just spoke
   S.turns.push({ who: 'caller', text });
   send(S, { type: 'heard', text });
-  S.replying = reply(S, hearMs).catch((e) => log('reply crashed:', e.message));
+  const ack = sayAck(S);                     // first, so nothing delays it
+  hearGender(S, pcm);
+  S.replying = reply(S, hearMs, ack).catch((e) => log('reply crashed:', e.message));
 }
 
-async function reply(S, hearMs) {
+async function reply(S, hearMs, ack) {
   const g = S.gen, t1 = Date.now(), lang = S.lang;
   const ctrl = new AbortController(); S.abort = ctrl;
-  const messages = [{ role: 'system', content: (S.cfg.prompts && S.cfg.prompts[lang]) || S.cfg.prompt }, { role: 'user', content: '(The call has just connected.)' },
+  let system = (S.cfg.prompts && S.cfg.prompts[lang]) || S.cfg.prompt;
+  if (S.gender) system += "\n\nThe caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.';
+  if (ack) system += '\n\nYou have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.';
+  const messages = [{ role: 'system', content: system }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
   let raw = '', done = 0, queued = 0, first = true, tThink = 0, problem = null;
   const said = [];
@@ -280,11 +358,13 @@ async function reply(S, hearMs) {
 
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
-    pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve() };
+    pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
+    pitch: [], gender: '', ackN: 0 };
 }
 
 function greet(S) {
   send(S, { type: 'ready', call_id: S.cfg.call_id, text: S.cfg.greeting });
+  if (S.cfg.allowed !== false) warmAcks(S, S.lang);
   const ctrl = new AbortController(); S.abort = ctrl;
   const g = S.gen;
   S.replying = tts(S.cfg, S.cfg.greeting, ctrl.signal, S.lang)
@@ -379,7 +459,7 @@ function phoneAudio(S, pcm) {
   }
   audioIn(S, pcm); V.total += ms;
   if (rms > limit) { V.speech += ms; V.silent = 0; } else V.silent += ms;
-  if (V.silent >= 600 || V.total >= 25000) {
+  if (V.silent >= 450 || V.total >= 25000) {
     V.on = false;
     if (V.speech >= 250) speechEnd(S).catch((e) => log('turn crashed:', e.message));
     else { S.capturing = false; S.pcm = []; S.pcmBytes = 0; }
