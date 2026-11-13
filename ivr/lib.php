@@ -12,6 +12,10 @@ const BUSY_HI = 'नमस्ते, Bharat GPS Tracker में call करन
 // Said on a phone call when a reply could not be prepared, so the caller is not left in silence.
 const RETRY_TE = 'క్షమించండి, ఒకసారి మళ్ళీ చెప్తారా?';
 const RETRY_HI = 'माफ़ कीजिए, एक बार फिर बताइए?';
+const RETRY_EN = 'Sorry, could you say that once more?';
+// On live calls she follows the caller's language. These are the languages she can switch between.
+const LIVE_LANGS = ['te' => ['name' => 'Telugu', 'code' => 'te-IN'], 'hi' => ['name' => 'Hindi', 'code' => 'hi-IN'], 'en' => ['name' => 'English', 'code' => 'en-IN']];
+const VOICE_EN = 'priya';   // voice used when a caller speaks English
 const GREETING = 'నమస్తే, Bharat GPS Tracker కి call చేసినందుకు thanks. చెప్పండి, మీకు ఏ vehicle కి tracker కావాలి?';
 const GREETING_HI = 'नमस्ते, Bharat GPS Tracker में call करने के लिए धन्यवाद. बताइए, आपको किस vehicle के लिए tracker चाहिए?';
 const LANGS = ['te' => ['name' => 'Telugu', 'code' => 'te-IN'], 'hi' => ['name' => 'Hindi', 'code' => 'hi-IN']];
@@ -56,6 +60,29 @@ How to speak:
 - If the caller only says hello or something unclear, respond naturally and gently repeat your question in different words.
 - No lists, no symbols, no emojis, no formatting. Write numbers in words.
 
+TXT;
+// The same instructions when the caller speaks English.
+const SPEAK_EN = <<<'TXT'
+How to speak:
+- Speak like a friendly Indian customer care person: simple, everyday Indian English, the way people really talk on the phone. Short, plain words.
+- Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
+- Begin most replies with a small natural reaction to what the caller just said: okay, sure, got it, alright, of course. Change it each time and never use the same one twice in a row.
+- Be warm and relaxed, not like reading a script. Use sir or madam only after the caller's voice or words make it clear.
+- If the caller only says hello or something unclear, respond naturally and gently repeat your question in different words.
+- No lists, no symbols, no emojis, no formatting. Write numbers in words.
+
+TXT;
+// On a live call the server works out the caller's language for every reply and picks these instructions to match.
+const LIVE_LANG_RULE = '- Answer in %s now. The caller may change between Telugu, Hindi and English at any time; you are always given the instructions for the language they just spoke. If they speak any other language, tell them politely that a team member will call them back.';
+// Added only when the owner himself is on the line and has switched on "Train by voice".
+const TRAIN_BLOCK = <<<'TXT'
+
+
+TRAINING MODE. The person on this call is the owner of the business, and he is training you. He acts as a customer. Sometimes he steps out of that role to correct you or teach you, for example: "no, not like that", "wrong", "you should say", "remember this", "అలా కాదు", "ऐसे नहीं". When he does:
+1. Stop the sales talk. In one short sentence, say back what you understood he wants you to do from now on, and ask whether you should remember it.
+2. Only after he clearly says yes, give a very short confirmation, and then at the very end of your reply add the rule in exactly this form: [[RULE: the rule as one clear sentence, in the language he used]]
+3. If he says no, or corrects what you understood, go back to step 1.
+Never write [[RULE: ...]] unless he has just said yes. The tag is not spoken; do not mention it. After that, wait for him to carry on as a customer.
 TXT;
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
 const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
@@ -175,22 +202,48 @@ function training(): array {
         'rules' => array_values(array_filter((array)($t['rules'] ?? []), 'is_string')),
         'examples' => array_values(array_filter((array)($t['examples'] ?? []), 'is_array')),
         'corrections' => array_values(array_filter((array)($t['corrections'] ?? []), 'is_array')),
+        'learned' => (object)array_filter((array)($t['learned'] ?? []), 'is_int'),   // rule text => when she learned it on a call
+        'train_on' => !empty(settings()['train_on']),
+        'train_nums' => implode("\n", (array)(settings()['train_nums'] ?? [])),
     ];
 }
 
-function system_prompt(string $lang = 'te'): string {
+function voice_for_lang(string $l): string {
+    $s = settings();
+    if ($l === 'en') return VOICE_EN;
+    if ($l === 'hi') { $v = (string)($s['voice_hi'] ?? ''); return in_array($v, voices_for('hi'), true) ? $v : VOICES_HI[0]; }
+    $v = (string)($s['voice'] ?? '');
+    return in_array($v, VOICES, true) ? $v : VOICES[0];
+}
+
+// Everything the live call server needs to run one call.
+function live_payload(string $lang, bool $trainer): array {
+    $prompts = []; $voices = []; $codes = [];
+    foreach (LIVE_LANGS as $l => $info) {
+        $prompts[$l] = system_prompt($l, true, $trainer);
+        $voices[$l] = voice_for_lang($l);
+        $codes[$l] = $info['code'];
+    }
+    return ['key' => sarvam_key(), 'lang' => $lang, 'lang_code' => $codes[$lang], 'voice' => $voices[$lang], 'prompt' => $prompts[$lang],
+        'prompts' => $prompts, 'voices' => $voices, 'codes' => $codes, 'trainer' => $trainer,
+        'retry' => ['te' => RETRY_TE, 'hi' => RETRY_HI, 'en' => RETRY_EN], 'retry_text' => $lang === 'hi' ? RETRY_HI : RETRY_TE];
+}
+
+function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = false): string {
     $t = training();
     $p = SYSTEM_PROMPT;
-    if ($lang === 'hi') {
+    if ($lang === 'hi' || $lang === 'en') {
         $a = strpos($p, 'How to speak:'); $b = strpos($p, 'What to do on the call:');
-        $p = substr($p, 0, $a) . SPEAK_HI . "\n" . substr($p, $b);
-        $p = str_replace(OTHER_LANG_TE, OTHER_LANG_HI, $p);
+        $p = substr($p, 0, $a) . ($lang === 'hi' ? SPEAK_HI : SPEAK_EN) . "\n" . substr($p, $b);
     }
+    $rule = $live ? sprintf(LIVE_LANG_RULE, LIVE_LANGS[$lang]['name']) : ($lang === 'hi' ? OTHER_LANG_HI : OTHER_LANG_TE);
+    $p = str_replace(OTHER_LANG_TE, $rule, $p);
+    if ($trainer) $p .= TRAIN_BLOCK;
     if (!$t['rules'] && !$t['examples']) return $p;
     $p .= "\n\nThe owner of the business has trained you with the rules and examples below. If any of them conflicts with the instructions above, follow the owner's.";
     if ($t['rules']) $p .= "\n\nOwner's rules. Follow every one on every call:\n- " . implode("\n- ", $t['rules']);
     if ($t['examples']) {
-        $p .= "\n\nHow the owner wants you to answer. Copy the style and the idea, not the exact words. An example may be written in another language; always reply in " . LANGS[$lang]['name'] . ":";
+        $p .= "\n\nHow the owner wants you to answer. Copy the style and the idea, not the exact words. An example may be written in another language; always reply in " . LIVE_LANGS[$lang]['name'] . ":";
         foreach ($t['examples'] as $e) $p .= "\nCustomer: " . ($e['q'] ?? '') . "\nYou: " . ($e['a'] ?? '');
     }
     return $p;

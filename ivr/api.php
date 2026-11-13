@@ -16,7 +16,7 @@ function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
 $writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
-    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey'];
+    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -62,7 +62,8 @@ if ($action === 'phone_config') {
     if (empty($s['phone_key']) || !hash_equals((string)$s['phone_key'], (string)($_POST['key'] ?? ''))) fail('Bad key.', 403);
     if (sarvam_key() === '') fail('Add your Sarvam API key in Settings first.');
     $from = phone_digits($_POST['from'] ?? '');
-    $allowed = ($s['phone_mode'] ?? 'test') === 'all' || ($from !== '' && in_array($from, (array)($s['phone_tests'] ?? []), true));
+    $trainer = !empty($s['train_on']) && $from !== '' && in_array($from, (array)($s['train_nums'] ?? []), true);
+    $allowed = $trainer || ($s['phone_mode'] ?? 'test') === 'all' || ($from !== '' && in_array($from, (array)($s['phone_tests'] ?? []), true));
     $lang = lang(); $voice = current_voice();
     $greeting = $allowed ? training()['greeting'] : ($lang === 'hi' ? BUSY_HI : BUSY_TE);
     $call = ['id' => bin2hex(random_bytes(8)), 'started' => time(), 'last' => time(), 'voice' => $voice, 'lang' => $lang,
@@ -70,16 +71,14 @@ if ($action === 'phone_config') {
     call_save($call);
     $all = array_filter(read_json('live.json'), fn($r) => is_array($r) && ($r['exp'] ?? 0) > time());
     $tok = bin2hex(random_bytes(24));
-    $all[$tok] = ['exp' => time() + 7200, 'call_id' => $call['id']];   // lets the server report this call's transcript
+    $all[$tok] = ['exp' => time() + 7200, 'call_id' => $call['id'], 'trainer' => $trainer];   // lets the server report this call's transcript
     write_json('live.json', $all);
     $s['phone_last'] = time();
     write_json('settings.json', $s);
-    out(['allowed' => $allowed, 'token' => $tok, 'key' => sarvam_key(), 'lang' => $lang, 'lang_code' => LANGS[$lang]['code'],
-        'voice' => $voice, 'greeting' => $greeting, 'prompt' => system_prompt($lang), 'call_id' => $call['id'],
-        'retry_text' => $lang === 'hi' ? RETRY_HI : RETRY_TE]);
+    out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id']] + live_payload($lang, $trainer));
 }
 
-if ($action === 'live_config' || $action === 'live_sync') {
+if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_rule') {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
     $tok = (string)($_POST['token'] ?? '');
     $all = read_json('live.json');
@@ -91,10 +90,26 @@ if ($action === 'live_config' || $action === 'live_sync') {
         $call = ['id' => bin2hex(random_bytes(8)), 'started' => time(), 'last' => time(), 'voice' => $voice, 'lang' => $lang,
             'live' => true, 'turns' => [['who' => 'agent', 'text' => $greeting]]];
         call_save($call);
+        $trainer = !empty(settings()['train_on']);   // a Talk test is made by the logged-in admin
         $all[$tok]['call_id'] = $call['id'];
+        $all[$tok]['trainer'] = $trainer;
         write_json('live.json', $all);
-        out(['key' => sarvam_key(), 'lang' => $lang, 'lang_code' => LANGS[$lang]['code'], 'voice' => $voice,
-            'greeting' => $greeting, 'prompt' => system_prompt($lang), 'call_id' => $call['id']]);
+        out(['greeting' => $greeting, 'call_id' => $call['id']] + live_payload($lang, $trainer));
+    }
+    if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes
+        if (empty($all[$tok]['trainer'])) fail('This call cannot teach her.', 403);
+        $rule = clean_line($_POST['rule'] ?? '', 300);
+        if ($rule === '') fail('Empty rule.');
+        $t = read_json('training.json');
+        $rules = array_values(array_filter((array)($t['rules'] ?? []), 'is_string'));
+        if (!in_array($rule, $rules, true)) {
+            if (count($rules) >= 40) fail('The rule list is full.');
+            $rules[] = $rule;
+            $t['rules'] = $rules;
+            $t['learned'][$rule] = time();
+            write_json('training.json', $t);
+        }
+        out(['ok' => true]);
     }
     $call = call_find((string)($all[$tok]['call_id'] ?? ''));
     if (!$call) fail('Call not found.', 404);
@@ -329,7 +344,20 @@ case 'training_save':
     $t[lang() === 'hi' ? 'greeting_hi' : 'greeting'] = clean_line($_POST['greeting'] ?? '', 400);
     $t['rules'] = array_slice($rules, 0, 40);
     $t['examples'] = array_slice($examples, 0, 60);
+    $t['learned'] = array_intersect_key((array)($t['learned'] ?? []), array_flip($t['rules']));   // forget labels of removed rules
     write_json('training.json', $t);
+    out(training());
+
+case 'train_save':   // who may teach her by voice
+    $s = settings();
+    $s['train_on'] = ($_POST['on'] ?? '') === '1';
+    $nums = [];
+    foreach (preg_split('~[\r\n,]+~', (string)($_POST['nums'] ?? '')) as $line) {
+        $n = phone_digits($line);
+        if (strlen($n) === 10 && !in_array($n, $nums, true)) $nums[] = $n;
+    }
+    $s['train_nums'] = array_slice($nums, 0, 10);
+    write_json('settings.json', $s);
     out(training());
 
 case 'correction_save':   // the right answer for a marked reply becomes a new example

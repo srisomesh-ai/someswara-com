@@ -106,6 +106,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
 .opt b{font-weight:600}
 .opt small{display:block;font-size:14px;color:var(--muted)}
 .steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.tag{display:inline-block;margin-top:6px;padding:3px 9px;border-radius:999px;background:#DDE8F7;color:#123C73;font-weight:600;font-size:12px}
 .badge{padding:4px 10px;border-radius:999px;background:#FFF1D6;color:#6B4700;font-weight:600;font-size:13px;white-space:nowrap}
 @media (max-width:760px){
   .side{border-right:none;border-bottom:1px solid var(--line);padding:16px 12px 8px}
@@ -303,6 +304,17 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
         <div class="thead"><h2>4. Corrections from test calls</h2><span class="badge hide" id="t-badge"></span></div>
         <div class="hint14">Every answer you mark as wrong in a test call comes here. Type what she should have said and it becomes a new example.</div>
         <div id="t-corr" class="stack"></div>
+      </div>
+      <div class="card stack">
+        <h2>5. Train by voice</h2>
+        <div class="hint14">Call her and act as a customer. When she says something wrong, tell her what to do instead. She repeats what she understood, and saves it as a rule when you say yes.</div>
+        <label class="check"><input id="tv-on" type="checkbox"> <b style="font-weight:600">Let her learn from my calls</b></label>
+        <div class="field">
+          <label for="tv-nums">Mobile numbers that can teach her, one per line</label>
+          <textarea id="tv-nums" rows="2" inputmode="tel" placeholder="Your mobile number"></textarea>
+          <span class="hint">Only these numbers can change her rules. Talk tests from this dashboard can teach her too.</span>
+        </div>
+        <div><button type="button" class="btn-save" id="tv-save">Save</button></div>
       </div>
     </div>
 
@@ -930,10 +942,15 @@ function renderTraining() {
   const rules = $('t-rules'); rules.textContent = '';
   if (!tr.rules.length) rules.appendChild(el('div', 'empty', 'No rules yet.'));
   tr.rules.forEach((r, i) => {
-    const row = el('div', 'item'); row.appendChild(el('span', '', r));
+    const row = el('div', 'item'); const body = el('span', ''); body.appendChild(el('div', '', r));
+    const at = tr.learned && tr.learned[r];   // she learned this one on a call
+    if (at) body.appendChild(el('span', 'tag', 'Learned on a call, ' + new Date(at * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })));
+    row.appendChild(body);
     row.appendChild(txtBtn('Remove', true, () => { tr.rules.splice(i, 1); saveTraining('Rule removed.'); }));
     rules.appendChild(row);
   });
+
+  $('tv-on').checked = !!tr.train_on; $('tv-nums').value = tr.train_nums || '';
 
   const exs = $('t-examples'); exs.textContent = '';
   if (!tr.examples.length) exs.appendChild(el('div', 'empty', 'No examples yet.'));
@@ -984,6 +1001,10 @@ async function fixCorrection(action, body, msg) {
   catch (err) { toast(err.message); }
 }
 $('t-save').addEventListener('click', () => saveTraining());
+$('tv-save').addEventListener('click', async () => {
+  try { const greet = $('t-greet').value; tr = await api('train_save', { on: $('tv-on').checked ? '1' : '0', nums: $('tv-nums').value }); renderTraining(); $('t-greet').value = greet; toast('Saved.'); }
+  catch (err) { toast(err.message); }
+});
 $('t-rule-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const v = $('t-rule').value.trim(); if (!v) return;

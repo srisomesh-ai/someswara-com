@@ -45,11 +45,13 @@ function speechText(t) {
   return t;
 }
 
-async function tts(cfg, text, signal) {
+async function tts(cfg, text, signal, lang) {
+  const voice = (cfg.voices && cfg.voices[lang]) || cfg.voice;      // each language has its own voice
+  const code = (cfg.codes && cfg.codes[lang]) || cfg.lang_code;
   const body = {
-    text: speechText(text).slice(0, 2400), language_code: cfg.lang_code,
-    model: cfg.voice.includes('_') ? 'bulbul:v4-flash' : 'bulbul:v3',
-    speaker: cfg.voice, speech_sample_rate: cfg.pcm_rate || 24000, pace: 1.15,
+    text: speechText(text).slice(0, 2400), language_code: code,
+    model: voice.includes('_') ? 'bulbul:v4-flash' : 'bulbul:v3',
+    speaker: voice, speech_sample_rate: cfg.pcm_rate || 24000, pace: 1.15,
   };
   if (!cfg.pcm_rate) body.output_audio_codec = 'mp3';   // browser gets MP3; a phone line gets the default WAV
   const post = () => fetch(S_HTTP + '/text-to-speech', {
@@ -84,7 +86,19 @@ async function sttRest(cfg, pcm, rate) {
   fd.append('file', new Blob([wav(pcm, rate)], { type: 'audio/wav' }), 'caller.wav');
   const r = await fetch(S_HTTP + '/speech-to-text', { method: 'POST', headers: { 'api-subscription-key': cfg.key }, body: fd, signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error('Listening failed (' + r.status + ')');
-  return String((await r.json()).transcript || '').trim();
+  const d = await r.json();
+  return { text: String(d.transcript || '').trim(), lang: String(d.language_code || '') };
+}
+
+// Which of her languages did the caller just speak? Telugu and Hindi are recognised by their script.
+// English needs a few words, so a stray "hello" or "okay" does not flip a Telugu or Hindi call.
+function detectLang(text, sttCode, current) {
+  const te = (text.match(/[\u0C00-\u0C7F]/g) || []).length, hi = (text.match(/[\u0900-\u097F]/g) || []).length;
+  if (te || hi) return te >= hi ? 'te' : 'hi';
+  const heard = { 'te-IN': 'te', 'hi-IN': 'hi', 'en-IN': 'en' }[sttCode];
+  const words = (text.match(/[A-Za-z]{2,}/g) || []).length;
+  if (heard === 'en' || !heard) return words >= 4 ? 'en' : current;
+  return heard;
 }
 
 const chatHeaders = (cfg) => ({ 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key, 'api-subscription-key': cfg.key });
@@ -122,7 +136,8 @@ async function chatOnce(cfg, messages, signal) {
   return String((await r.json()).choices?.[0]?.message?.content || '');
 }
 
-const cleanReply = (raw) => raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/[*#`_]/g, '');
+// What she may say aloud: her private thinking and a "remember this rule" tag are taken out.
+const cleanReply = (raw) => raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/\[\[RULE:[\s\S]*?(\]\]|$)/g, '').replace(/[*#`_]/g, '');
 
 // ---------- one call ----------
 function send(S, msg) {
@@ -138,7 +153,7 @@ async function syncCall(S, ended) {
 // Streaming speech-to-text: audio goes up while the caller talks, so the words are ready when they stop.
 function openStt(S) {
   if (S.closed || (S.stt && S.stt.readyState <= WebSocket.OPEN)) return;
-  const q = new URLSearchParams({ 'language-code': S.cfg.lang_code, model: 'saaras:v3', mode: 'codemix', sample_rate: String(S.rate), input_audio_codec: 'pcm_s16le', flush_signal: 'true' });
+  const q = new URLSearchParams({ 'language-code': S.cfg.prompts ? 'unknown' : S.cfg.lang_code, model: 'saaras:v3', mode: 'codemix', sample_rate: String(S.rate), input_audio_codec: 'pcm_s16le', flush_signal: 'true' });
   const stt = new WebSocket(S_WS + '/speech-to-text/ws?' + q, { headers: { 'api-subscription-key': S.cfg.key } });
   S.stt = stt;
   stt.on('message', (raw) => {
@@ -146,6 +161,7 @@ function openStt(S) {
     if (m.type === 'data') {
       const t = String(m.data?.transcript || '').trim();
       if (t) S.parts.push(t);
+      if (t && m.data?.language_code) S.sttLang = m.data.language_code;
       if (S.flushed) S.afterFlush = true;
     } else if (m.type === 'error') log('stt error:', JSON.stringify(m.data));
   });
@@ -155,7 +171,7 @@ function openStt(S) {
 function speechStart(S) {
   S.gen++;                                   // anything she was about to say is cancelled
   if (S.abort) S.abort.abort();
-  S.pcm = []; S.pcmBytes = 0; S.parts = []; S.flushed = false; S.afterFlush = false;
+  S.pcm = []; S.pcmBytes = 0; S.parts = []; S.flushed = false; S.afterFlush = false; S.sttLang = '';
   S.sttLive = !!S.stt && S.stt.readyState === WebSocket.OPEN;   // only trust streaming if it hears the whole utterance
   if (!S.sttLive) openStt(S);
   S.capturing = true;
@@ -183,7 +199,7 @@ async function speechEnd(S) {
     text = S.parts.join(' ').trim();
   }
   if (!text && pcm.length >= S.rate / 2) {
-    try { text = await sttRest(S.cfg, pcm, S.rate); }
+    try { const r = await sttRest(S.cfg, pcm, S.rate); text = r.text; S.sttLang = r.lang; }
     catch (e) { if (g === S.gen) send(S, { type: 'error', message: e.message }); return; }
   }
   if (g !== S.gen) { if (text) S.carry = (S.carry + ' ' + text).trim(); return; }   // they started talking again: keep the words for the next turn
@@ -192,15 +208,16 @@ async function speechEnd(S) {
   const hearMs = Date.now() - t0;
   await S.replying;                          // let a cancelled reply finish recording what it said
   if (g !== S.gen) { S.carry = text; return; }
+  if (S.cfg.prompts) S.lang = detectLang(text, S.sttLang, S.lang);   // answer in the language they just spoke
   S.turns.push({ who: 'caller', text });
   send(S, { type: 'heard', text });
   S.replying = reply(S, hearMs).catch((e) => log('reply crashed:', e.message));
 }
 
 async function reply(S, hearMs) {
-  const g = S.gen, t1 = Date.now();
+  const g = S.gen, t1 = Date.now(), lang = S.lang;
   const ctrl = new AbortController(); S.abort = ctrl;
-  const messages = [{ role: 'system', content: S.cfg.prompt }, { role: 'user', content: '(The call has just connected.)' },
+  const messages = [{ role: 'system', content: (S.cfg.prompts && S.cfg.prompts[lang]) || S.cfg.prompt }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
   let raw = '', done = 0, queued = 0, first = true, tThink = 0, problem = null;
   const said = [];
@@ -211,7 +228,7 @@ async function reply(S, hearMs) {
     queued++;
     if (!tThink) tThink = Date.now();
     const tS = Date.now();
-    const audio = tts(S.cfg, sentence, ctrl.signal).catch((e) => { problem = problem || e; return null; });
+    const audio = tts(S.cfg, sentence, ctrl.signal, lang).catch((e) => { problem = problem || e; return null; });
     chain = chain.then(async () => {
       const a = await audio;
       if (!a || g !== S.gen) return;
@@ -244,6 +261,11 @@ async function reply(S, hearMs) {
     try { raw = await chatOnce(S.cfg, messages, ctrl.signal); done = 0; emit(true); problem = queued ? null : problem; }
     catch (e) { problem = problem || e; }
   }
+  // The owner taught her something on this call and said yes: save it as a rule.
+  const rule = (raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').match(/\[\[RULE:\s*([\s\S]*?)\]\]/) || [])[1];
+  if (rule && rule.trim() && S.cfg.trainer) {
+    ivr('live_rule', { token: S.token, rule: rule.trim() }).then(() => log('call', S.cfg.call_id, 'learned a rule')).catch((e) => log('rule not saved:', e.message));
+  }
   await chain;
 
   const text = said.join(' ');
@@ -257,7 +279,7 @@ async function reply(S, hearMs) {
 }
 
 function newState(ws, token, cfg, rate) {
-  return { ws, token, cfg, rate, gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
+  return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve() };
 }
 
@@ -265,7 +287,7 @@ function greet(S) {
   send(S, { type: 'ready', call_id: S.cfg.call_id, text: S.cfg.greeting });
   const ctrl = new AbortController(); S.abort = ctrl;
   const g = S.gen;
-  S.replying = tts(S.cfg, S.cfg.greeting, ctrl.signal)
+  S.replying = tts(S.cfg, S.cfg.greeting, ctrl.signal, S.lang)
     .then((a) => { if (g === S.gen) send(S, { type: 'audio', audio: a }); })
     .catch((e) => { if (g === S.gen) send(S, { type: 'error', message: e.message }); });
 }
@@ -328,7 +350,7 @@ function phoneOut(S, msg) {
     log('call', S.cfg.call_id, 'problem:', msg.message);
     if (S.cfg.retry_text && !S.retrying) {               // do not leave the caller in silence
       S.retrying = true;
-      tts(S.cfg, S.cfg.retry_text, AbortSignal.timeout(15000)).then((a) => phoneOut(S, { type: 'audio', audio: a })).catch(() => {}).finally(() => { S.retrying = false; });
+      tts(S.cfg, (S.cfg.retry && S.cfg.retry[S.lang]) || S.cfg.retry_text, AbortSignal.timeout(15000), S.lang).then((a) => phoneOut(S, { type: 'audio', audio: a })).catch(() => {}).finally(() => { S.retrying = false; });
     }
   }
 }
@@ -453,7 +475,7 @@ function vobizOut(S, msg) {
     log('call', S.cfg.call_id, 'problem:', msg.message);
     if (S.cfg.retry_text && !S.retrying) {
       S.retrying = true;
-      tts(S.cfg, S.cfg.retry_text, AbortSignal.timeout(15000)).then((a) => vobizOut(S, { type: 'audio', audio: a })).catch(() => {}).finally(() => { S.retrying = false; });
+      tts(S.cfg, (S.cfg.retry && S.cfg.retry[S.lang]) || S.cfg.retry_text, AbortSignal.timeout(15000), S.lang).then((a) => vobizOut(S, { type: 'audio', audio: a })).catch(() => {}).finally(() => { S.retrying = false; });
     }
   }
 }
