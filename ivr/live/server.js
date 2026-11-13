@@ -191,14 +191,19 @@ const ACKS = {
 const clips = new Map();
 const clipKey = (cfg, lang, text) => [(cfg.voices && cfg.voices[lang]) || cfg.voice, cfg.pcm_rate || 'mp3', text].join('|');
 
+// Made one after another, the ones needed first at the front. Asking for all of them at once was being
+// refused by the voice service, so the quick "ok" was often missing in the first minute of a call.
+let warming = Promise.resolve();
 function warmAcks(S, lang) {
   if (!ACKS[lang] || !S.cfg.prompts) return;
   if (clips.size > 300) clips.clear();
-  for (const g of ['', 'm', 'f']) for (const text of ACKS[lang][g]) {
+  const order = [S.gender, '', 'm', 'f'].filter((g, i, all) => all.indexOf(g) === i);
+  for (const g of order) for (const text of ACKS[lang][g]) {
     const k = clipKey(S.cfg, lang, text);
     if (clips.has(k)) continue;
     clips.set(k, null);                                   // being made
-    tts(S.cfg, text, AbortSignal.timeout(15000), lang).then((a) => clips.set(k, a)).catch(() => clips.delete(k));
+    const cfg = S.cfg;
+    warming = warming.then(() => tts(cfg, text, AbortSignal.timeout(15000), lang)).then((a) => { clips.set(k, a); }).catch(() => { clips.delete(k); });
   }
 }
 
