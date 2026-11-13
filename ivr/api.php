@@ -363,7 +363,8 @@ case 'train_save':   // who may teach her by voice
     out(training());
 
 case 'products_get':
-    out(products());
+    $n = import_site_products();   // the website's products are copied in once, the first time this page opens
+    out(products() + ['imported' => $n]);
 
 case 'product_save':   // a new product, or a changed one when its id is sent
     $d = read_json('products.json');

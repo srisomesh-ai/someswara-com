@@ -1091,7 +1091,11 @@ function renderProducts() {
   });
 }
 async function loadProducts() {
-  try { pp = await api('products_get'); ppEdit = ''; ppFits = []; renderProducts(); renderPicks(); $('pp-notes').value = pp.notes; } catch (err) { toast(err.message); }
+  try {
+    pp = await api('products_get'); ppEdit = ''; ppFits = []; renderProducts(); renderPicks(); $('pp-notes').value = pp.notes;
+    if (pp.imported > 0) toast(pp.imported + ' products added from the website. Check each price, then edit or remove.');
+    if (pp.imported < 0) toast('Could not read the website products just now. Open this page again in a minute.');
+  } catch (err) { toast(err.message); }
 }
 $('pp-form').addEventListener('submit', async (e) => {
   e.preventDefault();

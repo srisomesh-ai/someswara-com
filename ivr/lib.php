@@ -301,6 +301,50 @@ function products(): array {
     return ['products' => $list, 'notes' => (string)($d['notes'] ?? ''), 'fits' => FITS];
 }
 
+// One time only: copy every product from bharatgpstracker.com into the owner's list, for him to edit and delete.
+// Returns how many were added, or -1 when the website could not be read (it is tried again next time).
+const SITE_FEED = 'https://bharatgpstracker.com/api.php?action=site';
+function import_site_products(): int {
+    $d = read_json('products.json');
+    if (!empty($d['site_import'])) return 0;
+    $ch = curl_init(SITE_FEED);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 10, CURLOPT_FOLLOWLOCATION => true]);
+    $raw = curl_exec($ch);
+    curl_close($ch);
+    $site = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($site) || empty($site['products']) || !is_array($site['products'])) return -1;
+    $words = ['Bike' => 'bike|motorcycle', 'Scooter' => 'scooter|scooty', 'Car' => '\bcars?\b', 'Auto' => '\bautos?\b|rickshaw', 'Truck' => 'truck|lorry',
+        'Bus' => '\bbus(es)?\b', 'Tractor or JCB' => 'tractor|jcb', 'Person, bag or pet' => 'bag|helmet|id card|\bpets?\b|\bkids?\b|child|person|portable'];
+    $list = array_values(array_filter((array)($d['products'] ?? []), 'is_array'));
+    $have = array_map(fn($x) => mb_strtolower((string)($x['name'] ?? '')), $list);
+    $added = 0;
+    foreach ($site['products'] as $p) {
+        if (!is_array($p)) continue;
+        $base = clean_line($p['name'] ?? '', 80);
+        $types = [];
+        foreach ((array)($p['variants'] ?? []) as $v) if (is_array($v) && (int)($v['p'] ?? 0) > 0) $types[] = [clean_line($v['n'] ?? '', 40), (int)$v['p']];
+        if (!$types && (int)($p['price'] ?? 0) > 0) $types[] = ['', (int)$p['price']];
+        if ($base === '' || !$types) continue;
+        $about = clean_line($p['subtitle'] ?? '', 200);
+        $feat = [];
+        foreach ((array)($p['simple'] ?? []) as $line) { $line = clean_line(is_string($line) ? $line : '', 120); if ($line !== '' && count($feat) < 8) $feat[] = $line; }
+        $text = mb_strtolower($base . ' ' . ($p['cat'] ?? '') . ' ' . $about . ' ' . implode(' ', $feat));
+        $fits = [];
+        foreach ($words as $fit => $re) if (preg_match('~' . $re . '~u', $text)) $fits[] = $fit;
+        foreach ($types as [$type, $price]) {
+            $name = clean_line(count($types) > 1 && $type !== '' ? $base . ' - ' . $type : $base, 80);
+            if (in_array(mb_strtolower($name), $have, true) || count($list) >= 40) continue;
+            $list[] = ['id' => bin2hex(random_bytes(6)), 'name' => $name, 'price' => $price, 'fits' => $fits, 'for' => $about, 'inc' => '', 'feat' => $feat];
+            $have[] = mb_strtolower($name);
+            $added++;
+        }
+    }
+    $d['products'] = $list;
+    $d['site_import'] = time();
+    write_json('products.json', $d);
+    return $added;
+}
+
 function catalog(): string {
     $rows = [];
     foreach (products()['products'] as $p) {
