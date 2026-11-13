@@ -414,7 +414,7 @@ function phoneCall(ws, key) {
       phoneAudio(S, Buffer.from((m.media && m.media.payload) || '', 'base64'));
     } else if (m.event === 'stop') ws.close();
   });
-  ws.on('close', () => { clearTimeout(limit); if (S) endState(S); });
+  ws.on('close', () => { clearTimeout(limit); if (S) endState(S); else log('phone stream closed before the call was set up'); });
 }
 
 // ---------- a real phone call (Vobiz) ----------
@@ -443,7 +443,7 @@ function vobizAnswer(req, res, url) {
   req.on('data', (c) => { if (body.length < 10000) body += c; });
   req.on('end', () => {
     const key = url.searchParams.get('key') || '';
-    if (!/^[a-f0-9]{32}$/.test(key)) { res.writeHead(404); res.end(); return; }
+    if (!/^[a-f0-9]{32}$/.test(key)) { log('Vobiz Answer URL refused: the key in the address is missing or malformed'); res.writeHead(404); res.end(); return; }
     let form = new URLSearchParams(body);
     try { if (body.trim().startsWith('{')) form = new URLSearchParams(Object.entries(JSON.parse(body)).map(([k, v]) => [k, String(v)])); } catch (e) { /* not JSON */ }
     const pick = (...names) => {             // field names differ in letter case between providers
@@ -455,6 +455,7 @@ function vobizAnswer(req, res, url) {
       vobizPending.set(call, { from, to });
       setTimeout(() => vobizPending.delete(call), 60000);
     }
+    log('Vobiz call from', from || '(no number)', '- telling Vobiz to stream it here');
     const ws = 'wss://' + (req.headers.host || 'call.someswara.com') + '/vobiz?' + new URLSearchParams({ key, from, to, call });
     res.writeHead(200, { 'Content-Type': 'application/xml' });
     res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Stream bidirectional="true" audioTrack="inbound" keepCallAlive="true" contentType="audio/x-mulaw;rate=8000">'
@@ -510,7 +511,7 @@ function vobizCall(ws, key, q) {
       phoneAudio(S, mulaw ? mulawToPcm(raw) : raw);
     } else if (m.event === 'stop') ws.close();
   });
-  ws.on('close', () => { clearTimeout(limit); if (S) endState(S); });
+  ws.on('close', () => { clearTimeout(limit); if (S) endState(S); else log('phone stream closed before the call was set up'); });
 }
 
 // ---------- server ----------
@@ -522,6 +523,8 @@ const server = http.createServer((req, res) => {
   res.writeHead(404); res.end();
 });
 const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
+// A dropped line can raise an error on its connection; without a listener that would stop the whole server.
+function guard(ws) { ws.on('error', (e) => log('call connection error:', e.message)); return ws; }
 
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://x');
@@ -531,19 +534,23 @@ server.on('upgrade', (req, socket, head) => {
     const key = url.searchParams.get('key') || '';
     if (!/^[a-f0-9]{32}$/.test(key)) return refuse('400 Bad Request');
     if (wss.clients.size >= MAX_CALLS) return refuse('503 Busy');
-    return wss.handleUpgrade(req, socket, head, (ws) => phoneCall(ws, key));
+    return wss.handleUpgrade(req, socket, head, (ws) => phoneCall(guard(ws), key));
   }
   if (url.pathname === '/vobiz') {
     const key = url.searchParams.get('key') || '';
     if (!/^[a-f0-9]{32}$/.test(key)) return refuse('400 Bad Request');
     if (wss.clients.size >= MAX_CALLS) return refuse('503 Busy');
     const q = { from: url.searchParams.get('from') || '', to: url.searchParams.get('to') || '', call: url.searchParams.get('call') || '' };
-    return wss.handleUpgrade(req, socket, head, (ws) => vobizCall(ws, key, q));
+    return wss.handleUpgrade(req, socket, head, (ws) => vobizCall(guard(ws), key, q));
   }
   if (url.pathname !== '/live' || !/^[a-f0-9]{48}$/.test(token)) return refuse('400 Bad Request');
   if (!ORIGINS.includes(req.headers.origin || '')) return refuse('403 Forbidden');
   if (wss.clients.size >= MAX_CALLS) return refuse('503 Busy');
-  wss.handleUpgrade(req, socket, head, (ws) => startCall(ws, token).catch((e) => { log('call failed:', e.message); ws.close(); }));
+  wss.handleUpgrade(req, socket, head, (ws) => startCall(guard(ws), token).catch((e) => { log('call failed:', e.message); ws.close(); }));
 });
+
+// One bad call must never take the server, and every other call, down with it.
+process.on('uncaughtException', (e) => log('unexpected error (server kept running):', e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e));
+process.on('unhandledRejection', (e) => log('unexpected failure (server kept running):', e && e.message ? e.message : e));
 
 server.listen(PORT, '127.0.0.1', () => log('live call server listening on', PORT));
