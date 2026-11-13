@@ -102,8 +102,7 @@ TRAINING MODE. The person on this call is the owner of the business, and he is t
 Never write [[RULE: ...]] unless he has just said yes. The tag is not spoken; do not mention it. After that, wait for him to carry on as a customer.
 TXT;
 const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
-const HAS_PRICES = '- Our products and prices are listed at the end. Every price there already includes GST, so say it as the final price. Once you know the vehicle and the need, suggest the one product that fits best, with its price. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
-const SITE_FEED = 'https://bharatgpstracker.com/api.php?action=site';   // the website's own product list; prices there are before GST
+const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Once you know the vehicle and the need, suggest the one product from the list that fits that vehicle and need best, with its price and what the price includes. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
 const LEAD_EMAIL = 'info@bharatgpstracker.com';                         // where the summary of every phone call goes
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
 const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
@@ -264,6 +263,8 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
     $cat = catalog();
     $p = str_replace('{{PRICES}}', $cat === '' ? NO_PRICES : HAS_PRICES, $p);
     if ($cat !== '') $p .= "\n\n" . $cat;
+    $notes = trim(products()['notes']);
+    if ($notes !== '') $p .= "\n\nOther charges and notes from the owner. Say these only when they come up:\n" . $notes;
     if ($trainer) $p .= TRAIN_BLOCK;
     if (!$t['rules'] && !$t['examples']) return $p;
     $p .= "\n\nThe owner of the business has trained you with the rules and examples below. If any of them conflicts with the instructions above, follow the owner's.";
@@ -291,63 +292,26 @@ function num_words(int $n): string {
     return implode(' ', $w);
 }
 
-// The website's product list as text for her instructions, with GST already added. Read from the website at most
-// once in ten minutes; if the website cannot be reached the last good list is used, and '' means there is none yet.
-function catalog(): string {
-    $c = read_json('catalog.json');
-    if (is_array($c) && ($c['at'] ?? 0) > time() - 600) return (string)($c['text'] ?? '');
-    $ch = curl_init(SITE_FEED);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 6, CURLOPT_FOLLOWLOCATION => true]);
-    $raw = curl_exec($ch);
-    curl_close($ch);
-    $d = is_string($raw) ? json_decode($raw, true) : null;
-    $text = is_array($d) ? catalog_text($d) : '';
-    if ($text === '') {   // not reachable just now: keep what we had and try again in two minutes
-        $text = (string)($c['text'] ?? '');
-        write_json('catalog.json', ['at' => time() - 480, 'text' => $text, 'ok' => (int)($c['ok'] ?? 0)]);
-        return $text;
-    }
-    write_json('catalog.json', ['at' => time(), 'text' => $text, 'ok' => time()]);
-    return $text;
+// The owner's own price list (Products and prices page) as text for her instructions. '' means no product yet.
+const FITS = ['Bike', 'Scooter', 'Car', 'Auto', 'Truck', 'Bus', 'Tractor or JCB', 'Person, bag or pet'];
+function products(): array {
+    $d = read_json('products.json');
+    $list = [];
+    foreach ((array)($d['products'] ?? []) as $p) if (is_array($p) && ($p['name'] ?? '') !== '' && (int)($p['price'] ?? 0) > 0) $list[] = $p;
+    return ['products' => $list, 'notes' => (string)($d['notes'] ?? ''), 'fits' => FITS];
 }
 
-function catalog_text(array $d): string {
-    $pay = (array)($d['pay'] ?? []);
-    $gst = !empty($pay['gst']);   // the website adds 18% GST at checkout; she says the price with it included
-    $rs = function (int $p) use ($gst): string { $p = $gst ? (int)round($p * 1.18) : $p; return 'Rs ' . $p . ' (' . num_words($p) . ')'; };
+function catalog(): string {
     $rows = [];
-    foreach ((array)($d['products'] ?? []) as $p) {
-        if (!is_array($p) || empty($p['visible']) || ($p['stock'] ?? '') === 'Out of stock') continue;
-        $name = clean_line($p['name'] ?? '', 90);
-        $types = [];
-        foreach ((array)($p['variants'] ?? []) as $v) {
-            if (!is_array($v) || !empty($v['out']) || (int)($v['p'] ?? 0) <= 0) continue;
-            $types[] = [clean_line($v['n'] ?? '', 50), (int)$v['p']];
-        }
-        if (!$types && (int)($p['price'] ?? 0) > 0) $types[] = ['', (int)$p['price']];
-        if ($name === '' || !$types) continue;
-        if (count($types) === 1) $price = $rs($types[0][1]);
-        else $price = implode('; ', array_map(fn($t) => ($t[0] !== '' ? $t[0] : 'Standard') . ' ' . $rs($t[1]), array_slice($types, 0, 6)));
-        $line = '- ' . $name . ': ' . $price . '.';
-        $about = clean_line($p['subtitle'] ?? '', 140);
-        $simple = array_slice(array_values(array_filter(array_map(fn($x) => clean_line($x, 90), (array)($p['simple'] ?? [])))), 0, 3);
-        if ($about !== '') $line .= ' ' . rtrim($about, '.') . '.';
-        if ($simple) $line .= ' ' . implode('. ', array_map(fn($x) => rtrim($x, '.'), $simple)) . '.';
-        if (!empty($p['activation'])) $line .= ' Activated online, nothing is delivered.';
+    foreach (products()['products'] as $p) {
+        $line = '- ' . $p['name'] . ': Rs ' . (int)$p['price'] . ' (' . num_words((int)$p['price']) . ').';
+        if (!empty($p['fits'])) $line .= ' Fits: ' . implode(', ', (array)$p['fits']) . '.';
+        if (($p['for'] ?? '') !== '') $line .= ' Best for: ' . rtrim($p['for'], '.') . '.';
+        if (($p['inc'] ?? '') !== '') $line .= ' Price includes: ' . rtrim($p['inc'], '.') . '.';
+        if (!empty($p['feat'])) $line .= ' Features: ' . implode('. ', array_map(fn($x) => rtrim((string)$x, '.'), (array)$p['feat'])) . '.';
         $rows[] = $line;
-        if (count($rows) >= 30) break;
     }
-    if (!$rows) return '';
-    $t = "Products and prices (from our website, every price includes GST):\n" . implode("\n", $rows);
-    $t .= "\nDelivery is free.";
-    if (!empty($pay['cod'])) $t .= ' Cash on delivery is available' . ((int)($pay['cod_fee'] ?? 0) > 0 ? ' for Rs ' . (int)$pay['cod_fee'] . ' (' . num_words((int)$pay['cod_fee']) . ') extra' : '') . '.';
-    $areas = array_values(array_filter((array)($pay['areas'] ?? []), 'is_string'));
-    if (!empty($pay['install']) && $areas) {
-        $fee = (int)($pay['install_fee'] ?? 0);
-        $t .= "\nInstallation by our technician at the customer's place" . ($fee > 0 ? ' costs Rs ' . $fee . ' (' . num_words($fee) . ')' : ' is free')
-            . ' in these PIN codes: ' . mb_substr(implode(', ', $areas), 0, 400) . '. Ask the PIN code before promising installation. For any other place, say the team will confirm installation on WhatsApp.';
-    }
-    return $t;
+    return $rows ? "Products and prices (the owner's own list for phone customers):\n" . implode("\n", $rows) : '';
 }
 
 // ---------- lead email ----------

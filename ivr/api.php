@@ -16,7 +16,7 @@ function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
 $writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
-    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save'];
+    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -361,6 +361,45 @@ case 'train_save':   // who may teach her by voice
     $s['train_nums'] = array_slice($nums, 0, 10);
     write_json('settings.json', $s);
     out(training());
+
+case 'products_get':
+    out(products());
+
+case 'product_save':   // a new product, or a changed one when its id is sent
+    $d = read_json('products.json');
+    $list = array_values(array_filter((array)($d['products'] ?? []), 'is_array'));
+    $name = clean_line($_POST['name'] ?? '', 80);
+    $price = (int)preg_replace('~\D~', '', (string)($_POST['price'] ?? ''));
+    if ($name === '') fail('Type the product name.');
+    if ($price < 1 || $price > 9999999) fail('Type the price in rupees, numbers only.');
+    $fits = array_values(array_intersect(FITS, (array)json_decode((string)($_POST['fits'] ?? '[]'), true)));
+    $feat = [];
+    foreach (preg_split('~[\r\n]+~', (string)($_POST['feat'] ?? '')) as $line) { $line = clean_line($line, 120); if ($line !== '' && count($feat) < 8) $feat[] = $line; }
+    $row = ['id' => (string)($_POST['id'] ?? ''), 'name' => $name, 'price' => $price, 'fits' => $fits,
+        'for' => clean_line($_POST['for'] ?? '', 200), 'inc' => clean_line($_POST['inc'] ?? '', 200), 'feat' => $feat];
+    $found = false;
+    foreach ($list as $i => $x) if ($row['id'] !== '' && ($x['id'] ?? '') === $row['id']) { $list[$i] = $row; $found = true; }
+    if (!$found) {
+        if (count($list) >= 40) fail('The list is full. Remove a product first.');
+        $row['id'] = bin2hex(random_bytes(6));
+        $list[] = $row;
+    }
+    $d['products'] = $list;
+    write_json('products.json', $d);
+    out(products());
+
+case 'product_remove':
+    $d = read_json('products.json');
+    $id = (string)($_POST['id'] ?? '');
+    $d['products'] = array_values(array_filter((array)($d['products'] ?? []), fn($x) => is_array($x) && ($x['id'] ?? '') !== $id));
+    write_json('products.json', $d);
+    out(products());
+
+case 'product_notes':
+    $d = read_json('products.json');
+    $d['notes'] = mb_substr(trim(preg_replace('~[ \t]+~u', ' ', str_replace("\r", '', (string)($_POST['notes'] ?? '')))), 0, 1500);
+    write_json('products.json', $d);
+    out(products());
 
 case 'correction_save':   // the right answer for a marked reply becomes a new example
 case 'correction_ignore':

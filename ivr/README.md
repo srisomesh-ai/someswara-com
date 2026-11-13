@@ -26,7 +26,7 @@ the real phone line will be.
   `public_html`) and set up again.
 - The folder can be moved to another path or site as it is. Copy the `ivr-data` folder
   to keep the settings and call log.
-- Prices: she reads the product list from bharatgpstracker.com (`SITE_FEED` in `lib.php`, refreshed every ten minutes) and says prices with GST included.
+- Prices: the owner types his own list on the Products and prices page (`products.json` in the data folder). She says exactly those prices; the website is not read.
 - Lead email: after every real phone call a summary goes to `LEAD_EMAIL` (`lib.php`).
 - Not built yet: leads page, staff transfer.
 

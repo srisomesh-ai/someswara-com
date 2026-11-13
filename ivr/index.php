@@ -107,6 +107,17 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
 .opt small{display:block;font-size:14px;color:var(--muted)}
 .steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 .tag{display:inline-block;margin-top:6px;padding:3px 9px;border-radius:999px;background:#DDE8F7;color:#123C73;font-weight:600;font-size:12px}
+.prod{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:8px;background:var(--bg)}
+.prod .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;font-weight:700;font-size:16px}
+.prod .top span{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.prod .l{font-size:14px;overflow-wrap:anywhere}
+.prod .l i{font-style:normal;color:var(--muted)}
+.prod .acts{display:flex;gap:4px;margin-left:-12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips .tag{margin-top:0}
+.picks{display:flex;gap:8px;flex-wrap:wrap}
+.pick{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line2);background:#fff;font-weight:600}
+.pick.on{border-color:#123C73;background:#DDE8F7;color:#123C73}
 .badge{padding:4px 10px;border-radius:999px;background:#FFF1D6;color:#6B4700;font-weight:600;font-size:13px;white-space:nowrap}
 @media (max-width:760px){
   .side{border-right:none;border-bottom:1px solid var(--line);padding:16px 12px 8px}
@@ -150,7 +161,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       <button type="button" data-view="history">Call history</button>
       <button type="button" data-view="soon" data-step="4" data-name="Leads">Leads</button>
       <button type="button" data-view="training">Training</button>
-      <button type="button" data-view="soon" data-step="2" data-name="Products and prices">Products and prices</button>
+      <button type="button" data-view="products">Products and prices</button>
       <button type="button" data-view="settings">Voice and language</button>
       <button type="button" data-view="phone">Phone line</button>
       <button type="button" data-view="soon" data-step="4" data-name="Staff transfer">Staff transfer</button>
@@ -318,6 +329,43 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       </div>
     </div>
 
+    <!-- Products and prices -->
+    <div id="view-products" class="hide" style="display:flex;flex-direction:column;gap:20px">
+      <div class="head"><div><h1>Products and prices</h1><div class="sub">She says only the products and prices on this page. Website prices are not used on calls.</div></div></div>
+      <div class="card stack">
+        <h2>1. Your products</h2>
+        <div class="hint14">She picks from this list by the vehicle and the need the customer tells her.</div>
+        <div id="pp-list" class="stack"></div>
+      </div>
+      <form class="card stack" id="pp-form" style="gap:14px">
+        <h2>2. Add a product</h2>
+        <div class="field"><label for="pp-name">Product name</label><input id="pp-name" type="text" autocomplete="off" maxlength="80" placeholder="Truck GPS tracker"></div>
+        <div class="field">
+          <label for="pp-price">Price she should say, in rupees</label>
+          <input id="pp-price" type="text" inputmode="numeric" autocomplete="off" placeholder="5500" style="width:160px">
+          <span class="hint">She says exactly this number. Nothing is added to it.</span>
+        </div>
+        <div class="field">
+          <span class="lbl">Which vehicles it fits</span>
+          <div class="picks" id="pp-fits" role="group" aria-label="Which vehicles it fits"></div>
+        </div>
+        <div class="field"><label for="pp-for">Best for (the purpose)</label><input id="pp-for" type="text" autocomplete="off" maxlength="200" placeholder="Commercial use, tracking drivers and trips"></div>
+        <div class="field"><label for="pp-inc">What the price includes</label><input id="pp-inc" type="text" autocomplete="off" maxlength="200" placeholder="1 year subscription, 5 years warranty, fitting by our technician"></div>
+        <div class="field">
+          <label for="pp-feat">Features, one per line</label>
+          <textarea id="pp-feat" rows="3" placeholder="Live location on mobile app&#10;Fuel and mileage report"></textarea>
+          <span class="hint">English or Telugu. She says them in the customer's language.</span>
+        </div>
+        <div><button type="submit" class="btn-save">Save product</button></div>
+      </form>
+      <div class="card stack">
+        <h2>3. Other charges and notes</h2>
+        <div class="hint14">Anything about money that is the same for every product: renewal after the first year, fitting outside the city, payment, delivery.</div>
+        <textarea id="pp-notes" rows="4" aria-label="Other charges and notes" maxlength="1500"></textarea>
+        <div><button type="button" class="btn-save" id="pp-notes-save">Save</button></div>
+      </div>
+    </div>
+
     <!-- Phone line -->
     <div id="view-phone" class="hide" style="display:flex;flex-direction:column;gap:20px">
       <div class="head"><div><h1>Phone line</h1><div class="sub">Connect a phone number so real calls reach the agent</div></div></div>
@@ -423,7 +471,7 @@ $('logout').addEventListener('click', async () => { await endCall(); await api('
 
 // ---------- views ----------
 function show(view) {
-  for (const v of ['overview', 'history', 'settings', 'training', 'phone', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
+  for (const v of ['overview', 'history', 'settings', 'training', 'products', 'phone', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
 }
 document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('.nav button').forEach((x) => x.classList.remove('on'));
@@ -431,6 +479,7 @@ document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('clic
   show(b.dataset.view);
   if (b.dataset.view === 'training') loadTraining();
   if (b.dataset.view === 'phone') loadPhone();
+  if (b.dataset.view === 'products') loadProducts();
   if (b.dataset.view === 'soon') {
     $('soon-title').textContent = b.dataset.name;
     $('soon-text').textContent = b.dataset.name + ' is step ' + b.dataset.step + ' of the build. It is not built yet.';
@@ -1005,6 +1054,57 @@ $('tv-save').addEventListener('click', async () => {
   try { const greet = $('t-greet').value; tr = await api('train_save', { on: $('tv-on').checked ? '1' : '0', nums: $('tv-nums').value }); renderTraining(); $('t-greet').value = greet; toast('Saved.'); }
   catch (err) { toast(err.message); }
 });
+// ---------- products and prices ----------
+let pp = { products: [], notes: '', fits: [] }, ppEdit = '', ppFits = [];
+const rupees = (n) => '₹' + Number(n).toLocaleString('en-IN');
+function ppLine(label, text) { const d = el('div', 'l'); d.appendChild(el('i', '', label + ' ')); d.appendChild(document.createTextNode(text)); return d; }
+function renderPicks() {
+  const box = $('pp-fits'); box.textContent = '';
+  pp.fits.forEach((f) => {
+    const on = ppFits.includes(f), b = el('button', 'pick' + (on ? ' on' : ''), f + (on ? ' ✓' : ''));
+    b.type = 'button'; b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.addEventListener('click', () => { ppFits = on ? ppFits.filter((x) => x !== f) : ppFits.concat(f); renderPicks(); });
+    box.appendChild(b);
+  });
+}
+function renderProducts() {
+  const list = $('pp-list'); list.textContent = '';
+  if (!pp.products.length) list.appendChild(el('div', 'empty', 'No products yet. Until you add one, she says no price and offers to send the details on WhatsApp.'));
+  pp.products.forEach((p) => {
+    const card = el('div', 'prod');
+    const top = el('div', 'top'); top.appendChild(el('span', '', p.name)); top.appendChild(el('div', '', rupees(p.price))); card.appendChild(top);
+    if (p.fits && p.fits.length) { const c = el('div', 'chips'); p.fits.forEach((f) => c.appendChild(el('span', 'tag', f))); card.appendChild(c); }
+    if (p.for) card.appendChild(ppLine('Best for:', p.for));
+    if (p.inc) card.appendChild(ppLine('Price includes:', p.inc));
+    if (p.feat && p.feat.length) card.appendChild(ppLine('Features:', p.feat.map((x) => x.replace(/\.$/, '')).join('. ') + '.'));
+    const acts = el('div', 'acts');
+    acts.appendChild(txtBtn('Edit', false, () => {
+      ppEdit = p.id; $('pp-name').value = p.name; $('pp-price').value = p.price; $('pp-for').value = p.for || ''; $('pp-inc').value = p.inc || '';
+      $('pp-feat').value = (p.feat || []).join('\n'); ppFits = (p.fits || []).slice(); renderPicks();
+      $('pp-form').scrollIntoView({ behavior: 'smooth' }); toast('Change it below and tap Save product.');
+    }));
+    acts.lastChild.style.textDecoration = 'none';
+    acts.appendChild(txtBtn('Remove', true, async () => {
+      try { pp = await api('product_remove', { id: p.id }); if (ppEdit === p.id) ppEdit = ''; renderProducts(); toast('Product removed.'); } catch (err) { toast(err.message); }
+    }));
+    card.appendChild(acts); list.appendChild(card);
+  });
+}
+async function loadProducts() {
+  try { pp = await api('products_get'); ppEdit = ''; ppFits = []; renderProducts(); renderPicks(); $('pp-notes').value = pp.notes; } catch (err) { toast(err.message); }
+}
+$('pp-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    pp = await api('product_save', { id: ppEdit, name: $('pp-name').value, price: $('pp-price').value, fits: JSON.stringify(ppFits),
+      for: $('pp-for').value, inc: $('pp-inc').value, feat: $('pp-feat').value });
+    ppEdit = ''; ppFits = []; $('pp-form').reset(); renderProducts(); renderPicks(); toast('Saved. She uses it from the next call.');
+  } catch (err) { toast(err.message); }
+});
+$('pp-notes-save').addEventListener('click', async () => {
+  try { pp = await api('product_notes', { notes: $('pp-notes').value }); renderProducts(); $('pp-notes').value = pp.notes; toast('Saved. She uses it from the next call.'); } catch (err) { toast(err.message); }
+});
+
 $('t-rule-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const v = $('t-rule').value.trim(); if (!v) return;
