@@ -129,7 +129,7 @@ TXT;
 const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
 const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Once you know the vehicle and the need, suggest the one product from the list that fits that vehicle and need best, with its price and what the price includes. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
 const LEAD_EMAIL = 'info@bharatgpstracker.com';                         // where the summary of every phone call goes
-const VEHICLE_CHECK = "- As soon as they confirm the number, say in a few words that you are checking it, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. The tag is never spoken. Do not ask anything else in that reply. The result of the check then comes to you: tell the caller what it says. Write the tag only once for each number.\n";
+const VEHICLE_CHECK = "- As soon as they confirm the number, say in a few words that you are checking it, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. The tag is never spoken. Do not ask anything else in that reply. The result of the check then comes to you: tell the caller what it says and follow it. Offer renewal only when the result says less than thirty days are left or it has expired; when thirty days or more are left, skip the plan and payment steps below. Write the tag only once for each number.\n";
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
 const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
 
@@ -494,7 +494,9 @@ function plate_parts(string $k): ?array {
 function gps_result_text(array $r): string {
     $n = $r['number'] ?? '';
     if ($r['status'] === 'found' && !empty($r['near'])) {
-        $exp = ($r['expiry'] ?? '') !== '' ? " If they say yes, its expiry date is {$r['expiry_text']}" . ($r['days'] < 0 ? ', so it has already expired' : '') . ', and you continue.' : ' If they say yes, say the team will confirm the expiry date, and continue.';
+        $exp = ($r['expiry'] ?? '') !== '' ? " If they say yes, its expiry date is {$r['expiry_text']}" . ($r['days'] < 0 ? ', so it has already expired' : '')
+            . ($r['days'] >= 30 ? ': thirty days or more are left, so say renewal is not needed now and do not ask for a plan.' : ': less than thirty days are left, so ask which plan they want.')
+            : ' If they say yes, say the team will confirm the expiry date, and continue.';
         return "$n itself is not on our server, but there is one very close number: {$r['name']}. Ask the caller whether {$r['name']} is their vehicle number, saying it letter by letter.$exp If they say no, ask them to say the number once more.";
     }
     switch ($r['status']) {
@@ -502,7 +504,10 @@ function gps_result_text(array $r): string {
             if (($r['expiry'] ?? '') === '') return "Vehicle $n is on our server, but no expiry date is recorded for it. Tell the caller the vehicle is found and that the team will confirm the expiry date, then continue.";
             $d = $r['days'];
             $when = $d > 1 ? "$d days from today" : ($d === 1 ? 'tomorrow' : ($d === 0 ? 'today' : ($d === -1 ? 'yesterday, so it has already expired' : 'which was ' . (-$d) . ' days ago, so it has already expired')));
-            return "Vehicle $n is found on our server. Its expiry date is {$r['expiry_text']}, $when. Tell the caller this in simple words, then continue.";
+            $next = $d >= 30
+                ? 'There are thirty days or more left, so renewal is not needed now. Tell the caller the expiry date and that the vehicle is still valid, and that they can renew when it is closer to that date. Do not ask which plan they want and do not push renewal.'
+                : 'There are less than thirty days left, so tell the caller the expiry date and ask which plan they want to renew with.';
+            return "Vehicle $n is found on our server. Its expiry date is {$r['expiry_text']}, $when. $next";
         case 'many': return "More than one vehicle matches $n. Ask the caller to say the full vehicle number once more, slowly.";
         case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.";
         default: return "Vehicle $n was not found on any of our servers. Tell the caller you could not find it and ask them to say the number once more. If it is not found a second time, say the team will call them back.";
