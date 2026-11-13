@@ -281,7 +281,17 @@ async function speechEnd(S) {
   const hearMs = Date.now() - t0;
   await S.replying;                          // let a cancelled reply finish recording what it said
   if (g !== S.gen) { S.carry = text; return; }
-  if (S.cfg.prompts) S.lang = detectLang(text, S.sttLang, S.lang);   // answer in the language they just spoke
+  if (S.cfg.prompts) {
+    // Follow the caller's language, but do not jump on one short or misheard word, because each language has
+    // its own voice: change on a clear sentence (four words or more), or when two turns in a row are in it.
+    const want = detectLang(text, S.sttLang, S.lang);
+    if (want === S.lang) S.langWant = '';
+    else {
+      const re = { te: /[\u0C00-\u0C7F]+/g, hi: /[\u0900-\u097F]+/g, en: /[A-Za-z]{2,}/g }[want];
+      if ((text.match(re) || []).length >= 4 || S.langWant === want) { S.lang = want; S.langWant = ''; }
+      else S.langWant = want;
+    }
+  }
   S.turns.push({ who: 'caller', text });
   send(S, { type: 'heard', text });
   const ack = sayAck(S);                     // first, so nothing delays it
@@ -359,7 +369,7 @@ async function reply(S, hearMs, ack) {
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0 };
+    pitch: [], gender: '', ackN: 0, langWant: '' };
 }
 
 function greet(S) {
