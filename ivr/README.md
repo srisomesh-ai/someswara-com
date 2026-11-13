@@ -28,6 +28,7 @@ the real phone line will be.
   to keep the settings and call log.
 - Prices: the owner types his own list on the Products and prices page (`products.json` in the data folder). She says exactly those prices; the website is not read.
 - Lead email: after every real phone call a summary goes to `LEAD_EMAIL` (`lib.php`).
+- GPS servers: on a renewal call she looks the vehicle number up on the three tracking servers (read only) and tells the expiry date. The server keys are typed on the GPS servers page and kept in `settings.json`, never in this code.
 - Not built yet: leads page, staff transfer.
 
 ## Live call server (ivr/live/)

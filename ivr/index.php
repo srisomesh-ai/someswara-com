@@ -73,6 +73,7 @@ th{text-align:left;color:var(--muted);font-weight:600;padding:10px 12px;border-b
 td{padding:12px;border-bottom:1px solid var(--soft);vertical-align:top}
 tr:last-child td{border-bottom:none}
 .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:600;font-size:13px;background:var(--soft);color:#3A3F45;white-space:nowrap}
+.pill.good{background:#DDF3E4;color:#14532D}
 .pill.bad{background:var(--accent-soft);color:var(--accent-dark)}
 .link{border:none;background:none;padding:8px 0;font-weight:600;text-decoration:underline;min-height:44px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1A1A1A;color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;max-width:90vw;z-index:9}
@@ -164,6 +165,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       <button type="button" data-view="products">Products and prices</button>
       <button type="button" data-view="settings">Voice and language</button>
       <button type="button" data-view="phone">Phone line</button>
+      <button type="button" data-view="gps">GPS servers</button>
       <button type="button" data-view="soon" data-step="4" data-name="Staff transfer">Staff transfer</button>
       <button type="button" data-view="settings">Settings</button>
     </nav>
@@ -366,6 +368,40 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       </div>
     </div>
 
+    <!-- GPS servers -->
+    <div id="view-gps" class="hide" style="display:flex;flex-direction:column;gap:20px">
+      <div class="head"><div><h1>GPS servers</h1><div class="sub">She looks up a vehicle number here during a call. She only reads; she cannot change anything on the servers.</div></div></div>
+      <form class="card stack" id="gs-form" style="gap:14px">
+        <h2>1. Connect your three servers</h2>
+        <div class="hint14">Paste the API key of each server. Keys are saved on your website only and are shown hidden after saving.</div>
+        <div id="gs-rows" class="stack" style="gap:14px"></div>
+        <div><button type="submit" class="btn-save" id="gs-save">Save and check</button></div>
+      </form>
+      <div class="card stack" style="gap:14px">
+        <h2>2. Try a vehicle number</h2>
+        <div class="hint14">Type any vehicle number to see exactly what she will find on a call.</div>
+        <form class="inline" id="gs-try">
+          <label class="sr" for="gs-q">Vehicle number</label>
+          <input id="gs-q" type="text" autocomplete="off" autocapitalize="characters" placeholder="AP 31 TX 4521">
+          <button type="submit" class="btn" id="gs-go">Search</button>
+        </form>
+        <div id="gs-out" class="prod hide" style="gap:6px" role="status"></div>
+      </div>
+      <div class="card stack" style="gap:10px">
+        <h2>What she does on a renewal call</h2>
+        <div class="hint14">Step one only. Nothing else changes yet.</div>
+        <div class="stack" style="gap:8px">
+          <div class="line caller">Renewal చేయాలి. AP 31 TX 4521.</div>
+          <div class="line agent">ఓకే సర్, AP 31 TX 4521, correct ఏనా?</div>
+          <div class="line caller">అవును.</div>
+          <div class="line agent">ఒక్క నిమిషం సర్, check చేస్తున్నాను.</div>
+          <div class="hint" style="align-self:center">She searches all three servers</div>
+          <div class="line agent">మీ vehicle దొరికింది సర్. ఈ నెల ఇరవై ఎనిమిదికి expire అవుతుంది. మూడు నెలలు, ఆరు నెలలు, లేదా ఒక సంవత్సరం, ఏ plan కావాలి?</div>
+        </div>
+        <div class="hint14">If the number is not on any server, she says she could not find it, asks them to say it once more, and after a second miss says the team will call back.</div>
+      </div>
+    </div>
+
     <!-- Phone line -->
     <div id="view-phone" class="hide" style="display:flex;flex-direction:column;gap:20px">
       <div class="head"><div><h1>Phone line</h1><div class="sub">Connect a phone number so real calls reach the agent</div></div></div>
@@ -471,7 +507,7 @@ $('logout').addEventListener('click', async () => { await endCall(); await api('
 
 // ---------- views ----------
 function show(view) {
-  for (const v of ['overview', 'history', 'settings', 'training', 'products', 'phone', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
+  for (const v of ['overview', 'history', 'settings', 'training', 'products', 'phone', 'gps', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
 }
 document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('.nav button').forEach((x) => x.classList.remove('on'));
@@ -480,6 +516,7 @@ document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('clic
   if (b.dataset.view === 'training') loadTraining();
   if (b.dataset.view === 'phone') loadPhone();
   if (b.dataset.view === 'products') loadProducts();
+  if (b.dataset.view === 'gps') loadGps();
   if (b.dataset.view === 'soon') {
     $('soon-title').textContent = b.dataset.name;
     $('soon-text').textContent = b.dataset.name + ' is step ' + b.dataset.step + ' of the build. It is not built yet.';
@@ -1054,6 +1091,57 @@ $('tv-save').addEventListener('click', async () => {
   try { const greet = $('t-greet').value; tr = await api('train_save', { on: $('tv-on').checked ? '1' : '0', nums: $('tv-nums').value }); renderTraining(); $('t-greet').value = greet; toast('Saved.'); }
   catch (err) { toast(err.message); }
 });
+// ---------- GPS servers ----------
+const GS_STATE = { ok: ['Connected', 'good'], badkey: ['Key not accepted', 'bad'], down: ['Could not reach it', 'bad'], nokey: ['No key yet', ''], unknown: ['Not checked yet', ''] };
+function renderGps(list) {
+  const box = $('gs-rows'); box.textContent = '';
+  list.forEach((sv) => {
+    const f = el('div', 'field'), top = el('div', 'thead'); top.style.flexWrap = 'wrap';
+    const lab = el('label', '', 'Server ' + sv.id + ': ' + sv.host); lab.htmlFor = 'gs-' + sv.id;
+    const st = GS_STATE[sv.state] || GS_STATE.unknown;
+    top.appendChild(lab); top.appendChild(el('span', 'pill' + (st[1] ? ' ' + st[1] : ''), st[0]));
+    const inp = el('input'); inp.id = 'gs-' + sv.id; inp.type = 'text'; inp.autocomplete = 'off'; inp.spellcheck = false;
+    inp.placeholder = 'Paste the API key'; inp.value = sv.has_key ? '••••••••••••••••••••' + sv.hint : '';
+    inp.addEventListener('focus', () => { if (inp.value.includes('•')) inp.select(); });
+    f.appendChild(top); f.appendChild(inp); box.appendChild(f);
+  });
+}
+async function loadGps() {
+  try { renderGps((await api('gps_get')).servers); } catch (err) { toast(err.message); }
+}
+$('gs-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const b = $('gs-save'); b.disabled = true; b.textContent = 'Checking the servers';
+  try {
+    const d = await api('gps_save', { k1: $('gs-1').value, k2: $('gs-2').value, k3: $('gs-3').value });
+    renderGps(d.servers);
+    const ok = d.servers.filter((x) => x.state === 'ok').length;
+    toast(ok === d.servers.length ? 'All three servers are connected.' : ok + ' of ' + d.servers.length + ' servers connected. Check the ones marked in red.');
+  } catch (err) { toast(err.message); }
+  b.disabled = false; b.textContent = 'Save and check';
+});
+$('gs-try').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = $('gs-q').value.trim(); if (!q) return;
+  const b = $('gs-go'), out = $('gs-out'); b.disabled = true; b.textContent = 'Searching';
+  try {
+    const r = await api('gps_find', { __get: { q } });
+    out.textContent = ''; out.classList.remove('hide');
+    const head = (t) => { const d = el('div', '', t); d.style.fontWeight = '700'; d.style.fontSize = '16px'; out.appendChild(d); };
+    if (r.status === 'found') {
+      head(r.name || r.number);
+      out.appendChild(ppLine('Found on:', 'Server ' + r.server + ', ' + r.host));
+      const d = r.days, left = d > 1 ? d + ' days left' : d === 1 ? 'expires tomorrow' : d === 0 ? 'expires today' : 'expired ' + (-d) + (d === -1 ? ' day ago' : ' days ago');
+      out.appendChild(ppLine('Expiry date:', r.expiry ? r.expiry_text + ', ' + left : 'Not recorded on the server'));
+      out.appendChild(ppLine('Last signal:', r.last || 'Not known'));
+    } else if (r.status === 'many') { head(r.number); out.appendChild(ppLine('', r.count + ' vehicles match this. Type the full vehicle number.'));
+    } else if (r.status === 'off') { head('No server connected yet'); out.appendChild(ppLine('', 'Paste the API keys above and tap Save and check.'));
+    } else if (r.status === 'down') { head(r.number); out.appendChild(ppLine('', 'Not found, but one of the servers could not be checked just now. Tap Save and check above to see which.'));
+    } else { head(r.number || q); out.appendChild(ppLine('', 'Not found on any connected server.')); }
+  } catch (err) { toast(err.message); }
+  b.disabled = false; b.textContent = 'Search';
+});
+
 // ---------- products and prices ----------
 let pp = { products: [], notes: '', fits: [] }, ppEdit = '', ppFits = [];
 const rupees = (n) => '₹' + Number(n).toLocaleString('en-IN');

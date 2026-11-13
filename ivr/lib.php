@@ -73,7 +73,7 @@ Existing customer, GPS not working or offline:
 Existing customer who wants to renew:
 - They are already our customer, so do not ask which type of vehicle it is, where the vehicle is, or what it is used for.
 - Say sure, and ask only the vehicle number. Repeat the number back and wait for them to confirm it.
-- Then ask which plan they want: three months, six months or one year. The one year plan is one thousand two hundred rupees. If they ask the price of the three or six month plan and you were not told it, say it will be in the payment link.
+{{VEHICLE}}- Then ask which plan they want: three months, six months or one year. The one year plan is one thousand two hundred rupees. If they ask the price of the three or six month plan and you were not told it, say it will be in the payment link.
 - When they have chosen, say you have noted it, that they will get the payment link very soon on WhatsApp and email, and that once they pay, the vehicle is renewed automatically.
 
 Existing customer whose GPS has already stopped because it was not renewed for a long time:
@@ -128,6 +128,7 @@ TXT;
 const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
 const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Once you know the vehicle and the need, suggest the one product from the list that fits that vehicle and need best, with its price and what the price includes. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
 const LEAD_EMAIL = 'info@bharatgpstracker.com';                         // where the summary of every phone call goes
+const VEHICLE_CHECK = "- As soon as they confirm the number, say in a few words that you are checking it, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. The tag is never spoken. Do not ask anything else in that reply. The result of the check then comes to you: tell the caller what it says. Write the tag only once for each number.\n";
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
 const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
 
@@ -284,6 +285,7 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
     }
     $rule = $live ? sprintf(LIVE_LANG_RULE, LIVE_LANGS[$lang]['name']) : ($lang === 'hi' ? OTHER_LANG_HI : OTHER_LANG_TE);
     $p = str_replace(OTHER_LANG_TE, $rule, $p);
+    $p = str_replace('{{VEHICLE}}', $live && gps_on() ? VEHICLE_CHECK : '', $p);
     $cat = catalog();
     $p = str_replace('{{PRICES}}', $cat === '' ? NO_PRICES : HAS_PRICES, $p);
     if ($cat !== '') $p .= "\n\n" . $cat;
@@ -380,6 +382,103 @@ function catalog(): string {
         $rows[] = $line;
     }
     return $rows ? "Products and prices (the owner's own list for phone customers):\n" . implode("\n", $rows) : '';
+}
+
+// ---------- GPS servers ----------
+// The three tracking servers (GPSWOX). She only reads from them: one request per server, the vehicle list.
+// The keys are typed in the dashboard and kept in settings.json, never in this code.
+const GPS_SERVERS = [1 => 'bharatgps.com', 2 => 'bharatgps.in', 3 => 'bharatgps.school'];
+function gps_keys(): array {
+    $k = (array)(settings()['gps_keys'] ?? []);
+    $out = [];
+    foreach (GPS_SERVERS as $id => $host) $out[$id] = trim((string)($k[$id] ?? ''));
+    return $out;
+}
+function gps_on(): bool { return (bool)array_filter(gps_keys()); }
+function plate_key(string $t): string { return preg_replace('~[^A-Z0-9]~', '', strtoupper($t)); }
+
+// A small copy of every server's vehicle list (number, expiry, last signal), refreshed when older than ten minutes.
+function gps_index(bool $fresh = false): array {
+    $c = read_json('gps.json');
+    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 600) return $c;
+    $keys = array_filter(gps_keys());
+    $multi = curl_multi_init(); $hs = [];
+    foreach ($keys as $id => $key) {
+        $ch = curl_init('https://' . GPS_SERVERS[$id] . '/api/get_devices?lang=en&user_api_hash=' . rawurlencode($key));
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => 18, CURLOPT_USERAGENT => 'Mozilla/5.0']);
+        curl_multi_add_handle($multi, $ch); $hs[$id] = $ch;
+    }
+    do { curl_multi_exec($multi, $run); if ($run) curl_multi_select($multi, 1.0); } while ($run > 0);
+    $old = is_array($c) ? $c : [];
+    $new = ['at' => time(), 'servers' => [], 'dev' => []];
+    foreach (GPS_SERVERS as $id => $host) {
+        if (!isset($hs[$id])) { $new['servers'][$id] = ['state' => 'nokey']; continue; }
+        $body = curl_multi_getcontent($hs[$id]); $code = curl_getinfo($hs[$id], CURLINFO_HTTP_CODE);
+        curl_multi_remove_handle($multi, $hs[$id]); curl_close($hs[$id]);
+        $data = is_string($body) ? json_decode($body, true) : null;
+        $groups = is_array($data) && ($data === [] || isset($data[0])) ? $data : null;
+        if ($groups === null) {
+            // Not readable just now: say why, and keep this server's last good list so calls still work.
+            $new['servers'][$id] = ['state' => ($code === 401 || $code === 403 || (is_array($data) && isset($data['status']) && !$data['status'])) ? 'badkey' : 'down', 'count' => 0];
+            foreach ((array)($old['dev'] ?? []) as $d) if (($d[0] ?? 0) === $id) $new['dev'][] = $d;
+            continue;
+        }
+        $n = 0;
+        foreach ($groups as $g) foreach ((array)($g['items'] ?? []) as $dv) {
+            if (!is_array($dv)) continue;
+            $dd = (array)($dv['device_data'] ?? []);
+            $exp = '';
+            foreach (['expiration_date', 'sim_expiration_date'] as $f) { $v = substr((string)($dd[$f] ?? ''), 0, 10); if (preg_match('~^[12]\d{3}-\d\d-\d\d$~', $v)) { $exp = $v; break; } }
+            $name = clean_line($dv['name'] ?? '', 80);
+            $new['dev'][] = [$id, plate_key($name), plate_key((string)($dd['plate_number'] ?? '')), $name, $exp, clean_line((string)($dv['time'] ?? ($dd['time'] ?? '')), 30)];
+            $n++;
+        }
+        $new['servers'][$id] = ['state' => 'ok', 'count' => $n];
+    }
+    curl_multi_close($multi);
+    write_json('gps.json', $new);
+    return $new;
+}
+
+// Find one vehicle number on the servers. status: found, none, many (several vehicles match), off (no key yet), down.
+function gps_find(string $number): array {
+    $q = plate_key($number);
+    if (!gps_on()) return ['status' => 'off'];
+    if (strlen($q) < 4) return ['status' => 'none', 'number' => $q];
+    $ix = gps_index();
+    $exact = []; $part = [];
+    foreach ((array)($ix['dev'] ?? []) as $d) {
+        if ($d[1] === $q || $d[2] === $q) $exact[] = $d;
+        elseif (strlen($q) >= 6 && (strpos($d[1], $q) !== false || ($d[2] !== '' && strpos($d[2], $q) !== false))) $part[] = $d;
+    }
+    $hit = $exact ?: $part;
+    if (!$hit) {
+        $down = array_filter((array)($ix['servers'] ?? []), fn($x) => in_array($x['state'] ?? '', ['down', 'badkey'], true));
+        return ['status' => $down ? 'down' : 'none', 'number' => $q];
+    }
+    if (count($hit) > 1) return ['status' => 'many', 'number' => $q, 'count' => count($hit)];
+    [$id, , , $name, $exp, $last] = $hit[0];
+    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last];
+    if ($exp !== '') {
+        $r['days'] = (int)(new DateTime('today'))->diff(new DateTime($exp))->format('%r%a');
+        $r['expiry_text'] = date('j F Y', strtotime($exp));
+    }
+    return $r;
+}
+
+// The result in words, for her.
+function gps_result_text(array $r): string {
+    $n = $r['number'] ?? '';
+    switch ($r['status']) {
+        case 'found':
+            if (($r['expiry'] ?? '') === '') return "Vehicle $n is on our server, but no expiry date is recorded for it. Tell the caller the vehicle is found and that the team will confirm the expiry date, then continue.";
+            $d = $r['days'];
+            $when = $d > 1 ? "$d days from today" : ($d === 1 ? 'tomorrow' : ($d === 0 ? 'today' : ($d === -1 ? 'yesterday, so it has already expired' : 'which was ' . (-$d) . ' days ago, so it has already expired')));
+            return "Vehicle $n is found on our server. Its expiry date is {$r['expiry_text']}, $when. Tell the caller this in simple words, then continue.";
+        case 'many': return "More than one vehicle matches $n. Ask the caller to say the full vehicle number once more, slowly.";
+        case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.";
+        default: return "Vehicle $n was not found on any of our servers. Tell the caller you could not find it and ask them to say the number once more. If it is not found a second time, say the team will call them back.";
+    }
 }
 
 // ---------- lead email ----------

@@ -16,7 +16,7 @@ function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
 $writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
-    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes'];
+    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes', 'gps_save'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -78,7 +78,7 @@ if ($action === 'phone_config') {
     out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id']] + live_payload($lang, $trainer));
 }
 
-if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_rule') {
+if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_rule' || $action === 'live_vehicle') {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
     $tok = (string)($_POST['token'] ?? '');
     $all = read_json('live.json');
@@ -95,6 +95,16 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
         $all[$tok]['trainer'] = $trainer;
         write_json('live.json', $all);
         out(['greeting' => $greeting, 'call_id' => $call['id']] + live_payload($lang, $trainer));
+    }
+    if ($action === 'live_vehicle') {   // the caller confirmed a vehicle number: look it up on the GPS servers
+        if (empty($all[$tok]['call_id'])) fail('Bad token.', 403);
+        $n = (int)($all[$tok]['lookups'] ?? 0);
+        if ($n >= 6) fail('Too many checks on this call.', 429);
+        $all[$tok]['lookups'] = $n + 1;
+        write_json('live.json', $all);
+        session_write_close();
+        $r = gps_find((string)($_POST['number'] ?? ''));
+        out(['status' => $r['status'], 'text' => gps_result_text($r)]);
     }
     if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes
         if (empty($all[$tok]['trainer'])) fail('This call cannot teach her.', 403);
@@ -361,6 +371,34 @@ case 'train_save':   // who may teach her by voice
     $s['train_nums'] = array_slice($nums, 0, 10);
     write_json('settings.json', $s);
     out(training());
+
+case 'gps_get':
+case 'gps_save':
+    if ($action === 'gps_save') {
+        $s = settings(); $keys = gps_keys();
+        foreach (GPS_SERVERS as $id => $host) {
+            $v = trim((string)($_POST['k' . $id] ?? ''));
+            if ($v === '' || strpos($v, '•') !== false) continue;   // empty or still the hidden one: keep what is saved
+            if ($v === '-') { $keys[$id] = ''; continue; }           // a single dash removes the key
+            if (strlen($v) < 20 || strlen($v) > 200 || preg_match('~\s~', $v)) fail('The key for ' . $host . ' does not look right. Paste the full API key.');
+            $keys[$id] = $v;
+        }
+        $s['gps_keys'] = $keys; write_json('settings.json', $s);
+        session_write_close();
+        $ix = gps_index(true);
+    } else { $ix = read_json('gps.json'); }
+    $rows = [];
+    foreach (GPS_SERVERS as $id => $host) {
+        $key = gps_keys()[$id];
+        $st = (array)($ix['servers'][$id] ?? []);
+        $rows[] = ['id' => $id, 'host' => $host, 'has_key' => $key !== '', 'hint' => $key !== '' ? substr($key, -4) : '',
+            'state' => $key === '' ? 'nokey' : ($st['state'] ?? 'unknown'), 'count' => (int)($st['count'] ?? 0)];
+    }
+    out(['servers' => $rows]);
+
+case 'gps_find':
+    session_write_close();
+    out(gps_find((string)($_GET['q'] ?? '')));
 
 case 'products_get':
     $n = import_site_products();   // the website's products are copied in once, the first time this page opens

@@ -25,8 +25,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 // ---------- dashboard ----------
-async function ivr(action, fields) {
-  const r = await fetch(IVR_API + '?action=' + action, { method: 'POST', body: new URLSearchParams(fields), signal: AbortSignal.timeout(8000) });
+async function ivr(action, fields, ms) {
+  const r = await fetch(IVR_API + '?action=' + action, { method: 'POST', body: new URLSearchParams(fields), signal: AbortSignal.timeout(ms || 8000) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || 'Dashboard answered ' + r.status);
   return d;
@@ -136,8 +136,8 @@ async function chatOnce(cfg, messages, signal) {
   return String((await r.json()).choices?.[0]?.message?.content || '');
 }
 
-// What she may say aloud: her private thinking and a "remember this rule" tag are taken out.
-const cleanReply = (raw) => raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/\[\[RULE:[\s\S]*?(\]\]|$)/g, '').replace(/[*#`_]/g, '');
+// What she may say aloud: her private thinking, a "remember this rule" tag and a "check this vehicle" tag are taken out.
+const cleanReply = (raw) => raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/\[\[(RULE|VEHICLE):[\s\S]*?(\]\]|$)/g, '').replace(/[*#`_]/g, '');
 
 // ---------- sir or madam ----------
 // How high the caller's voice is, measured on short slices of what they said. A phone line removes the
@@ -299,14 +299,16 @@ async function speechEnd(S) {
   S.replying = reply(S, hearMs, ack).catch((e) => log('reply crashed:', e.message));
 }
 
-async function reply(S, hearMs, ack) {
+async function reply(S, hearMs, ack, afterCheck) {
   const g = S.gen, t1 = Date.now(), lang = S.lang;
   const ctrl = new AbortController(); S.abort = ctrl;
   let system = (S.cfg.prompts && S.cfg.prompts[lang]) || S.cfg.prompt;
   if (S.gender) system += "\n\nThe caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.';
   if (ack) system += '\n\nYou have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.';
+  if (S.vehicle) system += '\n\nResult of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this number again.';
   const messages = [{ role: 'system', content: system }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
+  if (afterCheck) messages.push({ role: 'user', content: '(The vehicle check has finished. Tell the caller the result now.)' });
   let raw = '', done = 0, queued = 0, first = true, tThink = 0, problem = null;
   const said = [];
   let chain = Promise.resolve();
@@ -364,12 +366,24 @@ async function reply(S, hearMs, ack) {
   } else if (g === S.gen) {
     send(S, { type: 'error', message: problem ? problem.message : 'Thinking failed: the model sent an empty reply.' });
   }
+
+  // She asked for a vehicle to be checked: search the GPS servers, then let her tell the caller what was found.
+  const veh = (raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').match(/\[\[VEHICLE:\s*([A-Za-z0-9 -]{4,24})\]\]/) || [])[1];
+  if (veh && !afterCheck && S.checks < 4) {
+    S.checks++;
+    const number = veh.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    let found;
+    try { found = await ivr('live_vehicle', { token: S.token, number }, 22000); log('call', S.cfg.call_id, 'vehicle check', number, found.status); }
+    catch (e) { log('vehicle check failed:', e.message); found = { text: 'The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.' }; }
+    S.vehicle = found.text || '';
+    if (g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
+  }
 }
 
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '' };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0 };
 }
 
 function greet(S) {
