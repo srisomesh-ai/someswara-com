@@ -202,6 +202,9 @@ function warmAcks(S, lang) {
   }
 }
 
+// A reply that opens with the same kind of reaction she has just spoken ("ok sir. సరే అండి, ...") sounds like a repeat.
+const SAME_START = /^\s*(ఓకే|ఒకే|సరే|అలాగే|హా|ok|okay|sure|alright|ओके|जी|ठीक है|अच्छा)(\s+(అండి|సర్|మేడమ్|మేడం|sir|madam|सर|मैडम|जी))?\s*[,.!।]\s*/i;
+
 // Plays one if it is ready and returns the words; never waits for one.
 function sayAck(S) {
   const list = ACKS[S.lang] && ACKS[S.lang][S.gender];
@@ -309,12 +312,18 @@ async function reply(S, hearMs, ack, afterCheck) {
   const messages = [{ role: 'system', content: system }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
   if (afterCheck) messages.push({ role: 'user', content: '(The vehicle check has finished. Tell the caller the result now.)' });
-  let raw = '', done = 0, queued = 0, first = true, tThink = 0, problem = null;
+  let raw = '', done = 0, queued = 0, first = true, tThink = 0, problem = null, onlyAck = false;
   const said = [];
   let chain = Promise.resolve();
 
   // Start turning a sentence into speech straight away, but deliver the sentences in order.
   const speak = (sentence) => {
+    if (ack && !queued) {                    // she has just said "ok sir" aloud: do not open the answer with it again
+      for (let i = 0; i < 2; i++) sentence = sentence.replace(SAME_START, '');
+      sentence = sentence.trim();
+      if (sentence.replace(/[\s,.!?।]/g, '').length < 2) { onlyAck = true; return; }
+      sentence = sentence[0].toUpperCase() + sentence.slice(1);
+    }
     queued++;
     if (!tThink) tThink = Date.now();
     const tS = Date.now();
@@ -347,7 +356,7 @@ async function reply(S, hearMs, ack, afterCheck) {
     for await (const piece of chatStream(S.cfg, messages, ctrl.signal)) { if (g !== S.gen) break; raw += piece; emit(false); }
     if (g === S.gen) emit(true);
   } catch (e) { problem = problem || e; }
-  if (!queued && g === S.gen) {              // nothing came from the quick model: ask the main one
+  if (!queued && !onlyAck && g === S.gen) {  // nothing came from the quick model: ask the main one
     try { raw = await chatOnce(S.cfg, messages, ctrl.signal); done = 0; emit(true); problem = queued ? null : problem; }
     catch (e) { problem = problem || e; }
   }
@@ -363,7 +372,7 @@ async function reply(S, hearMs, ack, afterCheck) {
     S.turns.push({ who: 'agent', text });
     await syncCall(S, false);
     send(S, { type: 'reply_done', text, turn: S.turns.length - 1 });
-  } else if (g === S.gen) {
+  } else if (g === S.gen && !onlyAck) {
     send(S, { type: 'error', message: problem ? problem.message : 'Thinking failed: the model sent an empty reply.' });
   }
 
