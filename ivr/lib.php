@@ -1,7 +1,24 @@
 <?php
 // Bharat GPS Tracker AI call agent: shared helpers (settings, login, call log, Sarvam API).
 
-const DATA_DIR = __DIR__ . '/data';
+// Where the settings, call log and training are kept. A deploy replaces the website folder and was wiping
+// what was saved inside it, so the data lives next to the website folder, outside what a deploy touches.
+// If that place cannot be used, it falls back to the data folder inside the dashboard.
+function pick_data_dir(): string {
+    $old = __DIR__ . '/data';
+    $root = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+    if ($root !== '' && strpos(__DIR__, $root) === 0) {
+        $new = dirname($root) . '/ivr-data';
+        if ((@is_dir($new) || @mkdir($new, 0700, true)) && @is_writable($new)) {
+            if (!@is_file("$new/settings.json")) {          // first time: bring along what is already saved
+                foreach ((array)glob("$old/*.json") as $f) @copy($f, "$new/" . basename($f));
+            }
+            return $new;
+        }
+    }
+    return $old;
+}
+define('DATA_DIR', pick_data_dir());
 const MAX_CALLS = 500;
 const LIVE_URL = 'wss://call.someswara.com/live';   // the live call server on the VPS (ivr/live/)
 const PHONE_URL = 'wss://call.someswara.com/phone'; // where Exotel sends real phone calls on that server
@@ -100,8 +117,10 @@ function read_json(string $file, $default = []) {
 
 function write_json(string $file, $data): void {
     $p = DATA_DIR . "/$file";
-    file_put_contents("$p.tmp", json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
-    rename("$p.tmp", $p);
+    // Each save writes its own temporary file, then swaps it in whole. Two saves at the same moment
+    // (a phone call and the dashboard) can no longer leave a half-written file behind.
+    $tmp = $p . '.' . bin2hex(random_bytes(4)) . '.tmp';
+    if (file_put_contents($tmp, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) === false || !rename($tmp, $p)) @unlink($tmp);
 }
 
 function settings(): array { return read_json('settings.json'); }

@@ -18,12 +18,14 @@ the real phone line will be.
 - `index.php`: the dashboard page
 - `api.php`: login, settings, test-call backend, call log
 - `lib.php`: helpers, the agent's instructions (`SYSTEM_PROMPT`) and greeting
-- `data/`: settings and call log, blocked from the web and not in git
+- Saved data (settings, call log, training) lives in `ivr-data/` next to the website folder, outside
+  what a deploy replaces. `data/` inside this folder is only the fallback, blocked from the web and not in git
 
 ## Notes
-- Forgot the password: delete `data/settings.json` in File Manager and set up again.
-- The folder can be moved to another path or site as it is. Copy `data/` to keep the
-  settings and call log.
+- Forgot the password: delete `settings.json` in the `ivr-data` folder (File Manager, one level above
+  `public_html`) and set up again.
+- The folder can be moved to another path or site as it is. Copy the `ivr-data` folder
+  to keep the settings and call log.
 - Not built yet: products and prices, script editor, phone line, leads, staff transfer.
 
 ## Live call server (ivr/live/)
