@@ -82,7 +82,8 @@ Existing customer whose GPS has already stopped because it was not renewed for a
 
 Always:
 - Never invent a feature, a price, a charge or a promise. For any charge you were not told, say the team will confirm it.
-- Repeat a vehicle number back to the caller once to confirm it.
+- Repeat a vehicle number back to the caller once to confirm it. A vehicle number is always said in English, one letter and one digit at a time, whatever language the call is in. Write it exactly like this: A P, three nine, W A, one five seven five. Never say it as Telugu or Hindi number words, and never join the digits into a big number.
+- Callers say the number in many ways: letters in any language, digits one by one or in pairs like fifteen seventy five or పదిహేను డెబ్బై ఐదు. An Indian vehicle number is two letters for the state, two digits, one to three letters, then four digits. Work out the number in that shape before you repeat it.
 - If the caller is angry or asks something you do not know, say our team will call them back shortly on this number.
 - If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.
 - If the caller asks whether you are a person or a machine, say honestly that you are the AI assistant of Bharat GPS Tracker.
@@ -452,13 +453,31 @@ function gps_find(string $number): array {
         elseif (strlen($q) >= 6 && (strpos($d[1], $q) !== false || ($d[2] !== '' && strpos($d[2], $q) !== false))) $part[] = $d;
     }
     $hit = $exact ?: $part;
+    $near = false;
+    if (!$hit && ($want = plate_parts($q))) {
+        // Heard over the phone, one letter is easily wrong (W for V, B for D). If exactly one vehicle has the same
+        // state, district and four-digit number and differs only in the letters between, or only in the district
+        // number, take it as the closest match and let her confirm the real number with the caller.
+        $series = []; $district = [];
+        foreach ((array)($ix['dev'] ?? []) as $d) {
+            foreach ([$d[1], $d[2]] as $k) {
+                $have = $k !== '' ? plate_parts($k) : null;
+                if (!$have || $have[0] !== $want[0] || $have[3] !== $want[3]) continue;
+                if ($have[1] === $want[1] && $have[2] === $want[2]) { $exact[] = $d; break; }   // same number written with or without zeros
+                if ($have[1] === $want[1] && strlen($have[2]) === strlen($want[2]) && levenshtein($have[2], $want[2]) <= 1) { $series[] = $d; break; }
+                if ($have[2] === $want[2] && $want[2] !== '') { $district[] = $d; break; }
+            }
+        }
+        $hit = $exact ?: (count($series) === 1 ? $series : (!$series && count($district) === 1 ? $district : []));
+        $near = !$exact && (bool)$hit;
+    }
     if (!$hit) {
         $down = array_filter((array)($ix['servers'] ?? []), fn($x) => in_array($x['state'] ?? '', ['down', 'badkey'], true));
         return ['status' => $down ? 'down' : 'none', 'number' => $q];
     }
     if (count($hit) > 1) return ['status' => 'many', 'number' => $q, 'count' => count($hit)];
     [$id, , , $name, $exp, $last] = $hit[0];
-    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last];
+    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near];
     if ($exp !== '') {
         $r['days'] = (int)(new DateTime('today'))->diff(new DateTime($exp))->format('%r%a');
         $r['expiry_text'] = date('j F Y', strtotime($exp));
@@ -466,9 +485,18 @@ function gps_find(string $number): array {
     return $r;
 }
 
+// AP39WA1575 -> [AP, 39, WA, 1575]; null when the text is not a vehicle number.
+function plate_parts(string $k): ?array {
+    return preg_match('~([A-Z]{2})0?(\d{1,2})([A-Z]{0,3})0*(\d{1,4})(?!\d)~', $k, $m) ? [$m[1], (string)(int)$m[2], $m[3], (string)(int)$m[4]] : null;
+}
+
 // The result in words, for her.
 function gps_result_text(array $r): string {
     $n = $r['number'] ?? '';
+    if ($r['status'] === 'found' && !empty($r['near'])) {
+        $exp = ($r['expiry'] ?? '') !== '' ? " If they say yes, its expiry date is {$r['expiry_text']}" . ($r['days'] < 0 ? ', so it has already expired' : '') . ', and you continue.' : ' If they say yes, say the team will confirm the expiry date, and continue.';
+        return "$n itself is not on our server, but there is one very close number: {$r['name']}. Ask the caller whether {$r['name']} is their vehicle number, saying it letter by letter.$exp If they say no, ask them to say the number once more.";
+    }
     switch ($r['status']) {
         case 'found':
             if (($r['expiry'] ?? '') === '') return "Vehicle $n is on our server, but no expiry date is recorded for it. Tell the caller the vehicle is found and that the team will confirm the expiry date, then continue.";

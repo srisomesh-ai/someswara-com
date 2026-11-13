@@ -1130,6 +1130,7 @@ $('gs-try').addEventListener('submit', async (e) => {
     const head = (t) => { const d = el('div', '', t); d.style.fontWeight = '700'; d.style.fontSize = '16px'; out.appendChild(d); };
     if (r.status === 'found') {
       head(r.name || r.number);
+      if (r.near) out.appendChild(ppLine('', r.number + ' is not on the servers. This is the closest match; on a call she asks the customer to confirm it.'));
       out.appendChild(ppLine('Found on:', 'Server ' + r.server + ', ' + r.host));
       const d = r.days, left = d > 1 ? d + ' days left' : d === 1 ? 'expires tomorrow' : d === 0 ? 'expires today' : 'expired ' + (-d) + (d === -1 ? ' day ago' : ' days ago');
       out.appendChild(ppLine('Expiry date:', r.expiry ? r.expiry_text + ', ' + left : 'Not recorded on the server'));
