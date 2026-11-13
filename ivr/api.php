@@ -126,6 +126,8 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
     if ($turns) $call['turns'] = array_slice($turns, 0, 200);
     $call['last'] = time();
     if (($_POST['ended'] ?? '') === '1' && empty($call['ended'])) $call['ended'] = time();
+    // A real phone call has ended: send the team its summary once. The owner's own training calls are left out.
+    if (!empty($call['ended']) && !empty($call['phone']) && empty($call['mailed']) && empty($all[$tok]['trainer'])) $call['mailed'] = lead_mail($call) ? 1 : -1;
     call_save($call);
     out(['ok' => true]);
 }

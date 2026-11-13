@@ -57,7 +57,7 @@ How to speak:
 What to do on the call:
 - First find out which vehicle the tracker is for, then what the customer is worried about (theft, where it is parked, tracking a driver, family safety).
 - Then suggest in simple words what kind of tracker suits them, and say that live location is seen in the mobile app.
-- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.
+{{PRICES}}
 - Never invent a feature, a price or a promise.
 - If the caller is angry, has a complaint about a device they already have, or asks something you do not know, say you will connect them to the team.
 - If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.
@@ -101,6 +101,10 @@ TRAINING MODE. The person on this call is the owner of the business, and he is t
 3. If he says no, or corrects what you understood, go back to step 1.
 Never write [[RULE: ...]] unless he has just said yes. The tag is not spoken; do not mention it. After that, wait for him to carry on as a customer.
 TXT;
+const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
+const HAS_PRICES = '- Our products and prices are listed at the end. Every price there already includes GST, so say it as the final price. Once you know the vehicle and the need, suggest the one product that fits best, with its price. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
+const SITE_FEED = 'https://bharatgpstracker.com/api.php?action=site';   // the website's own product list; prices there are before GST
+const LEAD_EMAIL = 'info@bharatgpstracker.com';                         // where the summary of every phone call goes
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
 const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
 
@@ -257,6 +261,9 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
     }
     $rule = $live ? sprintf(LIVE_LANG_RULE, LIVE_LANGS[$lang]['name']) : ($lang === 'hi' ? OTHER_LANG_HI : OTHER_LANG_TE);
     $p = str_replace(OTHER_LANG_TE, $rule, $p);
+    $cat = catalog();
+    $p = str_replace('{{PRICES}}', $cat === '' ? NO_PRICES : HAS_PRICES, $p);
+    if ($cat !== '') $p .= "\n\n" . $cat;
     if ($trainer) $p .= TRAIN_BLOCK;
     if (!$t['rules'] && !$t['examples']) return $p;
     $p .= "\n\nThe owner of the business has trained you with the rules and examples below. If any of them conflicts with the instructions above, follow the owner's.";
@@ -266,6 +273,101 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
         foreach ($t['examples'] as $e) $p .= "\nCustomer: " . ($e['q'] ?? '') . "\nYou: " . ($e['a'] ?? '');
     }
     return $p;
+}
+
+// ---------- products and prices ----------
+// A price the way it is said on the phone: 1769 -> "one thousand seven hundred sixty nine".
+function num_words(int $n): string {
+    $one = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen',
+        'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+    $ten = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    if ($n <= 0) return 'zero';
+    $w = [];
+    foreach ([[100000, 'lakh'], [1000, 'thousand'], [100, 'hundred']] as [$size, $name]) {
+        if ($n >= $size) { $w[] = num_words(intdiv($n, $size)) . ' ' . $name; $n %= $size; }
+    }
+    if ($n >= 20) { $w[] = trim($ten[intdiv($n, 10)] . ' ' . $one[$n % 10]); }
+    elseif ($n > 0) $w[] = $one[$n];
+    return implode(' ', $w);
+}
+
+// The website's product list as text for her instructions, with GST already added. Read from the website at most
+// once in ten minutes; if the website cannot be reached the last good list is used, and '' means there is none yet.
+function catalog(): string {
+    $c = read_json('catalog.json');
+    if (is_array($c) && ($c['at'] ?? 0) > time() - 600) return (string)($c['text'] ?? '');
+    $ch = curl_init(SITE_FEED);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 6, CURLOPT_FOLLOWLOCATION => true]);
+    $raw = curl_exec($ch);
+    curl_close($ch);
+    $d = is_string($raw) ? json_decode($raw, true) : null;
+    $text = is_array($d) ? catalog_text($d) : '';
+    if ($text === '') {   // not reachable just now: keep what we had and try again in two minutes
+        $text = (string)($c['text'] ?? '');
+        write_json('catalog.json', ['at' => time() - 480, 'text' => $text, 'ok' => (int)($c['ok'] ?? 0)]);
+        return $text;
+    }
+    write_json('catalog.json', ['at' => time(), 'text' => $text, 'ok' => time()]);
+    return $text;
+}
+
+function catalog_text(array $d): string {
+    $pay = (array)($d['pay'] ?? []);
+    $gst = !empty($pay['gst']);   // the website adds 18% GST at checkout; she says the price with it included
+    $rs = function (int $p) use ($gst): string { $p = $gst ? (int)round($p * 1.18) : $p; return 'Rs ' . $p . ' (' . num_words($p) . ')'; };
+    $rows = [];
+    foreach ((array)($d['products'] ?? []) as $p) {
+        if (!is_array($p) || empty($p['visible']) || ($p['stock'] ?? '') === 'Out of stock') continue;
+        $name = clean_line($p['name'] ?? '', 90);
+        $types = [];
+        foreach ((array)($p['variants'] ?? []) as $v) {
+            if (!is_array($v) || !empty($v['out']) || (int)($v['p'] ?? 0) <= 0) continue;
+            $types[] = [clean_line($v['n'] ?? '', 50), (int)$v['p']];
+        }
+        if (!$types && (int)($p['price'] ?? 0) > 0) $types[] = ['', (int)$p['price']];
+        if ($name === '' || !$types) continue;
+        if (count($types) === 1) $price = $rs($types[0][1]);
+        else $price = implode('; ', array_map(fn($t) => ($t[0] !== '' ? $t[0] : 'Standard') . ' ' . $rs($t[1]), array_slice($types, 0, 6)));
+        $line = '- ' . $name . ': ' . $price . '.';
+        $about = clean_line($p['subtitle'] ?? '', 140);
+        $simple = array_slice(array_values(array_filter(array_map(fn($x) => clean_line($x, 90), (array)($p['simple'] ?? [])))), 0, 3);
+        if ($about !== '') $line .= ' ' . rtrim($about, '.') . '.';
+        if ($simple) $line .= ' ' . implode('. ', array_map(fn($x) => rtrim($x, '.'), $simple)) . '.';
+        if (!empty($p['activation'])) $line .= ' Activated online, nothing is delivered.';
+        $rows[] = $line;
+        if (count($rows) >= 30) break;
+    }
+    if (!$rows) return '';
+    $t = "Products and prices (from our website, every price includes GST):\n" . implode("\n", $rows);
+    $t .= "\nDelivery is free.";
+    if (!empty($pay['cod'])) $t .= ' Cash on delivery is available' . ((int)($pay['cod_fee'] ?? 0) > 0 ? ' for Rs ' . (int)$pay['cod_fee'] . ' (' . num_words((int)$pay['cod_fee']) . ') extra' : '') . '.';
+    $areas = array_values(array_filter((array)($pay['areas'] ?? []), 'is_string'));
+    if (!empty($pay['install']) && $areas) {
+        $fee = (int)($pay['install_fee'] ?? 0);
+        $t .= "\nInstallation by our technician at the customer's place" . ($fee > 0 ? ' costs Rs ' . $fee . ' (' . num_words($fee) . ')' : ' is free')
+            . ' in these PIN codes: ' . mb_substr(implode(', ', $areas), 0, 400) . '. Ask the PIN code before promising installation. For any other place, say the team will confirm installation on WhatsApp.';
+    }
+    return $t;
+}
+
+// ---------- lead email ----------
+// One email to the team after every real phone call: who called, what they asked, and the full talk.
+function lead_mail(array $c): bool {
+    $from = (string)($c['from'] ?? '');
+    $num = $from !== '' ? '+91 ' . substr($from, 0, 5) . ' ' . substr($from, 5) : 'Number not shown';
+    $s = call_summary($c);
+    $answered = !isset($c['answered']) || $c['answered'];
+    $spoke = $s['asked'] !== '';
+    $what = !$answered ? 'Missed call, she asked them to wait for a call back' : ($spoke ? 'New call lead' : 'Caller hung up without speaking');
+    $body = "$what\n\nCaller: $num\nTime: " . date('j M Y, g:i A', (int)$c['started']) . "\nLength: {$s['seconds']} seconds\n";
+    if ($from !== '') $body .= "Call back: tel:+91$from\nWhatsApp: https://wa.me/91$from\n";
+    if ($spoke) $body .= "First thing they said: {$s['asked']}\n";
+    $body .= "\nThe call:\n";
+    foreach ($c['turns'] as $t) $body .= ($t['who'] === 'agent' ? 'Agent: ' : 'Caller: ') . $t['text'] . "\n";
+    $host = preg_replace('~[^a-z0-9.-]~', '', strtolower(preg_replace('~^www\.|:\d+$~', '', (string)($_SERVER['HTTP_HOST'] ?? '')))) ?: 'someswara.com';
+    $subject = '=?UTF-8?B?' . base64_encode("$what: $num") . '?=';
+    $headers = "From: Bharat GPS call agent <noreply@$host>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64";
+    return function_exists('mail') && @mail(LEAD_EMAIL, $subject, chunk_split(base64_encode($body)), $headers);
 }
 
 // ---------- HTTP ----------

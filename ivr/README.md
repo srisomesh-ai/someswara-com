@@ -26,7 +26,9 @@ the real phone line will be.
   `public_html`) and set up again.
 - The folder can be moved to another path or site as it is. Copy the `ivr-data` folder
   to keep the settings and call log.
-- Not built yet: products and prices, script editor, phone line, leads, staff transfer.
+- Prices: she reads the product list from bharatgpstracker.com (`SITE_FEED` in `lib.php`, refreshed every ten minutes) and says prices with GST included.
+- Lead email: after every real phone call a summary goes to `LEAD_EMAIL` (`lib.php`).
+- Not built yet: leads page, staff transfer.
 
 ## Live call server (ivr/live/)
 Talk tests use a small Node server on a VPS when it is reachable (`LIVE_URL` in `lib.php`), and fall
