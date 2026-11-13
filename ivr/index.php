@@ -308,22 +308,25 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
 
     <!-- Phone line -->
     <div id="view-phone" class="hide" style="display:flex;flex-direction:column;gap:20px">
-      <div class="head"><div><h1>Phone line</h1><div class="sub">Connect an Exotel number so real calls reach the agent</div></div></div>
+      <div class="head"><div><h1>Phone line</h1><div class="sub">Connect a phone number so real calls reach the agent</div></div></div>
       <div class="card stack">
-        <div class="thead"><h2>1. Connect Exotel to the agent</h2><span class="pill" id="p-status">No phone call received yet</span></div>
+        <div class="thead"><h2>1. Connect your phone company</h2><span class="pill" id="p-status">No phone call received yet</span></div>
         <div class="field">
-          <label for="p-url">Address for the Exotel Voicebot applet</label>
+          <span class="lbl">Which phone company?</span>
+          <div class="seg" role="group" aria-label="Phone company">
+            <button type="button" id="p-vobiz" class="on" aria-pressed="true">Vobiz</button>
+            <button type="button" id="p-exotel" aria-pressed="false">Exotel</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="p-url" id="p-url-label">Answer URL for your Vobiz application</label>
           <div class="inline">
             <input id="p-url" type="text" readonly style="background:var(--bg);font-size:14px">
             <button type="button" class="btn-save" id="p-copy">Copy</button>
           </div>
           <span class="hint">Keep this address private. Anyone who has it can send calls to the agent.</span>
         </div>
-        <ol class="steps">
-          <li>In Exotel, open App Bazaar and create a new app.</li>
-          <li>Add the Voicebot applet and paste the address above.</li>
-          <li>Assign the app to your test number and call it.</li>
-        </ol>
+        <ol class="steps" id="p-steps"></ol>
         <div><button type="button" class="btn" id="p-new">Make a new address</button></div>
       </div>
       <div class="card stack">
@@ -860,8 +863,35 @@ $('talk').addEventListener('click', startCall);
 $('end').addEventListener('click', endCall);
 
 // ---------- phone line ----------
+// The same secret key works for both phone companies; only the address and the steps differ.
+const PROVIDERS = {
+  vobiz: { field: 'vobiz_url', label: 'Answer URL for your Vobiz application', steps: [
+    'In Vobiz, open Applications and create a new application.',
+    'Paste the address above as the Answer URL, method POST, and save.',
+    "Open your number's settings, attach it to that application, and call it."] },
+  exotel: { field: 'url', label: 'Address for the Exotel Voicebot applet', steps: [
+    'In Exotel, open App Bazaar and create a new app.',
+    'Add the Voicebot applet and paste the address above.',
+    'Assign the app to your test number and call it.'] },
+};
+let phoneInfo = null, provider = 'vobiz';
+try { if (localStorage.getItem('ivr-provider') === 'exotel') provider = 'exotel'; } catch (e) {}
+function showProvider() {
+  const P = PROVIDERS[provider];
+  for (const k of ['vobiz', 'exotel']) { $('p-' + k).classList.toggle('on', k === provider); $('p-' + k).setAttribute('aria-pressed', k === provider); }
+  $('p-url-label').textContent = P.label;
+  if (phoneInfo) $('p-url').value = phoneInfo[P.field];
+  $('p-steps').textContent = '';
+  for (const t of P.steps) { const li = document.createElement('li'); li.textContent = t; $('p-steps').appendChild(li); }
+}
+for (const k of ['vobiz', 'exotel']) $('p-' + k).addEventListener('click', () => {
+  provider = k;
+  try { localStorage.setItem('ivr-provider', k); } catch (e) {}
+  showProvider();
+});
+
 function renderPhone(p) {
-  $('p-url').value = p.url;
+  phoneInfo = p; showProvider();
   $('p-status').textContent = p.last ? 'Last phone call: ' + when(p.last) : 'No phone call received yet';
   $('p-test').checked = p.mode !== 'all'; $('p-all').checked = p.mode === 'all';
   $('p-nums').value = p.tests;
@@ -873,8 +903,8 @@ $('p-copy').addEventListener('click', async () => {
   toast('Address copied.');
 });
 $('p-new').addEventListener('click', async () => {
-  if (!confirm('Make a new address? The old one stops working, and you must paste the new one into Exotel.')) return;
-  try { renderPhone(await api('phone_newkey', {})); toast('New address made. Paste it into Exotel.'); } catch (err) { toast(err.message); }
+  if (!confirm('Make a new address? The old one stops working, and you must paste the new one at your phone company.')) return;
+  try { renderPhone(await api('phone_newkey', {})); toast('New address made. Paste it at your phone company.'); } catch (err) { toast(err.message); }
 });
 $('p-save').addEventListener('click', async () => {
   try { renderPhone(await api('phone_save', { mode: $('p-all').checked ? 'all' : 'test', tests: $('p-nums').value })); toast('Saved.'); }
