@@ -143,10 +143,23 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
     if ($turns) $call['turns'] = array_slice($turns, 0, 200);
     $call['last'] = time();
     if (($_POST['ended'] ?? '') === '1' && empty($call['ended'])) $call['ended'] = time();
-    // A real phone call has ended: send the team its summary once. The owner's own training calls are left out.
-    if (!empty($call['ended']) && !empty($call['phone']) && empty($call['mailed']) && empty($all[$tok]['trainer'])) $call['mailed'] = lead_mail($call) ? 1 : -1;
+    // A real phone call has ended: understand it, raise a task if the team has work, and email the team, once.
+    // The owner's own training calls are left out. The call server gets its answer first; the rest takes a few seconds.
+    $wrap = !empty($call['ended']) && !empty($call['phone']) && empty($call['mailed']) && empty($all[$tok]['trainer']);
+    if ($wrap) $call['mailed'] = 2;   // being done
     call_save($call);
-    out(['ok' => true]);
+    if (!$wrap) out(['ok' => true]);
+    ignore_user_abort(true); @set_time_limit(90);
+    $body = json_encode(['ok' => true]);
+    header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store'); header('Content-Length: ' . strlen($body)); header('Connection: close');
+    echo $body;
+    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    elseif (function_exists('litespeed_finish_request')) litespeed_finish_request();
+    else { while (ob_get_level()) ob_end_flush(); flush(); }
+    $keep = call_wrap($call);
+    $fresh = call_find($call['id']) ?: $call;
+    call_save($keep + $fresh);
+    exit;
 }
 
 if (!logged_in()) fail('Log in first.', 401);

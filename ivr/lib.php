@@ -582,22 +582,107 @@ function gps_result_text(array $r): string {
     }
 }
 
+// ---------- after a phone call ----------
+// TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
+const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
+
+// The pass for TaskManager: made here once and kept in settings.json. TaskManager remembers the first key it is shown.
+function task_key(): string {
+    $s = settings();
+    if (empty($s['task_key'])) { $s['task_key'] = bin2hex(random_bytes(32)); write_json('settings.json', $s); }
+    return (string)$s['task_key'];
+}
+
+// Read the finished call once more and say what it was: which kind of request, and the details the caller gave.
+function call_extract(array $c): array {
+    $none = ['type' => 'none', 'name' => '', 'vehicle' => '', 'location' => '', 'product' => '', 'plan' => '', 'summary' => ''];
+    $talk = '';
+    foreach ((array)$c['turns'] as $t) $talk .= (($t['who'] ?? '') === 'agent' ? 'Agent: ' : 'Caller: ') . $t['text'] . "\n";
+    if (!array_filter((array)$c['turns'], fn($t) => ($t['who'] ?? '') === 'caller')) return $none;
+    $ask = "Below is a phone call between the AI assistant of Bharat GPS Tracker (Agent) and a caller. Read it and reply with one JSON object only, no other words.\n"
+        . "Fields:\n"
+        . "\"type\": exactly one of these words.\n"
+        . "  \"renewal\": an existing customer wants to renew their GPS subscription.\n"
+        . "  \"troubleshoot\": an existing customer's GPS is not working or offline AND the agent said the team or a technician will follow up. If the agent only asked them to drive the vehicle and check, or said it is online, use \"none\".\n"
+        . "  \"readd\": the vehicle is not in our records or expired long ago and the caller wants it added or activated again.\n"
+        . "  \"new\": a new customer who agreed to buy or to book installation, or asked us to call them about buying.\n"
+        . "  \"other\": anything else where the agent promised that the team will call back or do something.\n"
+        . "  \"none\": only questions, a wrong number, or nothing for the team to do.\n"
+        . "\"name\": the caller's name in English letters, or \"\".\n"
+        . "\"vehicle\": the vehicle number in capital English letters and digits without spaces, or \"\".\n"
+        . "\"location\": the place or area the caller gave, in English letters, or \"\".\n"
+        . "\"product\": the product they want, or \"\".\n"
+        . "\"plan\": for a renewal, \"3 months\", \"6 months\" or \"1 year\", or \"\".\n"
+        . "\"summary\": one short English sentence saying what the caller needs from the team.\n\nThe call:\n" . mb_substr($talk, -6000);
+    $key = sarvam_key();
+    $text = '';
+    foreach ([['model' => 'sarvam-105b-conversations'], ['model' => 'sarvam-105b', 'reasoning_effort' => 'low']] as $m) {
+        $r = http_post('https://api.sarvam.ai/v1/chat/completions', ["Authorization: Bearer $key", "api-subscription-key: $key", 'Content-Type: application/json'],
+            json_encode($m + ['messages' => [['role' => 'user', 'content' => $ask]], 'temperature' => 0, 'max_tokens' => 1500], JSON_UNESCAPED_UNICODE), 20);
+        $text = preg_replace('~<think>.*?(</think>|$)~su', '', (string)($r['data']['choices'][0]['message']['content'] ?? ''));
+        if (preg_match('~\{.*\}~su', $text, $m2) && is_array($j = json_decode($m2[0], true))) {
+            $out = $none;
+            foreach ($none as $k => $v) $out[$k] = clean_line(is_scalar($j[$k] ?? '') ? (string)($j[$k] ?? '') : '', $k === 'summary' ? 300 : 120);
+            $out['type'] = in_array(strtolower($out['type']), ['renewal', 'troubleshoot', 'readd', 'new', 'other', 'none'], true) ? strtolower($out['type']) : 'none';
+            $out['vehicle'] = plate_key($out['vehicle']);
+            if ($out['vehicle'] === '' && !empty($c['vehicles'])) $out['vehicle'] = (string)end($c['vehicles']);
+            return $out;
+        }
+    }
+    return $none + ['failed' => true];
+}
+
+// Everything that happens once a real phone call is over: understand it, raise a task in TaskManager for work
+// that needs the team (never for renewals), and send the team one email. Returns the fields to keep on the call.
+function call_wrap(array $c): array {
+    $answered = !isset($c['answered']) || $c['answered'];
+    $x = $answered ? call_extract($c) : ['type' => 'none'];
+    $keep = ['outcome' => $x['type']];
+    foreach (['name', 'vehicle', 'location', 'plan', 'summary'] as $k) if (($x[$k] ?? '') !== '') $keep[$k] = $x[$k];
+    $from = (string)($c['from'] ?? '');
+    if (in_array($x['type'], ['troubleshoot', 'readd', 'new', 'other'], true)) {
+        if ($from === '') $keep['task_error'] = 'The caller number was hidden, so no task was made.';
+        else {
+            $note = '';
+            if ($x['vehicle'] !== '' && gps_on()) {
+                $g = gps_find($x['vehicle']);
+                if ($g['status'] === 'found') $note = "{$g['name']} on {$g['host']}" . (($g['expiry'] ?? '') !== '' ? ", expiry {$g['expiry_text']}" : '') . (!empty($g['online']) ? ', online now' : (($g['last'] ?? '') !== '' ? ", last online {$g['last']}" : ''));
+                elseif ($g['status'] === 'none') $note = 'not found on any server';
+            }
+            $talk = '';
+            foreach ((array)$c['turns'] as $t) $talk .= (($t['who'] ?? '') === 'agent' ? 'AI: ' : 'Caller: ') . $t['text'] . "\n";
+            $r = http_post(TASK_URL, [], ['key' => task_key(), 'type' => $x['type'], 'phone' => $from, 'call_id' => (string)$c['id'], 'name' => $x['name'], 'location' => $x['location'],
+                'vehicle' => $x['vehicle'], 'product' => $x['product'], 'summary' => $x['summary'], 'server_note' => $note, 'transcript' => mb_substr($talk, 0, 2800)], 20);
+            if ($r['code'] === 200 && !empty($r['data']['task_id'])) $keep['task_id'] = (string)$r['data']['task_id'];
+            else $keep['task_error'] = (string)($r['data']['error'] ?? ($r['err'] ?: 'TaskManager did not answer (' . $r['code'] . ').'));
+        }
+    }
+    $keep['mailed'] = lead_mail($c + $keep) ? 1 : -1;
+    return $keep;
+}
+
 // ---------- lead email ----------
-// One email to the team after every real phone call: who called, what they asked, and the full talk.
+// One email to the team after every real phone call: who called, what they need, and the full talk.
 function lead_mail(array $c): bool {
     $from = (string)($c['from'] ?? '');
     $num = $from !== '' ? '+91 ' . substr($from, 0, 5) . ' ' . substr($from, 5) : 'Number not shown';
     $s = call_summary($c);
     $answered = !isset($c['answered']) || $c['answered'];
     $spoke = $s['asked'] !== '';
-    $what = !$answered ? 'Missed call, she asked them to wait for a call back' : ($spoke ? 'New call lead' : 'Caller hung up without speaking');
+    $kind = ['renewal' => 'Renewal request', 'troubleshoot' => 'GPS complaint', 'readd' => 'Re-adding request', 'new' => 'New customer', 'other' => 'Customer request'][$c['outcome'] ?? ''] ?? '';
+    $what = !$answered ? 'Missed call, she asked them to wait for a call back' : ($kind !== '' ? $kind : ($spoke ? 'Call, nothing to do' : 'Caller hung up without speaking'));
+    $tail = trim((($c['vehicle'] ?? '') !== '' ? $c['vehicle'] : '') . (($c['plan'] ?? '') !== '' ? ', ' . $c['plan'] . ' plan' : ''), ', ');
     $body = "$what\n\nCaller: $num\nTime: " . date('j M Y, g:i A', (int)$c['started']) . "\nLength: {$s['seconds']} seconds\n";
     if ($from !== '') $body .= "Call back: tel:+91$from\nWhatsApp: https://wa.me/91$from\n";
-    if ($spoke) $body .= "First thing they said: {$s['asked']}\n";
+    foreach (['name' => 'Name', 'vehicle' => 'Vehicle number', 'plan' => 'Plan chosen', 'location' => 'Location', 'summary' => 'What they need'] as $k => $label) if (($c[$k] ?? '') !== '') $body .= "$label: {$c[$k]}\n";
+    if (($c['outcome'] ?? '') === 'renewal') $body .= "To do: send the payment link on WhatsApp and email. She told the caller it is coming.\n";
+    if (($c['task_id'] ?? '') !== '') $body .= "Task created in TaskManager: {$c['task_id']} (not assigned)\n";
+    if (($c['task_error'] ?? '') !== '') $body .= "A task could NOT be created in TaskManager: {$c['task_error']} Please create it by hand.\n";
+    if ($spoke && $kind === '') $body .= "First thing they said: {$s['asked']}\n";
     $body .= "\nThe call:\n";
     foreach ($c['turns'] as $t) $body .= ($t['who'] === 'agent' ? 'Agent: ' : 'Caller: ') . $t['text'] . "\n";
     $host = preg_replace('~[^a-z0-9.-]~', '', strtolower(preg_replace('~^www\.|:\d+$~', '', (string)($_SERVER['HTTP_HOST'] ?? '')))) ?: 'someswara.com';
-    $subject = '=?UTF-8?B?' . base64_encode("$what: $num") . '?=';
+    $subject = '=?UTF-8?B?' . base64_encode($what . ($tail !== '' ? ": $tail" : '') . (($c['task_id'] ?? '') !== '' ? " [{$c['task_id']}]" : '') . " ($num)") . '?=';
     $headers = "From: Bharat GPS call agent <noreply@$host>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64";
     return function_exists('mail') && @mail(LEAD_EMAIL, $subject, chunk_split(base64_encode($body)), $headers);
 }
