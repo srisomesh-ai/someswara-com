@@ -120,11 +120,12 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
         write_json('live.json', $all);
         session_write_close();
         $r = gps_find((string)($_POST['number'] ?? ''));
-        if (($c = call_find((string)$all[$tok]['call_id'])) && ($r['number'] ?? '') !== '') {   // remembered for the next call from this number
+        if (($c = call_find((string)$all[$tok]['call_id'])) && ($r['number'] ?? '') !== '' && empty($r['near'])) {   // remembered for the next call from this number
             $c['vehicles'] = array_values(array_unique(array_merge((array)($c['vehicles'] ?? []), [$r['status'] === 'found' ? $r['plate'] : $r['number']])));
             call_save($c);
         }
-        out(['status' => $r['status'], 'text' => gps_result_text($r)]);
+        $why = in_array($_POST['why'] ?? '', ['renew', 'trouble'], true) ? $_POST['why'] : '';
+        out(['status' => $r['status'], 'near' => !empty($r['near']), 'text' => gps_result_text($r, $why)]);
     }
     if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes
         if (empty($all[$tok]['trainer'])) fail('This call cannot teach her.', 403);

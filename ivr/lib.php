@@ -561,7 +561,8 @@ function gps_time(string $t): int {
 }
 
 // What the servers say about one found vehicle, with what she should do for each kind of call.
-function gps_facts(array $r): string {
+// $why: 'renew' or 'trouble' when the caller's words made the reason clear; then only that part is given to her.
+function gps_facts(array $r, string $why = ''): string {
     // validity
     if (($r['expiry'] ?? '') === '') $valid = 'Validity: no expiry date is recorded. If they ask about validity or renewal, say the team will confirm the expiry date.';
     else {
@@ -586,16 +587,18 @@ function gps_facts(array $r): string {
         else $sig .= 'say that it has been offline for a long time, so you will request a technician to visit; ' . $ask;
         if (($r['expiry'] ?? '') !== '' && $r['days'] < 0) $sig .= ' Also tell them the subscription has expired, which is often why a GPS goes offline, and that it needs renewal to work again.';
     }
-    return $valid . "\n" . $sig . "\nUse only the part that matches why they called. Do not read out the other part unless they ask.";
+    if ($why === 'renew') return $valid . "\nTell the caller only this. Do not talk about the app or the signal.";
+    if ($why === 'trouble') return $sig . "\nTell the caller only this. Do not offer renewal or plans unless it says the subscription has expired.";
+    return $valid . "\n" . $sig . "\nUse only the one part that matches why they called. Never say both parts in one reply.";
 }
 
 // The result in words, for her.
-function gps_result_text(array $r): string {
+function gps_result_text(array $r, string $why = ''): string {
     $n = $r['number'] ?? '';
     switch ($r['status']) {
         case 'found':
-            if (!empty($r['near'])) return "$n itself is not on our server, but there is one very close number: {$r['plate']}. Ask the caller whether {$r['plate']} is their vehicle number, saying it letter by letter. If they say no, ask them to say the number once more. If they say yes, this is what our server shows for it:\n" . gps_facts($r);
-            return "Vehicle $n is found on our server.\n" . gps_facts($r);
+            if (!empty($r['near'])) return "$n itself is not on our server, but there is one very close number: {$r['plate']}. Ask the caller whether {$r['plate']} is their vehicle number, saying it letter by letter, and say nothing else in this reply. You do not know its expiry date or status yet, so do not say any. If their answer means yes, check {$r['plate']} the usual way: say you are checking and end the reply with [[VEHICLE: {$r['plate']}]]. If it means no, ask them to say the full number once more.";
+            return "Vehicle $n is found on our server.\n" . gps_facts($r, $why);
         case 'many': return "More than one vehicle matches $n. Ask the caller to say the full vehicle number once more, slowly.";
         case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment, note what they need, and say the team will call them.";
         default: return "Vehicle $n is not on any of our servers. Tell the caller that this vehicle number is not in our records, which means its GPS expired earlier and was removed from the server. Then explain the two choices: adding it again by re-installing the same GPS costs one thousand seven hundred rupees; or, if that GPS no longer works, a new GPS is better, which costs three thousand three hundred rupees. Ask which they prefer. Only if the caller says the number you checked was wrong, take the right number and check that.";
@@ -604,7 +607,7 @@ function gps_result_text(array $r): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 13;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 14;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 

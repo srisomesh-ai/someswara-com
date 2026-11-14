@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 13;
+const VERSION = 14;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -320,6 +320,16 @@ async function recServe(req, res, url) {
   fs.createReadStream(file, { start: from, end: to }).on('error', () => res.destroy()).pipe(res);
 }
 
+// Why an existing customer is calling, from their own words: 'trouble' (GPS not working), 'renew' (validity, renewal),
+// or '' when it is not clear. She is then given only that part of what the GPS server shows.
+const TROUBLE_WORDS = /offline|ఆఫ్\s?లైన్|not working|పని\s?చేయ|work అవ్వ|రావడం లేదు|రావట్లేదు|చూపించ(డం|ట్లే)|complaint|కంప్లైంట్|problem|ప్రాబ్లం|काम नहीं|बंद है|ऑफलाइन|शिकायत|दिख नहीं/i;
+const RENEW_WORDS = /renew|రెన్యూ|రిన్యూ|రెన్యువల్|expir|validity|వాలిడిటీ|licen[sc]e|లైసెన్స్|recharge|రీఛార్జ్|రీచార్జ్|नवीनीकरण|रिन्यू|रिचार्ज|वैलिडिटी/i;
+function whyCalling(S) {
+  const said = S.turns.filter((t) => t.who === 'caller').map((t) => t.text).join(' ');
+  const t = TROUBLE_WORDS.test(said), r = RENEW_WORDS.test(said);
+  return t && !r ? 'trouble' : r && !t ? 'renew' : '';
+}
+
 // ---------- only the instructions this call needs ----------
 // The dashboard marks two parts of her instructions: what is only for new customers (selling steps, the product
 // list) and what is only for existing ones (complaints, renewals, the vehicle check). Once the caller's words show
@@ -442,7 +452,12 @@ async function reply(S, hearMs, ack, afterCheck) {
   const notes = [];
   if (S.gender) notes.push("The caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.');
   if (ack) notes.push('You have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.');
-  if (S.vehicle) notes.push('Result of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.');
+  // A check result is news once. After she has told the caller, it stays only as background, otherwise she keeps
+  // repeating it or asking the same question again on every later reply.
+  const freshResult = S.vehicle && !S.vehicleTold;
+  if (S.vehicle && S.vehicleNear) notes.push(S.vehicle);
+  else if (freshResult) notes.push('Result of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.');
+  else if (S.vehicle) notes.push('Background only: earlier in this call you checked a vehicle and you have ALREADY told the caller the result. Do not say it again, do not ask about that vehicle number again, and carry on with what the caller says now. The result was: ' + S.vehicle);
   const messages = [{ role: 'system', content: promptFor(S, lang) }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
   if (afterCheck) messages.push({ role: 'user', content: '(The vehicle check has finished. Tell the caller the result now.)' });
@@ -509,6 +524,7 @@ async function reply(S, hearMs, ack, afterCheck) {
   const text = said.join(' ');
   if (text) {
     S.turns.push({ who: 'agent', text });
+    if (freshResult) S.vehicleTold = true;
     await syncCall(S, false);
     send(S, { type: 'reply_done', text, turn: S.turns.length - 1 });
   } else if (g === S.gen && !onlyAck) {
@@ -519,6 +535,7 @@ async function reply(S, hearMs, ack, afterCheck) {
   const number = vehicleTag(raw);
   if (number && S.kind !== 'all') S.kind = S.kind === 'new' ? 'all' : 'old';   // a vehicle check means an existing customer
   if (number && !afterCheck) {
+    S.vehicleNear = false;
     if (!fullPlate(number)) {
       log('call', S.cfg.call_id, 'vehicle check skipped, not a full number:', number);
       S.vehicle = 'You tried to check "' + number + '", which is only part of a vehicle number, so nothing was checked. Ask the caller for the full vehicle number starting with the state letters, like A P three nine B P zero zero four two. Do not say you are checking until you have the full number.';
@@ -527,10 +544,12 @@ async function reply(S, hearMs, ack, afterCheck) {
     } else {
       S.checks++;
       let found;
-      try { found = await ivr('live_vehicle', { token: S.token, number }, 22000); log('call', S.cfg.call_id, 'vehicle check', number, found.status); }
+      try { found = await ivr('live_vehicle', { token: S.token, number, why: whyCalling(S) }, 22000); log('call', S.cfg.call_id, 'vehicle check', number, found.status); }
       catch (e) { log('vehicle check failed:', e.message); found = { text: 'The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.' }; }
       S.vehicle = found.text || '';
+      S.vehicleNear = !!found.near;                         // she still has to ask whether the close number is theirs
     }
+    S.vehicleTold = false;
     if (g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
   }
 }
@@ -538,7 +557,7 @@ async function reply(S, hearMs, ack, afterCheck) {
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {} };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false };
 }
 
 function greet(S) {
