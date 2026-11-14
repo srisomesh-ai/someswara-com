@@ -779,7 +779,7 @@ function onLiveAudio(e) {
   live.ws.send(pcm16(buf, ctx.sampleRate));
   live.spokenMs += ms;
   if (rms > limit) { speechMs += ms; silentMs = 0; } else silentMs += ms;
-  if (silentMs >= 600 || live.spokenMs >= 25000) {
+  if (silentMs >= 350 || live.spokenMs >= 25000) {
     inSpeech = false; pre = [];
     if (speechMs >= 250) { live.t0 = performance.now(); live.ws.send(JSON.stringify({ type: 'speech_end' })); setPhase('busy', 'Thinking'); }
     else { live.accept = true; live.ws.send(JSON.stringify({ type: 'speech_cancel' })); setPhase('listening', 'Listening. Speak now.'); }

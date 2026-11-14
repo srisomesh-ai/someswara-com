@@ -344,7 +344,8 @@ async function reply(S, hearMs, ack, afterCheck) {
   const emit = (final) => {
     let rest = cleanReply(raw).slice(done);
     for (;;) {
-      const m = rest.match(/^([\s\S]{12,}?[.?!।])\s+/);
+      // The very first piece may also end at a comma, so her voice starts sooner; after that, whole sentences.
+      const m = rest.match(!queued && !done ? /^([\s\S]{12,}?[.?!।,])\s+/ : /^([\s\S]{12,}?[.?!।])\s+/);
       if (!m) break;
       done += m[0].length; rest = rest.slice(m[0].length);
       const s = m[1].replace(/\s+/g, ' ').trim();
@@ -497,7 +498,7 @@ function phoneAudio(S, pcm) {
   }
   audioIn(S, pcm); V.total += ms;
   if (rms > limit) { V.speech += ms; V.silent = 0; } else V.silent += ms;
-  if (V.silent >= 450 || V.total >= 25000) {
+  if (V.silent >= 350 || V.total >= 25000) {
     V.on = false;
     if (V.speech >= 250) speechEnd(S).catch((e) => log('turn crashed:', e.message));
     else { S.capturing = false; S.pcm = []; S.pcmBytes = 0; }
