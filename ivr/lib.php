@@ -204,6 +204,28 @@ function call_find(string $id): ?array {
     return null;
 }
 
+// What she is told about this caller's earlier calls from the same mobile number, so they need not repeat themselves.
+// The latest earlier call from the last 30 days in which the caller actually spoke; '' when there is none.
+function caller_memory(string $from, string $skipId = ''): string {
+    if ($from === '') return '';
+    foreach (calls_all() as $c) {
+        if (($c['id'] ?? '') === $skipId || empty($c['phone']) || ($c['from'] ?? '') !== $from || empty($c['answered'])) continue;
+        if (($c['started'] ?? 0) < time() - 30 * 86400) break;
+        $turns = array_values(array_filter((array)($c['turns'] ?? []), fn($t) => is_array($t) && trim((string)($t['text'] ?? '')) !== ''));
+        if (!array_filter($turns, fn($t) => ($t['who'] ?? '') === 'caller')) continue;
+        $days = (int)(new DateTime('today'))->diff((new DateTime('@' . $c['started']))->setTimezone(new DateTimeZone('Asia/Kolkata'))->setTime(0, 0))->days;
+        $when = $days === 0 ? 'earlier today' : ($days === 1 ? 'yesterday' : $days . ' days ago') . ', on ' . date('j F', $c['started']);
+        $lines = [];
+        foreach (array_slice($turns, -16) as $t) $lines[] = (($t['who'] ?? '') === 'agent' ? 'You: ' : 'Caller: ') . mb_substr(trim($t['text']), 0, 220);
+        $talk = implode("\n", $lines);
+        if (mb_strlen($talk) > 2200) $talk = '...' . mb_substr($talk, -2200);
+        $m = "This same mobile number called us before, $when. Here is the end of that call:\n$talk\n";
+        if (!empty($c['vehicles'])) $m .= 'Vehicle number checked on that call: ' . implode(', ', array_slice((array)$c['vehicles'], -3)) . ".\n";
+        return $m . "How to use this: greet them as usual. Once they say why they are calling, if it is about the same matter, show that you remember, in a few words, and continue from where it stopped. Do not ask again for a name, vehicle number or place they already gave: say it and ask if it is the same. Do not read the old call out, and if they are calling about something new, simply help with that.";
+    }
+    return '';
+}
+
 function call_save(array $call): void {
     $all = calls_all();
     $found = false;

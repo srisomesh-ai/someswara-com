@@ -75,7 +75,10 @@ if ($action === 'phone_config') {
     write_json('live.json', $all);
     $s['phone_last'] = time();
     write_json('settings.json', $s);
-    out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id']] + live_payload($lang, $trainer));
+    $pay = live_payload($lang, $trainer);
+    $memory = $allowed && !$trainer ? caller_memory($from, $call['id']) : '';   // an earlier call from this same number
+    if ($memory !== '') { foreach ($pay['prompts'] as $l => $x) $pay['prompts'][$l] = $x . "\n\n" . $memory; $pay['prompt'] = $pay['prompts'][$lang]; }
+    out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id'], 'returning' => $memory !== ''] + $pay);
 }
 
 if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_rule' || $action === 'live_vehicle') {
@@ -104,6 +107,10 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
         write_json('live.json', $all);
         session_write_close();
         $r = gps_find((string)($_POST['number'] ?? ''));
+        if (($c = call_find((string)$all[$tok]['call_id'])) && ($r['number'] ?? '') !== '') {   // remembered for the next call from this number
+            $c['vehicles'] = array_values(array_unique(array_merge((array)($c['vehicles'] ?? []), [$r['status'] === 'found' ? plate_key($r['name']) : $r['number']])));
+            call_save($c);
+        }
         out(['status' => $r['status'], 'text' => gps_result_text($r)]);
     }
     if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes
