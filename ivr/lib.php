@@ -85,7 +85,7 @@ Existing customer whose GPS has already stopped because it was not renewed for a
 - Take the vehicle number, their name and where the vehicle is, and say our team will call to fix the visit.
 
 Always:
-- Never say again what you said in your previous reply. When the caller answers your question, accept the answer and move to the next step. If you did not understand their answer, ask only about the part you missed, in different words.
+{{PLACE}}- Never say again what you said in your previous reply. When the caller answers your question, accept the answer and move to the next step. If you did not understand their answer, ask only about the part you missed, in different words.
 - A caller who calls you madam or sir is addressing you. It tells you nothing about them. Until you are told whether the caller is a man or a woman, do not use sir or madam, and do not use అండి in their place: just speak politely with no address word.
 - Address the caller only as sir or madam, or గారు with their name (in Hindi सर, मैडम or जी). Callers often call you అమ్మా, అన్నా, అక్కా, చెల్లి, బాబు, తల్లి, bro, dear, बेटा, भैया or दीदी. Never copy the word they use for you and never use any such family or friendly word for them. Stay polite and professional however casually they speak.
 - Keep it short. Every reply is one or two short sentences, never more than about twenty words, and takes only a few seconds to say. Answer only what they just asked, then stop, or ask one short question. A long answer sounds like reading a script.
@@ -152,6 +152,7 @@ const MAIL_ON = false;   // the owner switched call emails off during testing (1
 const VEHICLE_CHECK = "- You need the full vehicle number: two state letters, two digits, one to three letters, then four digits, like AP39BP0042. If the caller gives only part of it, such as only the last four digits, do not check: ask them for the full number starting with the state letters.\n- Callers often say the number in pieces, over two or three turns, for example AP 31 DZ and then 5531. Join the pieces in the order they were said. As soon as the joined pieces make a full number, check that number at once. Never ask for the full number again when the pieces already said make one.\n- As soon as they have said the full number, do not repeat it back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the full vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n- Never tell the caller an expiry date, a validity, or whether the GPS is online unless a check result gave it to you. If no result has come, say you could not check just now and that the team will call them. Never guess.\n";
 const TROUBLE_ASK = "- Do not sell anything. Say sorry for the trouble, then ask these one at a time: since when it is offline; whether any service or repair work was done on the vehicle in recent days, or the battery was removed or changed; the vehicle number; their name; and where the vehicle is now.\n- Then say a technician will be assigned and our team will call them to confirm the visit time.\n";
 const TROUBLE_CHECK = "- Do not sell anything. Say sorry for the trouble in a few words and ask only the vehicle number. Do not ask since when it is offline; our server shows that.\n{{VEHICLE}}- The result tells you when the GPS was last online and exactly what to do next: follow it. Do not promise a technician unless the result says so.\n";
+const PLACE_CHECK = "- Service area: whenever the caller says the town, village or area where the vehicle is, or where they want the installation, check that place before you promise anything. Say a few words that you are checking and end that same reply with the tag [[PLACE: NAME]], where NAME is the place in English letters, with the town or district too if they said it, for example [[PLACE: Gajuwaka, Visakhapatnam]]. The tag is never spoken. The result then comes to you: follow it. Until a place has been checked and found inside our service area, do not promise a technician visit, an installation or free installation there. Write the tag only once for each place.\n";
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
 const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
 
@@ -340,6 +341,7 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
     $check = $live && gps_on();
     $p = str_replace('{{TROUBLE}}', $check ? TROUBLE_CHECK : TROUBLE_ASK, $p);
     $p = str_replace('{{VEHICLE}}', $check ? VEHICLE_CHECK : '', $p);
+    $p = str_replace('{{PLACE}}', $live && areas_on() ? PLACE_CHECK : '', $p);
     $cat = catalog();
     $p = str_replace('{{PRICES}}', $cat === '' ? NO_PRICES : HAS_PRICES, $p);
     if ($cat !== '') $p .= "\n\n" . ($parts ? "<<NEW>>\n$cat\n<</NEW>>" : $cat);
@@ -436,6 +438,94 @@ function catalog(): string {
         $rows[] = $line;
     }
     return $rows ? "Products and prices (the owner's own list for phone customers):\n" . implode("\n", $rows) : '';
+}
+
+// ---------- service areas ----------
+// Where the technicians work from, and how far from them the business serves. A place the caller says is found
+// on the map (Google when the owner has given a Maps key, otherwise the free OpenStreetMap search) and measured
+// in a straight line from the nearest technician.
+const AREA_OUTSIDE = 'Our technician is not in that area. The team will check and confirm on WhatsApp.';
+function areas(): array {
+    $d = read_json('areas.json');
+    $techs = [];
+    foreach ((array)($d['techs'] ?? []) as $t) if (is_array($t) && isset($t['lat'], $t['lng'])) $techs[] = $t;
+    $km = (int)($d['km'] ?? 50);
+    return ['techs' => $techs, 'km' => $km >= 1 && $km <= 2000 ? $km : 50, 'outside' => trim((string)($d['outside'] ?? '')) ?: AREA_OUTSIDE];
+}
+function areas_on(): bool { return (bool)areas()['techs']; }
+function maps_key(): string { return trim((string)(settings()['maps_key'] ?? '')); }
+
+// Find a place name on the map. ok, lat, lng, label (how the map names it), via; or ok false with why (none, key, down).
+function geo_find(string $q, bool $useCache = true): array {
+    $q = clean_line($q, 120);
+    if (mb_strlen($q) < 2) return ['ok' => false, 'why' => 'none'];
+    $k = mb_strtolower($q) . '|' . (maps_key() !== '' ? 'g' : 'o');
+    $cache = read_json('geo.json');
+    if ($useCache && isset($cache[$k]) && ($cache[$k]['at'] ?? 0) > time() - 90 * 86400) return $cache[$k]['r'];
+    $get = function (string $url, array $head = []) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 8, CURLOPT_HTTPHEADER => $head,
+            CURLOPT_USERAGENT => 'BharatGPS-call-agent/1.0 (someswara.com/ivr)']);
+        $b = curl_exec($ch); curl_close($ch);
+        return is_string($b) ? json_decode($b, true) : null;
+    };
+    if (maps_key() !== '') {
+        $j = $get('https://maps.googleapis.com/maps/api/geocode/json?region=in&components=country:IN&language=en&address=' . rawurlencode($q) . '&key=' . rawurlencode(maps_key()));
+        $st = is_array($j) ? (string)($j['status'] ?? '') : '';
+        if ($st === 'OK' && isset($j['results'][0]['geometry']['location'])) {
+            $g = $j['results'][0];
+            // "India" alone means Google did not really find the place
+            $r = count((array)($g['address_components'] ?? [])) <= 1 ? ['ok' => false, 'why' => 'none']
+                : ['ok' => true, 'lat' => (float)$g['geometry']['location']['lat'], 'lng' => (float)$g['geometry']['location']['lng'], 'label' => clean_line(preg_replace('~,\s*India$~', '', (string)($g['formatted_address'] ?? $q)), 120), 'via' => 'Google'];
+        } elseif ($st === 'ZERO_RESULTS') $r = ['ok' => false, 'why' => 'none'];
+        elseif ($st === 'REQUEST_DENIED' || $st === 'INVALID_REQUEST') return ['ok' => false, 'why' => 'key', 'msg' => clean_line((string)($j['error_message'] ?? ''), 200)];
+        else return ['ok' => false, 'why' => 'down'];
+    } else {
+        $j = $get('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=in&accept-language=en&q=' . rawurlencode($q));
+        if (!is_array($j)) return ['ok' => false, 'why' => 'down'];
+        $r = isset($j[0]['lat'], $j[0]['lon'])
+            ? ['ok' => true, 'lat' => (float)$j[0]['lat'], 'lng' => (float)$j[0]['lon'], 'label' => clean_line(implode(', ', array_slice(array_map('trim', explode(',', preg_replace('~,\s*India$~', '', (string)($j[0]['display_name'] ?? $q)))), 0, 3)), 120), 'via' => 'the free map']
+            : ['ok' => false, 'why' => 'none'];
+    }
+    $cache[$k] = ['at' => time(), 'r' => $r];
+    if (count($cache) > 400) $cache = array_slice($cache, -300, null, true);
+    write_json('geo.json', $cache);
+    return $r;
+}
+
+function km_between(float $a1, float $o1, float $a2, float $o2): float {
+    $p = M_PI / 180; $x = sin(($a2 - $a1) * $p / 2) ** 2 + cos($a1 * $p) * cos($a2 * $p) * sin(($o2 - $o1) * $p / 2) ** 2;
+    return 6371 * 2 * atan2(sqrt($x), sqrt(1 - $x));
+}
+
+// Is this place within the service distance of a technician? status: off (no technicians entered), unknown (place
+// not found), down (map not reachable or key refused), in, out.
+function area_check(string $place): array {
+    $a = areas();
+    if (!$a['techs']) return ['status' => 'off'];
+    $g = geo_find($place);
+    if (!$g['ok']) return ['status' => $g['why'] === 'none' ? 'unknown' : 'down', 'place' => clean_line($place, 120), 'why' => $g['why'], 'msg' => $g['msg'] ?? ''];
+    $best = null;
+    foreach ($a['techs'] as $t) { $d = km_between($g['lat'], $g['lng'], (float)$t['lat'], (float)$t['lng']); if ($best === null || $d < $best['km']) $best = ['km' => $d, 'tech' => $t]; }
+    $km = (int)round($best['km']);
+    return ['status' => $km <= $a['km'] ? 'in' : 'out', 'place' => clean_line($place, 120), 'label' => $g['label'], 'via' => $g['via'], 'km' => $km, 'limit' => $a['km'],
+        'tech' => (string)($best['tech']['name'] ?? ''), 'tech_place' => (string)($best['tech']['place'] ?? ''), 'outside' => $a['outside']];
+}
+
+// The result in words, for her, and as a bare fact for later in the call.
+function area_result_text(array $r): string {
+    switch ($r['status']) {
+        case 'in': return "{$r['label']} is inside our service area, about {$r['km']} km from our technician. Our technician can visit there. Do not say the distance or the technician's name; just continue with the next step.";
+        case 'out': return "{$r['label']} is outside our service area: about {$r['km']} km from our nearest technician, and we serve up to {$r['limit']} km. Do not promise a technician visit or installation there. Tell the caller this, in the language of the call: {$r['outside']}";
+        case 'unknown': return "The place \"{$r['place']}\" could not be found on the map. Ask the caller for the nearest town or the district, and check again with the PLACE tag.";
+        case 'off': return 'Service areas are not set up. Continue as usual and say the team will confirm the visit.';
+        default: return 'The map could not be checked just now. Do not say whether we serve that place. Say the team will confirm it, and continue.';
+    }
+}
+function area_result_fact(array $r): string {
+    if ($r['status'] === 'in') return "{$r['label']} is inside our service area; a technician can visit.";
+    if ($r['status'] === 'out') return "{$r['label']} is outside our service area; no technician visit was promised.";
+    return '';
 }
 
 // ---------- GPS servers ----------
@@ -622,7 +712,7 @@ function gps_result_text(array $r, string $why = ''): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 17;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 18;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 

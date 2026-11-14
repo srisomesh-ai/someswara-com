@@ -32,6 +32,7 @@ the real phone line will be.
 - Caller memory: when a mobile number calls again within 30 days she is given the end of its last call.
 - After a phone call: the call is read once more to see what it was. Complaints, new bookings, re-adding and other requests become an unassigned task in TaskManager (`TASK_URL` in `lib.php`); renewals are only emailed. Every call is emailed to the right team.
 - Recordings: the call server keeps every answered phone call as one sound file with both voices (`rec/` beside `server.js` on the VPS, 30 days). Call history plays it through a short-lived pass (`rec_token`, `rec_check`).
+- Service areas: the owner lists where each technician works from and a service distance. When a caller says a place she checks it on the map (Google with the owner's Maps key, otherwise the free OpenStreetMap search) and learns whether it is inside the service area.
 - Not built yet: leads page, staff transfer.
 
 ## Live call server (ivr/live/)

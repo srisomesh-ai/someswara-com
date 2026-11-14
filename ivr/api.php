@@ -16,7 +16,7 @@ function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
 $writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
-    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes', 'gps_save', 'rec_token'];
+    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes', 'gps_save', 'rec_token', 'areas_key', 'areas_save', 'area_tech_add', 'area_tech_remove'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -94,7 +94,7 @@ if ($action === 'phone_config') {
     out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id'], 'returning' => $memory !== ''] + $pay);
 }
 
-if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_rule' || $action === 'live_vehicle') {
+if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 'live_place'], true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
     $tok = (string)($_POST['token'] ?? '');
     $all = read_json('live.json');
@@ -111,6 +111,15 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
         $all[$tok]['trainer'] = $trainer;
         write_json('live.json', $all);
         out(['greeting' => $greeting, 'call_id' => $call['id']] + live_payload($lang, $trainer));
+    }
+    if ($action === 'live_place') {   // the caller said where the vehicle is: is it inside the service area?
+        if (empty($all[$tok]['call_id'])) fail('Bad token.', 403);
+        $n = (int)($all[$tok]['places'] ?? 0);
+        if ($n >= 6) fail('Too many checks on this call.', 429);
+        $all[$tok]['places'] = $n + 1;
+        write_json('live.json', $all);
+        $r = area_check((string)($_POST['place'] ?? ''));
+        out(['status' => $r['status'], 'text' => area_result_text($r), 'fact' => area_result_fact($r)]);
     }
     if ($action === 'live_vehicle') {   // the caller confirmed a vehicle number: look it up on the GPS servers
         if (empty($all[$tok]['call_id'])) fail('Bad token.', 403);
@@ -407,6 +416,60 @@ case 'train_save':   // who may teach her by voice
     $s['train_nums'] = array_slice($nums, 0, 10);
     write_json('settings.json', $s);
     out(training());
+
+case 'areas_get':
+case 'areas_key':
+case 'areas_save':
+case 'area_tech_add':
+case 'area_tech_remove':
+    $d = read_json('areas.json');
+    $d['techs'] = array_values(array_filter((array)($d['techs'] ?? []), 'is_array'));
+    $keyState = '';
+    if ($action === 'areas_key') {
+        $v = trim((string)($_POST['key'] ?? ''));
+        $s = settings();
+        if ($v === '-') $s['maps_key'] = '';
+        elseif ($v !== '' && strpos($v, '•') === false) {
+            if (strlen($v) < 20 || strlen($v) > 120 || preg_match('~\s~', $v)) fail('That does not look like a Google Maps API key. Paste the full key.');
+            $s['maps_key'] = $v;
+        }
+        write_json('settings.json', $s);
+        if (maps_key() !== '') {   // try it once
+            $t = geo_find('Visakhapatnam', false);
+            $keyState = $t['ok'] ? 'ok' : ($t['why'] === 'key' ? 'bad' : 'down');
+            $s['maps_ok'] = $keyState; $s['maps_msg'] = $t['msg'] ?? ''; write_json('settings.json', $s);
+        }
+    }
+    if ($action === 'areas_save') {
+        $km = (int)preg_replace('~\D~', '', (string)($_POST['km'] ?? ''));
+        if ($km < 1 || $km > 2000) fail('Type the distance in km, from 1 to 2000.');
+        $d['km'] = $km;
+        $d['outside'] = mb_substr(trim(preg_replace('~\s+~u', ' ', (string)($_POST['outside'] ?? ''))), 0, 300);
+        write_json('areas.json', $d);
+    }
+    if ($action === 'area_tech_add') {
+        $name = clean_line($_POST['name'] ?? '', 60); $place = clean_line($_POST['place'] ?? '', 120);
+        if ($name === '') fail('Type the technician name.');
+        if ($place === '') fail('Type the town or area.');
+        if (count($d['techs']) >= 60) fail('The list is full. Remove one first.');
+        session_write_close();
+        $g = geo_find($place, false);
+        if (!$g['ok']) fail($g['why'] === 'none' ? 'The map could not find "' . $place . '". Add the town or district name too.' : ($g['why'] === 'key' ? 'Google did not accept the Maps key. Check it in step 1.' : 'The map could not be reached just now. Try again.'));
+        $d['techs'][] = ['id' => bin2hex(random_bytes(6)), 'name' => $name, 'place' => $place, 'lat' => $g['lat'], 'lng' => $g['lng'], 'found' => $g['label'], 'via' => $g['via']];
+        write_json('areas.json', $d);
+    }
+    if ($action === 'area_tech_remove') {
+        $id = (string)($_POST['id'] ?? '');
+        $d['techs'] = array_values(array_filter($d['techs'], fn($t) => ($t['id'] ?? '') !== $id));
+        write_json('areas.json', $d);
+    }
+    $a = areas(); $s = settings(); $key = maps_key();
+    out(['techs' => $a['techs'], 'km' => $a['km'], 'outside' => $a['outside'],
+        'key' => ['has' => $key !== '', 'hint' => $key !== '' ? substr($key, -4) : '', 'state' => $key === '' ? 'free' : (string)($s['maps_ok'] ?? 'ok'), 'msg' => (string)($s['maps_msg'] ?? '')]]);
+
+case 'area_try':
+    session_write_close();
+    out(area_check((string)($_GET['q'] ?? '')));
 
 case 'gps_get':
 case 'gps_save':

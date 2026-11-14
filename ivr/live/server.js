@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 17;
+const VERSION = 18;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -145,7 +145,12 @@ async function chatOnce(cfg, messages, signal) {
 // Whatever brackets, colon or hidden characters the model types, a tag must never be heard or shown.
 const plain = (raw) => raw.normalize('NFKC').replace(/[​-‍⁠﻿\\]/g, '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
 const cleanReply = (raw) => plain(raw).replace(/[\[【〔〚⟦]{2}[\s\S]*?([\]】〕〛⟧]{2}|$)/g, '')
-  .replace(/[\[【〔〚⟦(]\s*(RULE|VEHICLE)\b[\s\S]*?([\]】〕〛⟧)]|$)/gi, '').replace(/\S*\b(VEHICLE|RULE)\s*[:=]\s*[A-Za-z0-9 .-]*[^\s\w.?!,]*/g, '').replace(/[*#`_]/g, '');
+  .replace(/[\[【〔〚⟦(]\s*(RULE|VEHICLE|PLACE)\b[\s\S]*?([\]】〕〛⟧)]|$)/gi, '').replace(/\S*\b(VEHICLE|RULE|PLACE)\s*[:=]\s*[A-Za-z0-9 .,-]*[^\s\w.?!,]*/g, '').replace(/[*#`_]/g, '');
+// The place inside her "is this place in our service area" tag.
+function placeTag(raw) {
+  const m = plain(raw).match(/\bPLACE\s*[:=]\s*([^\]\n】〕〛⟧)]{2,80})/);
+  return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+}
 // The vehicle number inside her "check this vehicle" tag. VEHICLE in capitals followed by a colon is only ever the tag.
 function vehicleTag(raw) {
   const m = plain(raw).match(/\bVEHICLE\s*[:=]\s*([A-Za-z0-9 .-]{1,30})/);
@@ -460,9 +465,12 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   if (S.vehicle && S.vehicleNear) notes.push(S.vehicle);
   else if (freshResult) notes.push('Result of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.');
   else if (S.vehicleFact) notes.push('Background, already told to the caller, do not say it again: ' + S.vehicleFact + ' Now answer only what the caller has just said and move to the next step.');
+  const freshPlace = S.place && !S.placeTold;
+  if (freshPlace) notes.push('Result of the place check you asked for, from the map just now: ' + S.place + ' Do not write the PLACE tag for this same place again.');
+  else if (S.placeFact) notes.push('Background, already known, do not say it again: ' + S.placeFact);
   const messages = [{ role: 'system', content: promptFor(S, lang) }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
-  if (afterCheck) messages.push({ role: 'user', content: '(The vehicle check has finished. Tell the caller the result now.)' });
+  if (afterCheck) messages.push({ role: 'user', content: '(The check has finished. Tell the caller the result now.)' });
   // What she said last time, to catch her starting the very same sentence again.
   const squash = (t) => t.toLowerCase().replace(/[\s,.!?।'"-]/g, '');
   const prev = squash(([...S.turns].reverse().find((t) => t.who === 'agent') || { text: '' }).text);
@@ -542,6 +550,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   if (text) {
     S.turns.push({ who: 'agent', text });
     if (freshResult) S.vehicleTold = true;
+    if (freshPlace) S.placeTold = true;
     // A vehicle number is said slowly, with gaps. After she asks for one, wait longer before deciding the caller has finished.
     S.waitMs = /number|నంబర్|నెంబర్|नंबर/i.test(text) ? 1200 : 350;
     await syncCall(S, false);
@@ -570,14 +579,27 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
       S.vehicleNear = !!found.near;                         // she still has to ask whether the close number is theirs
     }
     S.vehicleTold = false;
-    if (g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
   }
+  // She asked whether a place is inside the service area: look it up on the map.
+  const place = placeTag(raw);
+  if (place && !afterCheck) {
+    if (S.placeChecks >= 4) { S.place = 'No more places can be checked on this call. Say the team will confirm whether we serve that place.'; S.placeFact = ''; }
+    else {
+      S.placeChecks++;
+      let found;
+      try { found = await ivr('live_place', { token: S.token, place }, 15000); log('call', S.cfg.call_id, 'place check', JSON.stringify(place), found.status); }
+      catch (e) { log('place check failed:', e.message); found = { text: 'The map could not be checked just now. Do not say whether we serve that place. Say the team will confirm it, and continue.' }; }
+      S.place = found.text || ''; S.placeFact = found.fact || '';
+    }
+    S.placeTold = false;
+  }
+  if ((number || place) && !afterCheck && g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
 }
 
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '' };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0 };
 }
 
 function greet(S) {

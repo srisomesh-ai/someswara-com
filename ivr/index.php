@@ -166,6 +166,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       <button type="button" data-view="settings">Voice and language</button>
       <button type="button" data-view="phone">Phone line</button>
       <button type="button" data-view="gps">GPS servers</button>
+      <button type="button" data-view="areas">Service areas</button>
       <button type="button" data-view="soon" data-step="4" data-name="Staff transfer">Staff transfer</button>
       <button type="button" data-view="settings">Settings</button>
     </nav>
@@ -373,6 +374,56 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       </div>
     </div>
 
+    <!-- Service areas -->
+    <div id="view-areas" class="hide" style="display:flex;flex-direction:column;gap:20px">
+      <div class="head"><div><h1>Service areas</h1><div class="sub">When a customer says their place, she checks how far it is from your nearest technician.</div></div></div>
+      <form class="card stack" id="sa-key-form" style="gap:14px">
+        <h2>1. Google Maps key</h2>
+        <div class="hint14">She uses Google to find the place the customer says. Paste the API key from your Google Cloud account. It is saved on your website only.</div>
+        <div class="field">
+          <div class="thead" style="flex-wrap:wrap"><label for="sa-key">Google Maps API key</label><span class="pill" id="sa-key-state">Not checked yet</span></div>
+          <input id="sa-key" type="text" autocomplete="off" spellcheck="false" placeholder="Paste the API key">
+          <span class="hint" id="sa-key-hint"></span>
+        </div>
+        <div><button type="submit" class="btn-save" id="sa-key-save">Save and check</button></div>
+      </form>
+      <div class="card stack" style="gap:14px">
+        <h2>2. Where your technicians are</h2>
+        <div class="hint14">Add the town or area each technician works from. She measures from the nearest one.</div>
+        <div id="sa-techs" class="stack"></div>
+        <form class="inline" id="sa-tech-form" style="flex-wrap:wrap">
+          <label class="sr" for="sa-tname">Technician name</label>
+          <input id="sa-tname" type="text" autocomplete="off" maxlength="60" placeholder="Technician name" style="flex:1 1 140px;min-width:0">
+          <label class="sr" for="sa-tplace">Town or area</label>
+          <input id="sa-tplace" type="text" autocomplete="off" maxlength="120" placeholder="Town or area" style="flex:2 1 200px;min-width:0">
+          <button type="submit" class="btn" id="sa-tadd">Add</button>
+        </form>
+      </div>
+      <form class="card stack" id="sa-form" style="gap:14px">
+        <h2>3. How far you serve</h2>
+        <div class="field">
+          <label for="sa-km">Distance from a technician, in km</label>
+          <input id="sa-km" type="text" inputmode="numeric" autocomplete="off" style="width:120px">
+          <span class="hint">Straight-line distance. Road distance is usually a little more.</span>
+        </div>
+        <div class="field">
+          <label for="sa-out">What she says when the place is outside this distance</label>
+          <textarea id="sa-out" rows="2" maxlength="300"></textarea>
+        </div>
+        <div><button type="submit" class="btn-save">Save</button></div>
+      </form>
+      <div class="card stack" style="gap:14px">
+        <h2>4. Try a place</h2>
+        <div class="hint14">Type any place a customer might say, to see what she will find.</div>
+        <form class="inline" id="sa-try">
+          <label class="sr" for="sa-q">Place</label>
+          <input id="sa-q" type="text" autocomplete="off" placeholder="Anakapalle">
+          <button type="submit" class="btn" id="sa-go">Search</button>
+        </form>
+        <div id="sa-res" class="prod hide" style="gap:6px" role="status"></div>
+      </div>
+    </div>
+
     <!-- GPS servers -->
     <div id="view-gps" class="hide" style="display:flex;flex-direction:column;gap:20px">
       <div class="head"><div><h1>GPS servers</h1><div class="sub">She looks up a vehicle number here during a call. She only reads; she cannot change anything on the servers.</div></div></div>
@@ -512,7 +563,7 @@ $('logout').addEventListener('click', async () => { await endCall(); await api('
 
 // ---------- views ----------
 function show(view) {
-  for (const v of ['overview', 'history', 'settings', 'training', 'products', 'phone', 'gps', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
+  for (const v of ['overview', 'history', 'settings', 'training', 'products', 'phone', 'gps', 'areas', 'soon']) $('view-' + v).classList.toggle('hide', v !== view);
 }
 document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('click', () => {
   document.querySelectorAll('.nav button').forEach((x) => x.classList.remove('on'));
@@ -522,6 +573,7 @@ document.querySelectorAll('.nav button').forEach((b) => b.addEventListener('clic
   if (b.dataset.view === 'phone') loadPhone();
   if (b.dataset.view === 'products') loadProducts();
   if (b.dataset.view === 'gps') loadGps();
+  if (b.dataset.view === 'areas') loadAreas();
   if (b.dataset.view === 'soon') {
     $('soon-title').textContent = b.dataset.name;
     $('soon-text').textContent = b.dataset.name + ' is step ' + b.dataset.step + ' of the build. It is not built yet.';
@@ -1100,6 +1152,61 @@ $('tv-save').addEventListener('click', async () => {
   try { const greet = $('t-greet').value; tr = await api('train_save', { on: $('tv-on').checked ? '1' : '0', nums: $('tv-nums').value }); renderTraining(); $('t-greet').value = greet; toast('Saved.'); }
   catch (err) { toast(err.message); }
 });
+// ---------- service areas ----------
+function renderAreas(d) {
+  const st = { ok: ['Connected', 'good'], bad: ['Key not accepted', 'bad'], down: ['Could not reach Google', 'bad'], free: ['No key: using the free map search', ''] }[d.key.state] || ['Not checked yet', ''];
+  const pill = $('sa-key-state'); pill.className = 'pill' + (st[1] ? ' ' + st[1] : ''); pill.textContent = st[0];
+  $('sa-key').value = d.key.has ? '••••••••••••••••••••' + d.key.hint : '';
+  $('sa-key-hint').textContent = d.key.state === 'bad' && d.key.msg ? 'Google says: ' + d.key.msg : d.key.state === 'free' ? 'Without a key she uses a free map that knows fewer small areas. It works, but Google finds more places.' : '';
+  const box = $('sa-techs'); box.textContent = '';
+  if (!d.techs.length) box.appendChild(el('div', 'empty', 'No technician places yet. Until you add one, she does not check places.'));
+  d.techs.forEach((t) => {
+    const row = el('div', 'item'), body = el('span');
+    const n = el('div', '', t.name); n.style.fontWeight = '600';
+    body.appendChild(n); body.appendChild(el('div', 'hint14', t.place)); body.appendChild(el('div', 'hint', (t.via === 'Google' ? 'Google found: ' : 'Map found: ') + t.found));
+    body.children[1].style.color = 'var(--text)';
+    row.appendChild(body);
+    row.appendChild(txtBtn('Remove', true, async () => { try { renderAreas(await api('area_tech_remove', { id: t.id })); toast('Removed.'); } catch (err) { toast(err.message); } }));
+    box.appendChild(row);
+  });
+  $('sa-km').value = d.km; $('sa-out').value = d.outside;
+}
+async function loadAreas() { try { renderAreas(await api('areas_get')); } catch (err) { toast(err.message); } }
+$('sa-key').addEventListener('focus', () => { if ($('sa-key').value.includes('•')) $('sa-key').select(); });
+$('sa-key-form').addEventListener('submit', async (e) => {
+  e.preventDefault(); const b = $('sa-key-save'); b.disabled = true; b.textContent = 'Checking';
+  try { const d = await api('areas_key', { key: $('sa-key').value }); renderAreas(d); toast(d.key.state === 'ok' ? 'Google Maps is connected.' : d.key.state === 'free' ? 'No key saved. She uses the free map search.' : 'Google did not accept this key.'); } catch (err) { toast(err.message); }
+  b.disabled = false; b.textContent = 'Save and check';
+});
+$('sa-tech-form').addEventListener('submit', async (e) => {
+  e.preventDefault(); const b = $('sa-tadd'); b.disabled = true; b.textContent = 'Finding';
+  try { renderAreas(await api('area_tech_add', { name: $('sa-tname').value, place: $('sa-tplace').value })); $('sa-tech-form').reset(); toast('Added.'); } catch (err) { toast(err.message); }
+  b.disabled = false; b.textContent = 'Add';
+});
+$('sa-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try { renderAreas(await api('areas_save', { km: $('sa-km').value, outside: $('sa-out').value })); toast('Saved. She uses it from the next call.'); } catch (err) { toast(err.message); }
+});
+$('sa-try').addEventListener('submit', async (e) => {
+  e.preventDefault(); const q = $('sa-q').value.trim(); if (!q) return;
+  const b = $('sa-go'), out = $('sa-res'); b.disabled = true; b.textContent = 'Searching';
+  try {
+    const r = await api('area_try', { __get: { q } });
+    out.textContent = ''; out.classList.remove('hide');
+    const head = (t) => { const d = el('div', '', t); d.style.fontWeight = '700'; d.style.fontSize = '16px'; out.appendChild(d); };
+    if (r.status === 'in' || r.status === 'out') {
+      head(r.label);
+      out.appendChild(ppLine('Nearest technician:', r.tech + ', ' + r.tech_place));
+      out.appendChild(ppLine('Distance:', r.km + ' km'));
+      const wrap = el('div'), p = el('span', 'pill ' + (r.status === 'in' ? 'good' : 'bad'), r.status === 'in' ? 'Inside your service area' : 'Outside your service area (limit ' + r.limit + ' km)');
+      wrap.appendChild(p); out.appendChild(wrap);
+    } else if (r.status === 'off') { head('No technician places yet'); out.appendChild(ppLine('', 'Add at least one in step 2.'));
+    } else if (r.status === 'unknown') { head(q); out.appendChild(ppLine('', 'The map could not find this place. On a call she asks for the nearest town or district.'));
+    } else { head(q); out.appendChild(ppLine('', r.why === 'key' ? 'Google did not accept the Maps key. Check it in step 1.' : 'The map could not be reached just now.')); }
+  } catch (err) { toast(err.message); }
+  b.disabled = false; b.textContent = 'Search';
+});
+
 // ---------- GPS servers ----------
 const GS_STATE = { ok: ['Connected', 'good'], badkey: ['Key not accepted', 'bad'], down: ['Could not reach it', 'bad'], nokey: ['No key yet', ''], unknown: ['Not checked yet', ''] };
 function renderGps(list) {
