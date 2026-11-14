@@ -27,10 +27,10 @@ the real phone line will be.
 - The folder can be moved to another path or site as it is. Copy the `ivr-data` folder
   to keep the settings and call log.
 - Prices: the owner types his own list on the Products and prices page (`products.json` in the data folder). She says exactly those prices; the website is not read.
-- Lead email: after every real phone call a summary goes to `LEAD_EMAIL` (`lib.php`).
+- Call email: after every real phone call a summary goes to the team for that kind of call (`MAIL_TO` in `lib.php`), with a copy to `MAIL_COPY`.
 - GPS servers: on a renewal call she looks the vehicle number up on the three tracking servers (read only) and tells the expiry date. The server keys are typed on the GPS servers page and kept in `settings.json`, never in this code.
 - Caller memory: when a mobile number calls again within 30 days she is given the end of its last call.
-- After a phone call: the call is read once more to see what it was. Complaints, new bookings, re-adding and other requests become an unassigned task in TaskManager (`TASK_URL` in `lib.php`); renewals are only emailed. Every call is emailed to `LEAD_EMAIL`.
+- After a phone call: the call is read once more to see what it was. Complaints, new bookings, re-adding and other requests become an unassigned task in TaskManager (`TASK_URL` in `lib.php`); renewals are only emailed. Every call is emailed to the right team.
 - Not built yet: leads page, staff transfer.
 
 ## Live call server (ivr/live/)

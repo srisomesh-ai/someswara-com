@@ -136,7 +136,16 @@ Never write [[RULE: ...]] unless he has just said yes. The tag is not spoken; do
 TXT;
 const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
 const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Once you know the vehicle and the need, suggest the one product from the list that fits that vehicle and need best, with its price and what the price includes. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
-const LEAD_EMAIL = 'info@bharatgpstracker.com';                         // where the summary of every phone call goes
+// Which team gets the email about a finished phone call, by what the call was. Every email is also copied to MAIL_COPY.
+const MAIL_TO = [
+    'renewal'      => ['support@bharatgps.com'],                            // licence and renewals
+    'readd'        => ['support@bharatgps.com'],
+    'troubleshoot' => ['support@bharatgps.com', 'manager@bharatgps.com'],   // GPS not working
+    'other'        => ['manager@bharatgps.com'],                            // complaints and other requests
+    'new'          => ['sales@bharatgps.com'],
+    'none'         => ['sales@bharatgps.com'],                              // questions only, missed calls
+];
+const MAIL_COPY = 'admin@bharatgps.com';
 const VEHICLE_CHECK = "- As soon as they have said the vehicle number, do not repeat the number back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n";
 const TROUBLE_ASK = "- Do not sell anything. Say sorry for the trouble, then ask these one at a time: since when it is offline; whether any service or repair work was done on the vehicle in recent days, or the battery was removed or changed; the vehicle number; their name; and where the vehicle is now.\n- Then say a technician will be assigned and our team will call them to confirm the visit time.\n";
 const TROUBLE_CHECK = "- Do not sell anything. Say sorry for the trouble in a few words and ask only the vehicle number. Do not ask since when it is offline; our server shows that.\n{{VEHICLE}}- The result tells you when the GPS was last online and exactly what to do next: follow it. Do not promise a technician unless the result says so.\n";
@@ -683,8 +692,9 @@ function lead_mail(array $c): bool {
     foreach ($c['turns'] as $t) $body .= ($t['who'] === 'agent' ? 'Agent: ' : 'Caller: ') . $t['text'] . "\n";
     $host = preg_replace('~[^a-z0-9.-]~', '', strtolower(preg_replace('~^www\.|:\d+$~', '', (string)($_SERVER['HTTP_HOST'] ?? '')))) ?: 'someswara.com';
     $subject = '=?UTF-8?B?' . base64_encode($what . ($tail !== '' ? ": $tail" : '') . (($c['task_id'] ?? '') !== '' ? " [{$c['task_id']}]" : '') . " ($num)") . '?=';
-    $headers = "From: Bharat GPS call agent <noreply@$host>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64";
-    return function_exists('mail') && @mail(LEAD_EMAIL, $subject, chunk_split(base64_encode($body)), $headers);
+    $to = MAIL_TO[$c['outcome'] ?? 'none'] ?? MAIL_TO['none'];
+    $headers = "From: Bharat GPS call agent <noreply@$host>\r\nCc: " . MAIL_COPY . "\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64";
+    return function_exists('mail') && @mail(implode(', ', $to), $subject, chunk_split(base64_encode($body)), $headers);
 }
 
 // ---------- HTTP ----------
