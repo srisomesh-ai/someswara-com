@@ -146,6 +146,7 @@ const MAIL_TO = [
     'none'         => ['sales@bharatgps.com'],                              // questions only, missed calls
 ];
 const MAIL_COPY = 'admin@bharatgps.com';
+const MAIL_ON = false;   // the owner switched call emails off during testing (14 Nov 2026); true sends them again
 const VEHICLE_CHECK = "- You need the full vehicle number: two state letters, two digits, one to three letters, then four digits, like AP39BP0042. If the caller gives only part of it, such as only the last four digits, do not check: ask them for the full number starting with the state letters.\n- As soon as they have said the full number, do not repeat it back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the full vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n- Never tell the caller an expiry date, a validity, or whether the GPS is online unless a check result gave it to you. If no result has come, say you could not check just now and that the team will call them. Never guess.\n";
 const TROUBLE_ASK = "- Do not sell anything. Say sorry for the trouble, then ask these one at a time: since when it is offline; whether any service or repair work was done on the vehicle in recent days, or the battery was removed or changed; the vehicle number; their name; and where the vehicle is now.\n- Then say a technician will be assigned and our team will call them to confirm the visit time.\n";
 const TROUBLE_CHECK = "- Do not sell anything. Say sorry for the trouble in a few words and ask only the vehicle number. Do not ask since when it is offline; our server shows that.\n{{VEHICLE}}- The result tells you when the GPS was last online and exactly what to do next: follow it. Do not promise a technician unless the result says so.\n";
@@ -672,7 +673,7 @@ function call_wrap(array $c): array {
             else $keep['task_error'] = (string)($r['data']['error'] ?? ($r['err'] ?: 'TaskManager did not answer (' . $r['code'] . ').'));
         }
     }
-    $keep['mailed'] = lead_mail($c + $keep) ? 1 : -1;
+    $keep['mailed'] = MAIL_ON ? (lead_mail($c + $keep) ? 1 : -1) : 3;   // 3: finished, emails are switched off
     return $keep;
 }
 
