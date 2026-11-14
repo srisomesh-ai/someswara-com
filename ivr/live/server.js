@@ -10,6 +10,8 @@
 // language, greeting and the agent's instructions, and sends the transcript back the same way.
 
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { WebSocketServer, WebSocket } = require('ws');
 
 const PORT = +(process.env.PORT || 8790);
@@ -231,14 +233,97 @@ function sayAck(S) {
   return text;
 }
 
+// ---------- call recordings ----------
+// Every answered phone call is kept as one sound file with both voices, for the owner to listen to from the
+// dashboard. Files stay in the rec folder beside this program for 30 days. The caller's audio arrives in real
+// time, so it is the clock; her audio is placed at the moment it was sent to the phone line.
+const REC_DIR = path.join(__dirname, 'rec'), REC_DAYS = 30;
+const recBytes = (S, ms) => Math.floor(ms * S.rate / 1000) * 2;
+function recStart(S) {
+  S.rec = { t0: Date.now(), caller: [], callerEnd: 0, agent: [], agentEnd: 0, max: recBytes(S, MAX_CALL_MS + 60000) };
+}
+function recCaller(S, pcm) {
+  const R = S.rec; if (!R || R.callerEnd >= R.max) return;
+  const now = recBytes(S, Date.now() - R.t0) - pcm.length;
+  if (now - R.callerEnd > S.rate * 2 * 0.3) R.callerEnd = now;          // the line was silent for a while: leave the gap
+  R.caller.push({ at: R.callerEnd, pcm }); R.callerEnd += pcm.length;
+}
+function recAgent(S, pcm) {
+  const R = S.rec; if (!R || R.agentEnd >= R.max) return;
+  const at = Math.max(recBytes(S, Date.now() - R.t0), R.agentEnd);     // clips queue up one after another on the line
+  R.agent.push({ at, pcm }); R.agentEnd = at + pcm.length;
+}
+function recCut(S) {                                                    // the caller interrupted: the rest of her audio was dropped
+  const R = S.rec; if (!R) return;
+  const now = recBytes(S, Date.now() - R.t0);
+  R.agent = R.agent.filter((c) => c.at < now).map((c) => (c.at + c.pcm.length > now ? { at: c.at, pcm: c.pcm.subarray(0, now - c.at) } : c));
+  R.agentEnd = Math.min(R.agentEnd, now);
+}
+// Mix both voices into one WAV file. Returns its length in seconds, or 0 when nothing worth keeping was said.
+async function recSave(S) {
+  const R = S.rec; S.rec = null;
+  if (!R || !R.caller.length) return 0;
+  const total = Math.min(Math.max(R.callerEnd, R.agentEnd), R.max), n = total >> 1;
+  if (n < S.rate * 3) return 0;
+  const mix = new Int16Array(n);
+  for (const track of [R.caller, R.agent]) for (const c of track) {
+    const start = c.at >> 1, len = Math.min(c.pcm.length >> 1, n - start);
+    for (let i = 0; i < len; i++) { const v = mix[start + i] + c.pcm.readInt16LE(i * 2); mix[start + i] = v > 32767 ? 32767 : v < -32768 ? -32768 : v; }
+  }
+  const head = Buffer.alloc(44), data = Buffer.from(mix.buffer, mix.byteOffset, n * 2);
+  head.write('RIFF', 0); head.writeUInt32LE(36 + data.length, 4); head.write('WAVEfmt ', 8); head.writeUInt32LE(16, 16); head.writeUInt16LE(1, 20); head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(S.rate, 24); head.writeUInt32LE(S.rate * 2, 28); head.writeUInt16LE(2, 32); head.writeUInt16LE(16, 34); head.write('data', 36); head.writeUInt32LE(data.length, 40);
+  await fs.promises.mkdir(REC_DIR, { recursive: true });
+  await fs.promises.writeFile(path.join(REC_DIR, S.cfg.call_id + '.wav'), Buffer.concat([head, data]));
+  return Math.round(n / S.rate);
+}
+async function recClean() {
+  try {
+    const old = Date.now() - REC_DAYS * 86400000;
+    for (const f of await fs.promises.readdir(REC_DIR)) {
+      const file = path.join(REC_DIR, f);
+      if (/\.wav$/.test(f) && (await fs.promises.stat(file)).mtimeMs < old) await fs.promises.unlink(file);
+    }
+  } catch (e) { /* no recordings yet */ }
+}
+recClean(); setInterval(recClean, 6 * 3600000).unref();
+
+// The dashboard hands the browser a short-lived pass for one recording; this server checks it with the dashboard.
+const recPass = new Map();
+async function recServe(req, res, url) {
+  const id = (url.pathname.match(/^\/rec\/([a-f0-9]{16})\.wav$/) || [])[1], t = url.searchParams.get('t') || '';
+  const no = (code) => { res.writeHead(code, { 'Content-Type': 'text/plain' }); res.end(); };
+  if (!id || !/^[a-f0-9]{48}$/.test(t) || (req.method !== 'GET' && req.method !== 'HEAD')) return no(404);
+  const known = recPass.get(t);
+  if (!known || known.exp < Date.now() || known.id !== id) {
+    try { await ivr('rec_check', { t, id }); } catch (e) { return no(403); }
+    if (recPass.size > 500) recPass.clear();
+    recPass.set(t, { id, exp: Date.now() + 30 * 60000 });
+  }
+  const file = path.join(REC_DIR, id + '.wav');
+  let size; try { size = (await fs.promises.stat(file)).size; } catch (e) { return no(404); }
+  const h = { 'Content-Type': 'audio/wav', 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=600' };
+  const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+  let from = 0, to = size - 1, code = 200;
+  if (m && (m[1] || m[2])) {
+    if (m[1]) { from = +m[1]; if (m[2]) to = Math.min(+m[2], size - 1); } else from = Math.max(0, size - +m[2]);
+    if (from > to || from >= size) { res.writeHead(416, { 'Content-Range': 'bytes */' + size }); return res.end(); }
+    code = 206; h['Content-Range'] = 'bytes ' + from + '-' + to + '/' + size;
+  }
+  h['Content-Length'] = to - from + 1;
+  res.writeHead(code, h);
+  if (req.method === 'HEAD') return res.end();
+  fs.createReadStream(file, { start: from, end: to }).on('error', () => res.destroy()).pipe(res);
+}
+
 // ---------- one call ----------
 function send(S, msg) {
   if (S.out) return S.out(msg);              // a phone call has its own way of sending (see phoneOut)
   if (S.ws.readyState === WebSocket.OPEN) S.ws.send(JSON.stringify(msg));
 }
 
-async function syncCall(S, ended) {
-  try { await ivr('live_sync', { token: S.token, turns: JSON.stringify(S.turns), ended: ended ? '1' : '0' }); }
+async function syncCall(S, ended, recSecs) {
+  try { await ivr('live_sync', { token: S.token, turns: JSON.stringify(S.turns), ended: ended ? '1' : '0', rec_secs: String(recSecs || 0) }); }
   catch (e) { log('sync failed:', e.message); }
 }
 
@@ -428,8 +513,10 @@ async function endState(S) {
   if (S.abort) S.abort.abort();
   if (S.stt) try { S.stt.close(); } catch (e) { /* already closed */ }
   await S.replying;
-  await syncCall(S, true);
-  log('call', S.cfg.call_id, 'ended,', S.turns.length, 'lines');
+  let secs = 0;
+  try { secs = await recSave(S); } catch (e) { log('recording not saved:', e.message); }
+  await syncCall(S, true, secs);
+  log('call', S.cfg.call_id, 'ended,', S.turns.length, 'lines' + (secs ? ', recorded ' + secs + ' s' : ''));
 }
 
 // ---------- a test call from the dashboard ----------
@@ -467,6 +554,7 @@ function wavPcm(b64) {
 function phoneOut(S, msg) {
   if (msg.type === 'audio') {
     let pcm = wavPcm(msg.audio);
+    recAgent(S, pcm);
     const pad = (320 - pcm.length % 320) % 320;          // Exotel wants pieces in multiples of 320 bytes, at least 3200
     if (pad) pcm = Buffer.concat([pcm, Buffer.alloc(pad)]);
     if (pcm.length < 3200) pcm = Buffer.concat([pcm, Buffer.alloc(3200 - pcm.length)]);
@@ -500,6 +588,7 @@ function phoneAudio(S, pcm) {
     if (V.loudMs >= (talking ? 240 : 60)) {
       V.on = true; V.loudMs = 0; V.speech = ms; V.silent = 0; V.total = 0;
       S.clear();                                         // stop her mid-sentence
+      recCut(S);
       S.playUntil = 0;
       speechStart(S);
       for (const p of V.pre) audioIn(S, p);
@@ -536,12 +625,14 @@ function phoneCall(ws, key) {
       S.clear = () => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event: 'clear', stream_sid: S.sid })); };
       log('call', cfg.call_id, 'phone call started,', cfg.allowed ? 'answering' : 'not a test number', cfg.lang_code, cfg.voice, rate + ' Hz');
       if (ws.readyState !== WebSocket.OPEN) { endState(S); return; }
-      if (cfg.allowed) openStt(S);
+      if (cfg.allowed) { openStt(S); recStart(S); }
       greet(S);
       // Not a number she answers yet: say the call-back message, then hang up.
       if (!cfg.allowed) S.replying.then(() => setTimeout(() => ws.close(), Math.max(0, S.playUntil - Date.now()) + 800));
     } else if (m.event === 'media' && S && S.cfg.allowed && !S.closed) {
-      phoneAudio(S, Buffer.from((m.media && m.media.payload) || '', 'base64'));
+      const pcm = Buffer.from((m.media && m.media.payload) || '', 'base64');
+      recCaller(S, pcm);
+      phoneAudio(S, pcm);
     } else if (m.event === 'stop') ws.close();
   });
   ws.on('close', () => { clearTimeout(limit); if (S) endState(S); else log('phone stream closed before the call was set up'); });
@@ -596,6 +687,7 @@ function vobizAnswer(req, res, url) {
 function vobizOut(S, msg) {
   if (msg.type === 'audio') {
     const pcm = wavPcm(msg.audio), step = S.rate * 2 * 20 / 1000;   // 20 ms pieces
+    recAgent(S, pcm);
     for (let i = 0; i < pcm.length; i += step) {
       if (S.ws.readyState !== WebSocket.OPEN) return;
       S.ws.send(JSON.stringify({ event: 'playAudio', streamId: S.sid, media: { contentType: 'audio/x-l16', sampleRate: S.rate, payload: pcm.subarray(i, i + step).toString('base64') } }));
@@ -633,12 +725,13 @@ function vobizCall(ws, key, q) {
       S.clear = () => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event: 'clearAudio', streamId: S.sid })); };
       log('call', cfg.call_id, 'Vobiz call started,', cfg.allowed ? 'answering' : 'not a test number', cfg.lang_code, cfg.voice, rate + ' Hz', mulaw ? 'mu-law' : 'L16');
       if (ws.readyState !== WebSocket.OPEN) { endState(S); return; }
-      if (cfg.allowed) openStt(S);
+      if (cfg.allowed) { openStt(S); recStart(S); }
       greet(S);
       if (!cfg.allowed) S.replying.then(() => setTimeout(() => ws.close(), Math.max(0, S.playUntil - Date.now()) + 800));
     } else if (m.event === 'media' && S && S.cfg.allowed && !S.closed) {
-      const raw = Buffer.from((m.media && m.media.payload) || '', 'base64');
-      phoneAudio(S, mulaw ? mulawToPcm(raw) : raw);
+      const raw = Buffer.from((m.media && m.media.payload) || '', 'base64'), pcm = mulaw ? mulawToPcm(raw) : raw;
+      recCaller(S, pcm);
+      phoneAudio(S, pcm);
     } else if (m.event === 'stop') ws.close();
   });
   ws.on('close', () => { clearTimeout(limit); if (S) endState(S); else log('phone stream closed before the call was set up'); });
@@ -650,6 +743,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok'); return; }
   if (url.pathname === '/vobiz/answer') return vobizAnswer(req, res, url);
   if (url.pathname === '/vobiz/hangup') { req.resume(); res.writeHead(204); res.end(); return; }
+  if (url.pathname.startsWith('/rec/')) return void recServe(req, res, url).catch(() => { try { res.writeHead(500); res.end(); } catch (e) { /* already sent */ } });
   res.writeHead(404); res.end();
 });
 const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });

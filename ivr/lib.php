@@ -259,6 +259,7 @@ function call_summary(array $c): array {
         'phone' => !empty($c['phone']),
         'from' => (string)($c['from'] ?? ''),
         'answered' => !isset($c['answered']) || $c['answered'],
+        'rec' => (int)($c['rec'] ?? 0),   // seconds of recording kept on the call server, 0 when there is none
     ];
 }
 
@@ -593,6 +594,7 @@ function gps_result_text(array $r): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
+const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
 // The pass for TaskManager: made here once and kept in settings.json. TaskManager remembers the first key it is shown.

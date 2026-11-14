@@ -252,6 +252,11 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       <div class="head"><div><h1>Call history</h1><div class="sub">The last 50 calls</div></div></div>
       <div class="card hide" id="detail" style="display:flex;flex-direction:column;gap:14px">
         <div class="thead"><h2 id="detail-title">Call</h2><button type="button" class="btn" id="detail-close">Close</button></div>
+        <div id="detail-rec" class="hide" style="display:flex;flex-direction:column;gap:6px">
+          <span class="lbl">Call recording</span>
+          <audio id="detail-audio" controls preload="none" style="width:100%"></audio>
+          <span class="hint">Both voices. Kept for 30 days.</span>
+        </div>
         <div class="lines" id="detail-lines" style="max-height:none"></div>
       </div>
       <div class="card"><div class="scroll"><table>
@@ -545,7 +550,7 @@ function fillTable(tbody, calls) {
     tr.appendChild(cell(c.phone ? (c.from || 'Phone call') : 'Browser test'));
     tr.appendChild(cell(c.asked || 'Caller did not speak'));
     const res = document.createElement('td'); const pill = document.createElement('span');
-    pill.className = 'pill' + (c.flagged ? ' bad' : ''); pill.textContent = c.flagged ? 'Wrong answer marked' : !c.phone ? 'Test call' : c.answered ? 'Phone call' : 'Not answered, call back';
+    pill.className = 'pill' + (c.flagged ? ' bad' : ''); pill.textContent = c.flagged ? 'Wrong answer marked' : !c.phone ? 'Test call' : c.answered ? (c.rec ? 'Phone call, recorded' : 'Phone call') : 'Not answered, call back';
     res.appendChild(pill); tr.appendChild(res);
     tr.appendChild(cell(mmss(c.seconds)));
     const rev = document.createElement('td'); const btn = document.createElement('button');
@@ -641,11 +646,14 @@ async function openCall(id) {
     $('detail-title').textContent = 'Call on ' + when(d.call.started) + ', ' + mmss(d.call.seconds);
     $('detail-lines').textContent = '';
     for (const l of d.call.lines) addLine($('detail-lines'), l.who, l.text, l.flagged, { typed: l.typed });
+    const au = $('detail-audio'); au.pause(); au.removeAttribute('src'); au.load();
+    $('detail-rec').classList.toggle('hide', !d.call.rec);
+    if (d.call.rec) api('rec_token', { id }).then((r) => { au.src = r.url; }).catch((err) => toast(err.message));
     $('detail').classList.remove('hide');
     $('detail').scrollIntoView({ behavior: 'smooth' });
   } catch (err) { toast(err.message); }
 }
-$('detail-close').addEventListener('click', () => $('detail').classList.add('hide'));
+$('detail-close').addEventListener('click', () => { $('detail-audio').pause(); $('detail').classList.add('hide'); });
 
 // ---------- browser test call ----------
 // One turn at a time. Talk: the agent speaks, then the microphone listens until the caller pauses.

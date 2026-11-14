@@ -31,6 +31,7 @@ the real phone line will be.
 - GPS servers: on a renewal call she looks the vehicle number up on the three tracking servers (read only) and tells the expiry date. The server keys are typed on the GPS servers page and kept in `settings.json`, never in this code.
 - Caller memory: when a mobile number calls again within 30 days she is given the end of its last call.
 - After a phone call: the call is read once more to see what it was. Complaints, new bookings, re-adding and other requests become an unassigned task in TaskManager (`TASK_URL` in `lib.php`); renewals are only emailed. Every call is emailed to the right team.
+- Recordings: the call server keeps every answered phone call as one sound file with both voices (`rec/` beside `server.js` on the VPS, 30 days). Call history plays it through a short-lived pass (`rec_token`, `rec_check`).
 - Not built yet: leads page, staff transfer.
 
 ## Live call server (ivr/live/)
@@ -42,7 +43,7 @@ sentence, and the caller can interrupt.
 - Install or update on the VPS (as root): `curl -fsSL https://someswara.com/ivr/live/install.sh | bash`
 - Remove: `curl -fsSL https://someswara.com/ivr/live/install.sh | bash -s -- remove`
 - Logs: `journalctl -u bgt-call -n 50`
-- It stores nothing. Per call it trades a one-time token with `api.php` for the Sarvam key, voice,
+- Apart from call recordings it stores nothing. Per call it trades a one-time token with `api.php` for the Sarvam key, voice,
   language and instructions, and sends the transcript back the same way.
 
 ## Phone line (Exotel)

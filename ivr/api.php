@@ -16,7 +16,7 @@ function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
 $writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
-    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes', 'gps_save'];
+    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes', 'gps_save', 'rec_token'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -55,6 +55,14 @@ if ($action === 'login') {
 // ---------- live call server ----------
 // The VPS has no login of its own. The dashboard hands the browser a one-time token (live_token, below);
 // the VPS trades it here for what the call needs, and reports the transcript back with the same token.
+// The call server asks whether a pass for one recording is good. The pass itself is the secret.
+if ($action === 'rec_check') {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
+    $p = read_json('rec.json')[(string)($_POST['t'] ?? '')] ?? null;
+    if (!is_array($p) || ($p['exp'] ?? 0) < time() || !hash_equals((string)$p['id'], (string)($_POST['id'] ?? ''))) fail('Bad pass.', 403);
+    out(['ok' => true]);
+}
+
 // A real phone call has reached the live call server. The secret key in the address Exotel was given is the pass.
 if ($action === 'phone_config') {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
@@ -143,6 +151,7 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
     if ($turns) $call['turns'] = array_slice($turns, 0, 200);
     $call['last'] = time();
     if (($_POST['ended'] ?? '') === '1' && empty($call['ended'])) $call['ended'] = time();
+    if ((int)($_POST['rec_secs'] ?? 0) > 0) $call['rec'] = (int)$_POST['rec_secs'];   // the call server kept a recording
     // A real phone call has ended: understand it, raise a task if the team has work, and email the team, once.
     // The owner's own training calls are left out. The call server gets its answer first; the rest takes a few seconds.
     $wrap = !empty($call['ended']) && !empty($call['phone']) && empty($call['mailed']) && empty($all[$tok]['trainer']);
@@ -479,6 +488,15 @@ case 'correction_ignore':
     $t['corrections'] = $rest;
     write_json('training.json', $t);
     out(training());
+
+case 'rec_token':   // a two-hour pass for the logged-in owner to play one call's recording
+    $call = call_find((string)($_POST['id'] ?? ''));
+    if (!$call || empty($call['rec'])) fail('This call has no recording.', 404);
+    $all = array_filter(read_json('rec.json'), fn($r) => is_array($r) && ($r['exp'] ?? 0) > time());
+    $tok = bin2hex(random_bytes(24));
+    $all[$tok] = ['id' => $call['id'], 'exp' => time() + 7200];
+    write_json('rec.json', $all);
+    out(['url' => REC_URL . '/' . $call['id'] . '.wav?t=' . $tok]);
 
 case 'call_get':
     $call = call_find((string)($_GET['id'] ?? ''));
