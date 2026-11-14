@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 15;
+const VERSION = 16;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -201,7 +201,7 @@ function hearGender(S, pcm) {
 // The moment the caller stops, she says a tiny "ok sir" while the real answer is still being prepared,
 // so there is no dead silence. These few clips are made once and kept ready.
 const ACKS = {
-  te: { m: ['ఓకే సర్', 'సరే సర్', 'అలాగే సర్'], f: ['ఓకే మేడమ్', 'సరే మేడమ్', 'అలాగే మేడమ్'], '': ['ఓకే అండి', 'సరే అండి', 'అలాగే అండి'] },
+  te: { m: ['ఓకే సర్', 'సరే సర్', 'అలాగే సర్'], f: ['ఓకే మేడమ్', 'సరే మేడమ్', 'అలాగే మేడమ్'], '': ['ఓకే', 'సరే', 'అలాగే'] },
   hi: { m: ['ओके सर', 'जी सर', 'ठीक है सर'], f: ['ओके मैडम', 'जी मैडम', 'ठीक है मैडम'], '': ['ओके जी', 'जी', 'ठीक है जी'] },
   en: { m: ['Okay sir', 'Sure sir', 'Alright sir'], f: ['Okay madam', 'Sure madam', 'Alright madam'], '': ['Okay', 'Sure', 'Alright'] },
 };
@@ -451,7 +451,7 @@ async function reply(S, hearMs, ack, afterCheck) {
   // go at the very end. Sarvam charges less for text it has already read, so this keeps the cost of each reply down.
   const notes = [];
   if (S.gender) notes.push("The caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.');
-  else notes.push('It is not known yet whether the caller is a man or a woman. Do not say sir or madam; use only the neutral polite word.');
+  else notes.push('It is not known yet whether the caller is a man or a woman. Do not say sir or madam, and do not use అండి as an address word; speak politely with no address word.');
   if (ack) notes.push('You have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.');
   // A check result is news once. After she has told the caller, it stays only as background, otherwise she keeps
   // repeating it or asking the same question again on every later reply.
