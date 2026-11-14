@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 14;
+const VERSION = 15;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -451,13 +451,14 @@ async function reply(S, hearMs, ack, afterCheck) {
   // go at the very end. Sarvam charges less for text it has already read, so this keeps the cost of each reply down.
   const notes = [];
   if (S.gender) notes.push("The caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.');
+  else notes.push('It is not known yet whether the caller is a man or a woman. Do not say sir or madam; use only the neutral polite word.');
   if (ack) notes.push('You have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.');
   // A check result is news once. After she has told the caller, it stays only as background, otherwise she keeps
   // repeating it or asking the same question again on every later reply.
   const freshResult = S.vehicle && !S.vehicleTold;
   if (S.vehicle && S.vehicleNear) notes.push(S.vehicle);
   else if (freshResult) notes.push('Result of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.');
-  else if (S.vehicle) notes.push('Background only: earlier in this call you checked a vehicle and you have ALREADY told the caller the result. Do not say it again, do not ask about that vehicle number again, and carry on with what the caller says now. The result was: ' + S.vehicle);
+  else if (S.vehicleFact) notes.push('Background, already told to the caller, do not say it again: ' + S.vehicleFact + ' Now answer only what the caller has just said and move to the next step.');
   const messages = [{ role: 'system', content: promptFor(S, lang) }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
   if (afterCheck) messages.push({ role: 'user', content: '(The vehicle check has finished. Tell the caller the result now.)' });
@@ -535,7 +536,7 @@ async function reply(S, hearMs, ack, afterCheck) {
   const number = vehicleTag(raw);
   if (number && S.kind !== 'all') S.kind = S.kind === 'new' ? 'all' : 'old';   // a vehicle check means an existing customer
   if (number && !afterCheck) {
-    S.vehicleNear = false;
+    S.vehicleNear = false; S.vehicleFact = '';
     if (!fullPlate(number)) {
       log('call', S.cfg.call_id, 'vehicle check skipped, not a full number:', number);
       S.vehicle = 'You tried to check "' + number + '", which is only part of a vehicle number, so nothing was checked. Ask the caller for the full vehicle number starting with the state letters, like A P three nine B P zero zero four two. Do not say you are checking until you have the full number.';
@@ -547,6 +548,7 @@ async function reply(S, hearMs, ack, afterCheck) {
       try { found = await ivr('live_vehicle', { token: S.token, number, why: whyCalling(S) }, 22000); log('call', S.cfg.call_id, 'vehicle check', number, found.status); }
       catch (e) { log('vehicle check failed:', e.message); found = { text: 'The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.' }; }
       S.vehicle = found.text || '';
+      S.vehicleFact = found.fact || '';
       S.vehicleNear = !!found.near;                         // she still has to ask whether the close number is theirs
     }
     S.vehicleTold = false;
@@ -557,7 +559,7 @@ async function reply(S, hearMs, ack, afterCheck) {
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '' };
 }
 
 function greet(S) {

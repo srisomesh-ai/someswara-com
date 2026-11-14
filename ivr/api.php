@@ -125,7 +125,7 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
             call_save($c);
         }
         $why = in_array($_POST['why'] ?? '', ['renew', 'trouble'], true) ? $_POST['why'] : '';
-        out(['status' => $r['status'], 'near' => !empty($r['near']), 'text' => gps_result_text($r, $why)]);
+        out(['status' => $r['status'], 'near' => !empty($r['near']), 'text' => gps_result_text($r, $why), 'fact' => gps_result_fact($r)]);
     }
     if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes
         if (empty($all[$tok]['trainer'])) fail('This call cannot teach her.', 403);

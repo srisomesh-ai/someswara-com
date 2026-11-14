@@ -85,6 +85,8 @@ Existing customer whose GPS has already stopped because it was not renewed for a
 - Take the vehicle number, their name and where the vehicle is, and say our team will call to fix the visit.
 
 Always:
+- Never say again what you said in your previous reply. When the caller answers your question, accept the answer and move to the next step. If you did not understand their answer, ask only about the part you missed, in different words.
+- A caller who calls you madam or sir is addressing you. It tells you nothing about them. Until you are told whether the caller is a man or a woman, use only అండి (Hindi जी), not sir and not madam.
 - Address the caller only as sir, madam, అండి or గారు with their name (in Hindi सर, मैडम or जी). Callers often call you అమ్మా, అన్నా, అక్కా, చెల్లి, బాబు, తల్లి, bro, dear, बेटा, भैया or दीदी. Never copy the word they use for you and never use any such family or friendly word for them. Stay polite and professional however casually they speak.
 - Keep it short. Every reply is one or two short sentences, never more than about twenty words, and takes only a few seconds to say. Answer only what they just asked, then stop, or ask one short question. A long answer sounds like reading a script.
 - Say a thing once. Do not repeat the price, subscription, warranty or free installation again later in the call unless they ask again. Do not finish every sentence with the same polite word.
@@ -592,6 +594,19 @@ function gps_facts(array $r, string $why = ''): string {
     return $valid . "\n" . $sig . "\nUse only the one part that matches why they called. Never say both parts in one reply.";
 }
 
+// The same result as bare facts with no instructions, kept as background once she has told the caller.
+function gps_result_fact(array $r): string {
+    $n = $r['number'] ?? '';
+    if ($r['status'] === 'found' && empty($r['near'])) {
+        $f = "vehicle $n is on our server";
+        if (($r['expiry'] ?? '') !== '') $f .= ", expiry date {$r['expiry_text']}" . ($r['days'] < 0 ? ' (already expired)' : " ({$r['days']} days left)");
+        $f .= !empty($r['online']) ? ', GPS online now' : (($r['last_ts'] ?? 0) ? ", GPS last online {$r['last']}" : '');
+        return $f . '.';
+    }
+    if ($r['status'] === 'none') return "vehicle $n is not in our records (expired earlier and removed). You offered re-adding the same GPS for 1700 rupees or a new GPS for 3300 rupees.";
+    return '';
+}
+
 // The result in words, for her.
 function gps_result_text(array $r, string $why = ''): string {
     $n = $r['number'] ?? '';
@@ -601,13 +616,13 @@ function gps_result_text(array $r, string $why = ''): string {
             return "Vehicle $n is found on our server.\n" . gps_facts($r, $why);
         case 'many': return "More than one vehicle matches $n. Ask the caller to say the full vehicle number once more, slowly.";
         case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment, note what they need, and say the team will call them.";
-        default: return "Vehicle $n is not on any of our servers. Tell the caller that this vehicle number is not in our records, which means its GPS expired earlier and was removed from the server. Then explain the two choices: adding it again by re-installing the same GPS costs one thousand seven hundred rupees; or, if that GPS no longer works, a new GPS is better, which costs three thousand three hundred rupees. Ask which they prefer. Only if the caller says the number you checked was wrong, take the right number and check that.";
+        default: return "Vehicle $n is not on any of our servers. Tell the caller that this vehicle number is not in our records, which means its GPS expired earlier and was removed from the server. Then explain the two choices: adding it again by re-installing the same GPS costs one thousand seven hundred rupees; or, if that GPS no longer works, a new GPS is better, which costs three thousand three hundred rupees. Ask which they prefer, once. When they choose either one, do not explain it again: say you have noted it, take their name and where the vehicle is, and say our team will call to fix the technician's visit. Only if the caller says the number you checked was wrong, take the right number and check that.";
     }
 }
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 14;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 15;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
