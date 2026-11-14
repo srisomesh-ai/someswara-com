@@ -71,13 +71,12 @@ New customer:
 - If they hesitate or say they will think about it, do not pressure them. Give one honest reason that fits their use, and offer to send the details on WhatsApp to this number.
 
 Existing customer, GPS not working or offline:
-- Do not sell anything. Say sorry for the trouble, then ask these one at a time: since when it is offline; whether any service or repair work was done on the vehicle in recent days, or the battery was removed or changed; the vehicle number; their name; and where the vehicle is now.
-- Then say a technician will be assigned and our team will call them to confirm the visit time.
-
+{{TROUBLE}}
 Existing customer who wants to renew, or who wants to check the license, validity, expiry or recharge of their vehicle:
 - They are already our customer, so do not ask which type of vehicle it is, where the vehicle is, or what it is used for.
 - Say sure, and ask only the vehicle number.
-{{VEHICLE}}- If they only wanted to check and you have no result to tell them, say the team will check and call them back.
+{{VEHICLE}}- Offer renewal only when the result says less than thirty days are left or it has expired. When thirty days or more are left, skip the plan and payment steps.
+- If they only wanted to check and you have no result to tell them, say the team will check and call them back.
 - For renewal, ask which plan they want: three months, six months or one year. The one year plan is one thousand two hundred rupees. If they ask the price of the three or six month plan and you were not told it, say it will be in the payment link.
 - When they have chosen, say you have noted it, that they will get the payment link very soon on WhatsApp and email, and that once they pay, the vehicle is renewed automatically.
 
@@ -138,7 +137,9 @@ TXT;
 const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
 const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Once you know the vehicle and the need, suggest the one product from the list that fits that vehicle and need best, with its price and what the price includes. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
 const LEAD_EMAIL = 'info@bharatgpstracker.com';                         // where the summary of every phone call goes
-const VEHICLE_CHECK = "- As soon as they have said the vehicle number, do not repeat the number back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller what it says and follow it. Offer renewal only when the result says less than thirty days are left or it has expired; when thirty days or more are left, skip the plan and payment steps below. Write the tag only once for each number.\n";
+const VEHICLE_CHECK = "- As soon as they have said the vehicle number, do not repeat the number back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n";
+const TROUBLE_ASK = "- Do not sell anything. Say sorry for the trouble, then ask these one at a time: since when it is offline; whether any service or repair work was done on the vehicle in recent days, or the battery was removed or changed; the vehicle number; their name; and where the vehicle is now.\n- Then say a technician will be assigned and our team will call them to confirm the visit time.\n";
+const TROUBLE_CHECK = "- Do not sell anything. Say sorry for the trouble in a few words and ask only the vehicle number. Do not ask since when it is offline; our server shows that.\n{{VEHICLE}}- The result tells you when the GPS was last online and exactly what to do next: follow it. Do not promise a technician unless the result says so.\n";
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
 const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
 
@@ -295,7 +296,9 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
     }
     $rule = $live ? sprintf(LIVE_LANG_RULE, LIVE_LANGS[$lang]['name']) : ($lang === 'hi' ? OTHER_LANG_HI : OTHER_LANG_TE);
     $p = str_replace(OTHER_LANG_TE, $rule, $p);
-    $p = str_replace('{{VEHICLE}}', $live && gps_on() ? VEHICLE_CHECK : '', $p);
+    $check = $live && gps_on();
+    $p = str_replace('{{TROUBLE}}', $check ? TROUBLE_CHECK : TROUBLE_ASK, $p);
+    $p = str_replace('{{VEHICLE}}', $check ? VEHICLE_CHECK : '', $p);
     $cat = catalog();
     $p = str_replace('{{PRICES}}', $cat === '' ? NO_PRICES : HAS_PRICES, $p);
     if ($cat !== '') $p .= "\n\n" . $cat;
@@ -407,10 +410,10 @@ function gps_keys(): array {
 function gps_on(): bool { return (bool)array_filter(gps_keys()); }
 function plate_key(string $t): string { return preg_replace('~[^A-Z0-9]~', '', strtoupper($t)); }
 
-// A small copy of every server's vehicle list (number, expiry, last signal), refreshed when older than ten minutes.
+// A small copy of every server's vehicle list (number, expiry, last signal), refreshed when older than five minutes.
 function gps_index(bool $fresh = false): array {
     $c = read_json('gps.json');
-    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 600) return $c;
+    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 300 && ($c['v'] ?? 0) === 2) return $c;
     $keys = array_filter(gps_keys());
     $multi = curl_multi_init(); $hs = [];
     foreach ($keys as $id => $key) {
@@ -420,7 +423,7 @@ function gps_index(bool $fresh = false): array {
     }
     do { curl_multi_exec($multi, $run); if ($run) curl_multi_select($multi, 1.0); } while ($run > 0);
     $old = is_array($c) ? $c : [];
-    $new = ['at' => time(), 'servers' => [], 'dev' => []];
+    $new = ['at' => time(), 'v' => 2, 'servers' => [], 'dev' => []];
     foreach (GPS_SERVERS as $id => $host) {
         if (!isset($hs[$id])) { $new['servers'][$id] = ['state' => 'nokey']; continue; }
         $body = curl_multi_getcontent($hs[$id]); $code = curl_getinfo($hs[$id], CURLINFO_HTTP_CODE);
@@ -440,7 +443,7 @@ function gps_index(bool $fresh = false): array {
             $exp = '';
             foreach (['expiration_date', 'sim_expiration_date'] as $f) { $v = substr((string)($dd[$f] ?? ''), 0, 10); if (preg_match('~^[12]\d{3}-\d\d-\d\d$~', $v)) { $exp = $v; break; } }
             $name = clean_line($dv['name'] ?? '', 80);
-            $new['dev'][] = [$id, plate_key($name), plate_key((string)($dd['plate_number'] ?? '')), $name, $exp, clean_line((string)($dv['time'] ?? ($dd['time'] ?? '')), 30)];
+            $new['dev'][] = [$id, plate_key($name), plate_key((string)($dd['plate_number'] ?? '')), $name, $exp, clean_line((string)($dv['time'] ?? ($dd['time'] ?? ($dv['timestamp'] ?? ''))), 30), strtolower((string)($dv['online'] ?? ''))];
             $n++;
         }
         $new['servers'][$id] = ['state' => 'ok', 'count' => $n];
@@ -486,7 +489,10 @@ function gps_find(string $number): array {
     }
     if (count($hit) > 1) return ['status' => 'many', 'number' => $q, 'count' => count($hit)];
     [$id, , , $name, $exp, $last] = $hit[0];
-    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near];
+    $online = in_array($hit[0][6] ?? '', ['online', 'ack'], true);
+    $ts = gps_time($last);
+    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near, 'online' => $online];
+    if ($ts) { $r['last_ts'] = $ts; $r['off_hours'] = max(0, (int)floor((time() - $ts) / 3600)); $r['last'] = date('j M Y, g:i A', $ts); }
     if ($exp !== '') {
         $r['days'] = (int)(new DateTime('today'))->diff(new DateTime($exp))->format('%r%a');
         $r['expiry_text'] = date('j F Y', strtotime($exp));
@@ -499,26 +505,57 @@ function plate_parts(string $k): ?array {
     return preg_match('~([A-Z]{2})0?(\d{1,2})([A-Z]{0,3})0*(\d{1,4})(?!\d)~', $k, $m) ? [$m[1], (string)(int)$m[2], $m[3], (string)(int)$m[4]] : null;
 }
 
+// The server's "last signal" text as a time. The servers give it as 13-11-2026 19:42:10 or 2026-11-13 19:42:10.
+function gps_time(string $t): int {
+    $t = trim($t);
+    if ($t === '' || $t[0] === '0' && strpos($t, '0000') === 0) return 0;
+    if (ctype_digit($t) && strlen($t) >= 9) return (int)$t;
+    foreach (['d-m-Y H:i:s', 'Y-m-d H:i:s', 'd-m-Y h:i:s A', 'd/m/Y H:i:s', 'Y-m-d H:i'] as $f) {
+        $d = DateTime::createFromFormat($f, $t);
+        if ($d && $d->getTimestamp() > 946684800) return $d->getTimestamp();
+    }
+    $x = strtotime($t);
+    return $x && $x > 946684800 ? $x : 0;
+}
+
+// What the servers say about one found vehicle, with what she should do for each kind of call.
+function gps_facts(array $r): string {
+    // validity
+    if (($r['expiry'] ?? '') === '') $valid = 'Validity: no expiry date is recorded. If they ask about validity or renewal, say the team will confirm the expiry date.';
+    else {
+        $d = $r['days'];
+        $when = $d > 1 ? "$d days from today" : ($d === 1 ? 'tomorrow' : ($d === 0 ? 'today' : ($d === -1 ? 'yesterday, so it has already expired' : 'which was ' . (-$d) . ' days ago, so it has already expired')));
+        $valid = "Validity: the expiry date is {$r['expiry_text']}, $when. If they called about renewal or validity: " . ($d >= 30
+            ? 'thirty days or more are left, so renewal is not needed now. Tell them the expiry date and that the vehicle is still valid. Do not ask which plan they want and do not push renewal.'
+            : 'less than thirty days are left, so tell them the expiry date and ask which plan they want to renew with.');
+    }
+    // signal
+    $h = $r['off_hours'] ?? null;
+    $ask = 'take their name and where the vehicle is now, and say our team will call to confirm the visit time.';
+    if (!empty($r['online']) || ($h !== null && $h < 1)) {
+        $sig = 'Signal: the GPS is online on our server right now. If they called because it is not working: tell them it is showing online on our side, and ask them to close the app, open it again and check. If they still cannot see it, say our team will call them.';
+    } elseif ($h === null) {
+        $sig = 'Signal: the last online time is not known. If they called because it is not working: say you have noted the complaint and the team will check it, then ' . $ask;
+    } else {
+        $ago = $h < 48 ? "$h hours ago" : intdiv($h, 24) . ' days ago';
+        $sig = "Signal: the GPS is offline. It was last online $ago, on {$r['last']}. If they called because it is not working: tell them when it was last online, then ";
+        if ($h < 72) $sig .= 'ask them to start the vehicle and drive it a little, and check the app after some time. If it still does not come online, they should call us back. Do not arrange a technician now.';
+        elseif ($h <= 15 * 24) $sig .= 'ask whether any service or repair was done on the vehicle or the battery was removed in recent days. Then say you have noted the complaint and our team will check and arrange a technician; ' . $ask;
+        else $sig .= 'say that it has been offline for a long time, so you will request a technician to visit; ' . $ask;
+        if (($r['expiry'] ?? '') !== '' && $r['days'] < 0) $sig .= ' Also tell them the subscription has expired, which is often why a GPS goes offline, and that it needs renewal to work again.';
+    }
+    return $valid . "\n" . $sig . "\nUse only the part that matches why they called. Do not read out the other part unless they ask.";
+}
+
 // The result in words, for her.
 function gps_result_text(array $r): string {
     $n = $r['number'] ?? '';
-    if ($r['status'] === 'found' && !empty($r['near'])) {
-        $exp = ($r['expiry'] ?? '') !== '' ? " If they say yes, its expiry date is {$r['expiry_text']}" . ($r['days'] < 0 ? ', so it has already expired' : '')
-            . ($r['days'] >= 30 ? ': thirty days or more are left, so say renewal is not needed now and do not ask for a plan.' : ': less than thirty days are left, so ask which plan they want.')
-            : ' If they say yes, say the team will confirm the expiry date, and continue.';
-        return "$n itself is not on our server, but there is one very close number: {$r['name']}. Ask the caller whether {$r['name']} is their vehicle number, saying it letter by letter.$exp If they say no, ask them to say the number once more.";
-    }
     switch ($r['status']) {
         case 'found':
-            if (($r['expiry'] ?? '') === '') return "Vehicle $n is on our server, but no expiry date is recorded for it. Tell the caller the vehicle is found and that the team will confirm the expiry date, then continue.";
-            $d = $r['days'];
-            $when = $d > 1 ? "$d days from today" : ($d === 1 ? 'tomorrow' : ($d === 0 ? 'today' : ($d === -1 ? 'yesterday, so it has already expired' : 'which was ' . (-$d) . ' days ago, so it has already expired')));
-            $next = $d >= 30
-                ? 'There are thirty days or more left, so renewal is not needed now. Tell the caller the expiry date and that the vehicle is still valid, and that they can renew when it is closer to that date. Do not ask which plan they want and do not push renewal.'
-                : 'There are less than thirty days left, so tell the caller the expiry date and ask which plan they want to renew with.';
-            return "Vehicle $n is found on our server. Its expiry date is {$r['expiry_text']}, $when. $next";
+            if (!empty($r['near'])) return "$n itself is not on our server, but there is one very close number: {$r['name']}. Ask the caller whether {$r['name']} is their vehicle number, saying it letter by letter. If they say no, ask them to say the number once more. If they say yes, this is what our server shows for it:\n" . gps_facts($r);
+            return "Vehicle $n is found on our server.\n" . gps_facts($r);
         case 'many': return "More than one vehicle matches $n. Ask the caller to say the full vehicle number once more, slowly.";
-        case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.";
+        case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment, note what they need, and say the team will call them.";
         default: return "Vehicle $n is not on any of our servers. Tell the caller that this vehicle number is not in our records, which means its GPS expired earlier and was removed from the server. Then explain the two choices: adding it again by re-installing the same GPS costs one thousand seven hundred rupees; or, if that GPS no longer works, a new GPS is better, which costs three thousand three hundred rupees. Ask which they prefer. Only if the caller says the number you checked was wrong, take the right number and check that.";
     }
 }
