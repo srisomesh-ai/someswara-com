@@ -48,7 +48,7 @@ How to speak:
 - Speak like a friendly local customer care person: everyday spoken Telugu mixed with the common English words people really use (tracker, vehicle, bike, car, installation, SIM, app, WhatsApp, location).
 - Write Telugu words in Telugu script and English words in English letters.
 - Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
-- Begin most replies with a small natural reaction to what the caller just said, the way people do on the phone: ఓకే సర్, సరే, అవునా, అర్థమైంది, తప్పకుండా. Change it each time and never use the same one twice in a row.
+- Go straight to the answer. Do not begin a reply with a reaction word such as ఓకే, సరే, అలాగే, అర్థమైంది, okay, sure, जी or ठीक है, and do not begin with sir or madam on its own.
 - Use spoken Telugu, never bookish or written-style Telugu. Say కావాలా, చెప్పండి, పంపిస్తాను, చూసుకోవచ్చు. Do not use words like అవసరము, దయచేసి, సంప్రదించండి, వినియోగదారు.
 - Be warm and relaxed, not like reading a script. Address the caller as సర్ or మేడమ్ once the caller's voice or words make it clear which. Do not use అండి as a word on its own to address them or to begin or end a sentence. The polite verb endings, as in చెప్పండి, are still right.
 - If the caller only says hello or something unclear, respond naturally and gently repeat your question in different words.
@@ -105,7 +105,7 @@ How to speak:
 - Speak like a friendly customer care person: everyday spoken Hindi mixed with the common English words people really use (tracker, vehicle, bike, car, installation, SIM, app, WhatsApp, location). The simple Hindi of a phone call, never formal or news-reader Hindi.
 - Write Hindi words in Devanagari script and English words in English letters.
 - Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
-- Begin most replies with a small natural reaction to what the caller just said, the way people do on the phone: जी, अच्छा जी, ठीक है, बिल्कुल, हाँ जी. Change it each time and never use the same one twice in a row.
+- Go straight to the answer. Do not begin a reply with a reaction word such as ఓకే, సరే, అలాగే, అర్థమైంది, okay, sure, जी or ठीक है, and do not begin with sir or madam on its own.
 - Use spoken words: चाहिए, बताइए, देख लीजिए, भेज देते हैं. Do not use words like कृपया, आवश्यकता, संपर्क करें, उपभोक्ता.
 - Be warm and relaxed, not like reading a script. Address the caller as आप and जी. Use सर or मैडम only after the caller's voice or words make it clear.
 - Speak for the company as हम (हम भेज देते हैं, हम बता देते हैं), so you never need a masculine or feminine verb for yourself.
@@ -118,7 +118,7 @@ const SPEAK_EN = <<<'TXT'
 How to speak:
 - Speak like a friendly Indian customer care person: simple, everyday Indian English, the way people really talk on the phone. Short, plain words.
 - Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
-- Begin most replies with a small natural reaction to what the caller just said: okay, sure, got it, alright, of course. Change it each time and never use the same one twice in a row.
+- Go straight to the answer. Do not begin a reply with a reaction word such as ఓకే, సరే, అలాగే, అర్థమైంది, okay, sure, जी or ठीक है, and do not begin with sir or madam on its own.
 - Be warm and relaxed, not like reading a script. Use sir or madam only after the caller's voice or words make it clear.
 - If the caller only says hello or something unclear, respond naturally and gently repeat your question in different words.
 - No lists, no symbols, no emojis, no formatting. Write numbers in words.
@@ -149,7 +149,7 @@ const MAIL_TO = [
 ];
 const MAIL_COPY = 'admin@bharatgps.com';
 const MAIL_ON = false;   // the owner switched call emails off during testing (14 Nov 2026); true sends them again
-const VEHICLE_CHECK = "- You need the full vehicle number: two state letters, two digits, one to three letters, then four digits, like AP39BP0042. If the caller gives only part of it, such as only the last four digits, do not check: ask them for the full number starting with the state letters.\n- As soon as they have said the full number, do not repeat it back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the full vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n- Never tell the caller an expiry date, a validity, or whether the GPS is online unless a check result gave it to you. If no result has come, say you could not check just now and that the team will call them. Never guess.\n";
+const VEHICLE_CHECK = "- You need the full vehicle number: two state letters, two digits, one to three letters, then four digits, like AP39BP0042. If the caller gives only part of it, such as only the last four digits, do not check: ask them for the full number starting with the state letters.\n- Callers often say the number in pieces, over two or three turns, for example AP 31 DZ and then 5531. Join the pieces in the order they were said. As soon as the joined pieces make a full number, check that number at once. Never ask for the full number again when the pieces already said make one.\n- As soon as they have said the full number, do not repeat it back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the full vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n- Never tell the caller an expiry date, a validity, or whether the GPS is online unless a check result gave it to you. If no result has come, say you could not check just now and that the team will call them. Never guess.\n";
 const TROUBLE_ASK = "- Do not sell anything. Say sorry for the trouble, then ask these one at a time: since when it is offline; whether any service or repair work was done on the vehicle in recent days, or the battery was removed or changed; the vehicle number; their name; and where the vehicle is now.\n- Then say a technician will be assigned and our team will call them to confirm the visit time.\n";
 const TROUBLE_CHECK = "- Do not sell anything. Say sorry for the trouble in a few words and ask only the vehicle number. Do not ask since when it is offline; our server shows that.\n{{VEHICLE}}- The result tells you when the GPS was last online and exactly what to do next: follow it. Do not promise a technician unless the result says so.\n";
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
@@ -622,7 +622,7 @@ function gps_result_text(array $r, string $why = ''): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 16;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 17;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 

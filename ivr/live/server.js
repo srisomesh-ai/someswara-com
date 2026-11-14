@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 16;
+const VERSION = 17;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -205,6 +205,7 @@ const ACKS = {
   hi: { m: ['ओके सर', 'जी सर', 'ठीक है सर'], f: ['ओके मैडम', 'जी मैडम', 'ठीक है मैडम'], '': ['ओके जी', 'जी', 'ठीक है जी'] },
   en: { m: ['Okay sir', 'Sure sir', 'Alright sir'], f: ['Okay madam', 'Sure madam', 'Alright madam'], '': ['Okay', 'Sure', 'Alright'] },
 };
+const ACK_ON = false;
 const clips = new Map();
 const clipKey = (cfg, lang, text) => [(cfg.voices && cfg.voices[lang]) || cfg.voice, cfg.pcm_rate || 'mp3', text].join('|');
 
@@ -225,14 +226,14 @@ function warmAcks(S, lang) {
 }
 
 // A reply that opens with the same kind of reaction she has just spoken ("ok sir. సరే అండి, ...") sounds like a repeat.
-const SAME_START = /^\s*(ఓకే|ఒకే|సరే|అలాగే|హా|ok|okay|sure|alright|ओके|जी|ठीक है|अच्छा)(\s+(అండి|సర్|మేడమ్|మేడం|sir|madam|सर|मैडम|जी))?\s*[,.!।]\s*/i;
+const SAME_START = /^\s*((ఓకే|ఒకే|సరే|అలాగే|హా|ok|okay|sure|alright|ओके|जी|ठीक है|अच्छा)(\s+(అండి|సర్|మేడమ్|మేడం|sir|madam|सर|मैडम|जी))?|అండి|సర్|మేడమ్|మేడం|sir|madam)\s*[,.!।]\s*/i;
 
 // Plays one if it is ready and returns the words; never waits for one.
 function sayAck(S) {
   const list = ACKS[S.lang] && ACKS[S.lang][S.gender];
   if (!list || !S.cfg.prompts) return '';
   const text = list[S.ackN++ % list.length], clip = clips.get(clipKey(S.cfg, S.lang, text));
-  if (!clip) { warmAcks(S, S.lang); return ''; }
+  if (!clip) { warmAcks(S, S.lang); return ''; }   // only reached when ACK_ON
   send(S, { type: 'audio', audio: clip });
   return text;
 }
@@ -438,13 +439,13 @@ async function speechEnd(S) {
   }
   S.turns.push({ who: 'caller', text });
   send(S, { type: 'heard', text });
-  const ack = sayAck(S);                     // first, so nothing delays it
+  const ack = ACK_ON ? sayAck(S) : '';       // the quick "ok sir" clip; the owner asked for it to be removed (14 Nov 2026)
   hearGender(S, pcm);
   noteKind(S, text);
   S.replying = reply(S, hearMs, ack).catch((e) => log('reply crashed:', e.message));
 }
 
-async function reply(S, hearMs, ack, afterCheck) {
+async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   const g = S.gen, t1 = Date.now(), lang = S.lang;
   const ctrl = new AbortController(); S.abort = ctrl;
   // Her instructions stay word for word the same through the call, and the things that change from reply to reply
@@ -462,6 +463,11 @@ async function reply(S, hearMs, ack, afterCheck) {
   const messages = [{ role: 'system', content: promptFor(S, lang) }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
   if (afterCheck) messages.push({ role: 'user', content: '(The vehicle check has finished. Tell the caller the result now.)' });
+  // What she said last time, to catch her starting the very same sentence again.
+  const squash = (t) => t.toLowerCase().replace(/[\s,.!?।'"-]/g, '');
+  const prev = squash(([...S.turns].reverse().find((t) => t.who === 'agent') || { text: '' }).text);
+  let repeated = false;
+  if (noRepeat) notes.push('You were about to say exactly what you said in your previous reply. Do not. Read what the caller has just said, and what they said in the turns before it, and take the next step. If their words now make a full vehicle number, check it.');
   if (notes.length) {
     const last = messages[messages.length - 1], note = '(Notes for you from the system, not said by the caller. ' + notes.join(' ') + ')';
     if (last.role === 'user') last.content += '\n\n' + note; else messages.push({ role: 'user', content: note });
@@ -471,12 +477,16 @@ async function reply(S, hearMs, ack, afterCheck) {
   let chain = Promise.resolve();
 
   // Start turning a sentence into speech straight away, but deliver the sentences in order.
-  const speak = (sentence) => {
-    if (ack && !queued) {                    // she has just said "ok sir" aloud: do not open the answer with it again
+  let held = '';
+  const speak = (sentence, keep) => {
+    if (!queued && !keep) {                  // no "ok", "సరే" or "sir," in front of the answer: the owner wants her to start with the answer itself
+      const whole = sentence;
       for (let i = 0; i < 2; i++) sentence = sentence.replace(SAME_START, '');
       sentence = sentence.trim();
-      if (sentence.replace(/[\s,.!?।]/g, '').length < 2) { onlyAck = true; return; }
+      if (sentence.replace(/[\s,.!?।]/g, '').length < 2) { onlyAck = true; held = whole; return; }   // kept in case it is all she says
       sentence = sentence[0].toUpperCase() + sentence.slice(1);
+      const cur = squash(sentence);
+      if (!noRepeat && cur.length >= 12 && prev.startsWith(cur)) { repeated = true; return; }          // the same opening as her last reply
     }
     queued++;
     if (!tThink) tThink = Date.now();
@@ -508,9 +518,15 @@ async function reply(S, hearMs, ack, afterCheck) {
   };
 
   try {
-    for await (const piece of chatStream(S.cfg, messages, ctrl.signal)) { if (g !== S.gen) break; raw += piece; emit(false); }
-    if (g === S.gen) emit(true);
+    for await (const piece of chatStream(S.cfg, messages, ctrl.signal)) { if (g !== S.gen || repeated) break; raw += piece; emit(false); }
+    if (g === S.gen && !repeated) emit(true);
   } catch (e) { problem = problem || e; }
+  if (!queued && onlyAck && held && !repeated && g === S.gen) { onlyAck = false; speak(held, true); }   // a bare "సరే సర్" was the whole reply
+  if (repeated && g === S.gen) {             // one more try, told not to repeat herself
+    ctrl.abort();
+    log('call', S.cfg.call_id, 'stopped a repeated reply');
+    return reply(S, hearMs, ack, afterCheck, true);
+  }
   if (!queued && !onlyAck && g === S.gen) {  // nothing came from the quick model: ask the main one
     try { raw = await chatOnce(S.cfg, messages, ctrl.signal); done = 0; emit(true); problem = queued ? null : problem; }
     catch (e) { problem = problem || e; }
@@ -526,6 +542,8 @@ async function reply(S, hearMs, ack, afterCheck) {
   if (text) {
     S.turns.push({ who: 'agent', text });
     if (freshResult) S.vehicleTold = true;
+    // A vehicle number is said slowly, with gaps. After she asks for one, wait longer before deciding the caller has finished.
+    S.waitMs = /number|నంబర్|నెంబర్|नंबर/i.test(text) ? 1200 : 350;
     await syncCall(S, false);
     send(S, { type: 'reply_done', text, turn: S.turns.length - 1 });
   } else if (g === S.gen && !onlyAck) {
@@ -564,7 +582,7 @@ function newState(ws, token, cfg, rate) {
 
 function greet(S) {
   send(S, { type: 'ready', call_id: S.cfg.call_id, text: S.cfg.greeting });
-  if (S.cfg.allowed !== false) warmAcks(S, S.lang);
+  if (ACK_ON && S.cfg.allowed !== false) warmAcks(S, S.lang);
   const ctrl = new AbortController(); S.abort = ctrl;
   const g = S.gen;
   // The greeting is the same on every call, so its sound is made once and kept, like the quick "ok" clips.
@@ -665,7 +683,7 @@ function phoneAudio(S, pcm) {
   }
   audioIn(S, pcm); V.total += ms;
   if (rms > limit) { V.speech += ms; V.silent = 0; } else V.silent += ms;
-  if (V.silent >= 350 || V.total >= 25000) {
+  if (V.silent >= (S.waitMs || 350) || V.total >= 25000) {
     V.on = false;
     if (V.speech >= 250) speechEnd(S).catch((e) => log('turn crashed:', e.message));
     else { S.capturing = false; S.pcm = []; S.pcmBytes = 0; }
