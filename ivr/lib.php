@@ -522,8 +522,11 @@ function gps_find(string $number): array {
     if (count($hit) > 1) return ['status' => 'many', 'number' => $q, 'count' => count($hit)];
     [$id, , , $name, $exp, $last] = $hit[0];
     $online = in_array($hit[0][6] ?? '', ['online', 'ack'], true);
+    // The number plate as the server has it. The device name is often a customer name, so it is not used as the number.
+    $plate = $q;
+    foreach ([$hit[0][2], $hit[0][1]] as $k) if ($k !== '' && ($pp = plate_parts($k)) && preg_match('~[A-Z]{2}0?' . $pp[1] . $pp[2] . '0*' . $pp[3] . '(?!\d)~', $k, $pm)) { $plate = $pm[0]; break; }
     $ts = gps_time($last);
-    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near, 'online' => $online];
+    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near, 'online' => $online, 'plate' => $plate];
     if ($ts) { $r['last_ts'] = $ts; $r['off_hours'] = max(0, (int)floor((time() - $ts) / 3600)); $r['last'] = date('j M Y, g:i A', $ts); }
     if ($exp !== '') {
         $r['days'] = (int)(new DateTime('today'))->diff(new DateTime($exp))->format('%r%a');
@@ -584,7 +587,7 @@ function gps_result_text(array $r): string {
     $n = $r['number'] ?? '';
     switch ($r['status']) {
         case 'found':
-            if (!empty($r['near'])) return "$n itself is not on our server, but there is one very close number: {$r['name']}. Ask the caller whether {$r['name']} is their vehicle number, saying it letter by letter. If they say no, ask them to say the number once more. If they say yes, this is what our server shows for it:\n" . gps_facts($r);
+            if (!empty($r['near'])) return "$n itself is not on our server, but there is one very close number: {$r['plate']}. Ask the caller whether {$r['plate']} is their vehicle number, saying it letter by letter. If they say no, ask them to say the number once more. If they say yes, this is what our server shows for it:\n" . gps_facts($r);
             return "Vehicle $n is found on our server.\n" . gps_facts($r);
         case 'many': return "More than one vehicle matches $n. Ask the caller to say the full vehicle number once more, slowly.";
         case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment, note what they need, and say the team will call them.";

@@ -121,7 +121,7 @@ if ($action === 'live_config' || $action === 'live_sync' || $action === 'live_ru
         session_write_close();
         $r = gps_find((string)($_POST['number'] ?? ''));
         if (($c = call_find((string)$all[$tok]['call_id'])) && ($r['number'] ?? '') !== '') {   // remembered for the next call from this number
-            $c['vehicles'] = array_values(array_unique(array_merge((array)($c['vehicles'] ?? []), [$r['status'] === 'found' ? plate_key($r['name']) : $r['number']])));
+            $c['vehicles'] = array_values(array_unique(array_merge((array)($c['vehicles'] ?? []), [$r['status'] === 'found' ? $r['plate'] : $r['number']])));
             call_save($c);
         }
         out(['status' => $r['status'], 'text' => gps_result_text($r)]);
