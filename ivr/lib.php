@@ -73,7 +73,7 @@ Existing customer, GPS not working or offline:
 
 Existing customer who wants to renew, or who wants to check the license, validity, expiry or recharge of their vehicle:
 - They are already our customer, so do not ask which type of vehicle it is, where the vehicle is, or what it is used for.
-- Say sure, and ask only the vehicle number. Repeat the number back and wait for them to confirm it.
+- Say sure, and ask only the vehicle number.
 {{VEHICLE}}- If they only wanted to check and you have no result to tell them, say the team will check and call them back.
 - For renewal, ask which plan they want: three months, six months or one year. The one year plan is one thousand two hundred rupees. If they ask the price of the three or six month plan and you were not told it, say it will be in the payment link.
 - When they have chosen, say you have noted it, that they will get the payment link very soon on WhatsApp and email, and that once they pay, the vehicle is renewed automatically.
@@ -86,7 +86,7 @@ Always:
 - Keep it short. Every reply is one or two short sentences, never more than about twenty words, and takes only a few seconds to say. Answer only what they just asked, then stop, or ask one short question. A long answer sounds like reading a script.
 - Say a thing once. Do not repeat the price, subscription, warranty or free installation again later in the call unless they ask again. Do not end every reply with a question, and do not finish every sentence with the same polite word.
 - Never invent a feature, a price, a charge or a promise. For any charge you were not told, say the team will confirm it.
-- Repeat a vehicle number back to the caller once to confirm it. A vehicle number is always said in English, one letter and one digit at a time, whatever language the call is in. Write it exactly like this: A P, three nine, W A, one five seven five. Never say it as Telugu or Hindi number words, and never join the digits into a big number.
+- Do not repeat a vehicle number back to the caller unless you are unsure of a letter or a digit, or a check result tells you to. When you do say a vehicle number, it is always said in English, one letter and one digit at a time, whatever language the call is in. Write it exactly like this: A P, three nine, W A, one five seven five. Never say it as Telugu or Hindi number words, and never join the digits into a big number.
 - Callers say the number in many ways: letters in any language, digits one by one or in pairs like fifteen seventy five or పదిహేను డెబ్బై ఐదు. An Indian vehicle number is two letters for the state, two digits, one to three letters, then four digits. Work out the number in that shape before you repeat it.
 - If the caller is angry or asks something you do not know, say our team will call them back shortly on this number.
 - If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.
@@ -133,7 +133,7 @@ TXT;
 const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
 const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Once you know the vehicle and the need, suggest the one product from the list that fits that vehicle and need best, with its price and what the price includes. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
 const LEAD_EMAIL = 'info@bharatgpstracker.com';                         // where the summary of every phone call goes
-const VEHICLE_CHECK = "- As soon as they confirm the number, say in a few words that you are checking it, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. The tag is never spoken. Do not ask anything else in that reply. The result of the check then comes to you: tell the caller what it says and follow it. Offer renewal only when the result says less than thirty days are left or it has expired; when thirty days or more are left, skip the plan and payment steps below. Write the tag only once for each number.\n";
+const VEHICLE_CHECK = "- As soon as they have said the vehicle number, do not repeat the number back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller what it says and follow it. Offer renewal only when the result says less than thirty days are left or it has expired; when thirty days or more are left, skip the plan and payment steps below. Write the tag only once for each number.\n";
 const OTHER_LANG_TE = '- If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.';
 const OTHER_LANG_HI = '- If the caller speaks English, answer in simple English mixed with Hindi. If the caller speaks only Telugu or another language, tell them politely that a team member will call them back.';
 
@@ -514,7 +514,7 @@ function gps_result_text(array $r): string {
             return "Vehicle $n is found on our server. Its expiry date is {$r['expiry_text']}, $when. $next";
         case 'many': return "More than one vehicle matches $n. Ask the caller to say the full vehicle number once more, slowly.";
         case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.";
-        default: return "Vehicle $n was not found on any of our servers. Tell the caller you could not find it and ask them to say the number once more. If it is not found a second time, say the team will call them back.";
+        default: return "Vehicle $n is not on any of our servers. Tell the caller that this vehicle number is not in our records, which means its GPS expired earlier and was removed from the server. Then explain the two choices: adding it again by re-installing the same GPS costs one thousand seven hundred rupees; or, if that GPS no longer works, a new GPS is better, which costs three thousand three hundred rupees. Ask which they prefer. Only if the caller says the number you checked was wrong, take the right number and check that.";
     }
 }
 

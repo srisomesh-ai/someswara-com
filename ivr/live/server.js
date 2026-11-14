@@ -137,7 +137,16 @@ async function chatOnce(cfg, messages, signal) {
 }
 
 // What she may say aloud: her private thinking, a "remember this rule" tag and a "check this vehicle" tag are taken out.
-const cleanReply = (raw) => raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/\[\[(RULE|VEHICLE):[\s\S]*?(\]\]|$)/g, '').replace(/[*#`_]/g, '');
+const cleanReply = (raw) => raw.normalize('NFKC').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/[\[【〔]{2}[\s\S]*?([\]】〕]{2}|$)/g, '')
+  .replace(/[\[【〔(]\s*(RULE|VEHICLE)\b[\s\S]*?([\]】〕)]|$)/gi, '').replace(/[*#`_]/g, '');
+// The vehicle number inside her "check this vehicle" tag, however the brackets and colon were typed.
+function vehicleTag(raw) {
+  const t = raw.normalize('NFKC').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
+  const m = t.match(/[\[【〔(]\s*VEHICLE\s*[:=-]?\s*([A-Za-z0-9 .-]{4,30})/i);
+  if (!m) return '';
+  const n = m[1].replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  return /[A-Z]/.test(n) && /\d/.test(n) ? n : '';
+}
 
 // ---------- sir or madam ----------
 // How high the caller's voice is, measured on short slices of what they said. A phone line removes the
@@ -172,10 +181,12 @@ function hearGender(S, pcm) {
   try {
     S.pitch.push(...voicePitch(pcm, S.rate));
     if (S.pitch.length > 600) S.pitch = S.pitch.slice(-600);
-    if (S.pitch.length < 25) return;
-    const mid = [...S.pitch].sort((a, b) => a - b)[S.pitch.length >> 1];
+    if (S.pitch.length < 40) return;
+    const sorted = [...S.pitch].sort((a, b) => a - b), mid = sorted[sorted.length >> 1], low = sorted[sorted.length >> 2];
     const was = S.gender;
-    S.gender = mid < 150 ? 'm' : mid > 185 ? 'f' : '';
+    // Many men speak as high as 160 to 170 on a call. Madam only when the voice is clearly high all through;
+    // calling a man madam is worse than the neutral word.
+    S.gender = mid < 168 ? 'm' : (mid > 200 && low > 178) ? 'f' : '';
     if (S.gender !== was) log('call', S.cfg.call_id, 'caller voice about', Math.round(mid), 'Hz:', S.gender === 'm' ? 'sir' : S.gender === 'f' ? 'madam' : 'not sure');
   } catch (e) { /* never let this stop a call */ }
 }
@@ -383,10 +394,10 @@ async function reply(S, hearMs, ack, afterCheck) {
   }
 
   // She asked for a vehicle to be checked: search the GPS servers, then let her tell the caller what was found.
-  const veh = (raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').match(/\[\[VEHICLE:\s*([A-Za-z0-9 -]{4,24})\]\]/) || [])[1];
-  if (veh && !afterCheck && S.checks < 4) {
+  const number = vehicleTag(raw);
+  if (!number && /VEHICLE/i.test(raw)) log('call', S.cfg.call_id, 'vehicle tag not understood:', JSON.stringify(raw.slice(-80)));
+  if (number && !afterCheck && S.checks < 4) {
     S.checks++;
-    const number = veh.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
     let found;
     try { found = await ivr('live_vehicle', { token: S.token, number }, 22000); log('call', S.cfg.call_id, 'vehicle check', number, found.status); }
     catch (e) { log('vehicle check failed:', e.message); found = { text: 'The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.' }; }
