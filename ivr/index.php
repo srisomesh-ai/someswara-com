@@ -577,6 +577,7 @@ $('set-key').addEventListener('blur', (e) => { if (e.target.value.trim() === '')
 
 async function loadOverview() {
   const d = await api('overview');
+  if (d.server_old && !loadOverview.told) { loadOverview.told = true; toast('The call server on the VPS is older than this website. Run the installer command on the VPS, then make one call.'); }
   $('s-calls').textContent = d.stats.calls;
   $('s-leads').textContent = d.stats.leads;
   $('s-staff').textContent = d.stats.staff;

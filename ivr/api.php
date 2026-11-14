@@ -55,6 +55,11 @@ if ($action === 'login') {
 // ---------- live call server ----------
 // The VPS has no login of its own. The dashboard hands the browser a one-time token (live_token, below);
 // the VPS trades it here for what the call needs, and reports the transcript back with the same token.
+// Every request from the call server says which version of server.js is running on the VPS. Remember the latest.
+if (isset($_GET['sv']) && ctype_digit((string)$_GET['sv']) && in_array($action, ['phone_config', 'live_config'], true)) {
+    write_json('server.json', ['v' => (int)$_GET['sv'], 'at' => time()]);
+}
+
 // The call server asks whether a pass for one recording is good. The pass itself is the secret.
 if ($action === 'rec_check') {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
@@ -216,6 +221,7 @@ case 'overview':
         'lang' => lang(),
         'stats' => ['calls' => $count, 'leads' => 0, 'staff' => 0, 'avg_seconds' => $count ? (int)round($secs / $count) : 0],
         'calls' => array_map('call_summary', array_slice($all, 0, 50)),
+        'server_old' => (int)(read_json('server.json')['v'] ?? 0) < LIVE_VERSION,   // the VPS still runs an older call server
     ]);
 
 case 'save_settings':

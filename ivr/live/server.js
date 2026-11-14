@@ -14,6 +14,9 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer, WebSocket } = require('ws');
 
+// Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
+// owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
+const VERSION = 12;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -28,7 +31,7 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 // ---------- dashboard ----------
 async function ivr(action, fields, ms) {
-  const r = await fetch(IVR_API + '?action=' + action, { method: 'POST', body: new URLSearchParams(fields), signal: AbortSignal.timeout(ms || 8000) });
+  const r = await fetch(IVR_API + '?action=' + action + '&sv=' + VERSION, { method: 'POST', body: new URLSearchParams(fields), signal: AbortSignal.timeout(ms || 8000) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || 'Dashboard answered ' + r.status);
   return d;
@@ -139,16 +142,17 @@ async function chatOnce(cfg, messages, signal) {
 }
 
 // What she may say aloud: her private thinking, a "remember this rule" tag and a "check this vehicle" tag are taken out.
-const cleanReply = (raw) => raw.normalize('NFKC').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/[\[【〔]{2}[\s\S]*?([\]】〕]{2}|$)/g, '')
-  .replace(/[\[【〔(]\s*(RULE|VEHICLE)\b[\s\S]*?([\]】〕)]|$)/gi, '').replace(/[*#`_]/g, '');
-// The vehicle number inside her "check this vehicle" tag, however the brackets and colon were typed.
+// Whatever brackets, colon or hidden characters the model types, a tag must never be heard or shown.
+const plain = (raw) => raw.normalize('NFKC').replace(/[​-‍⁠﻿\\]/g, '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
+const cleanReply = (raw) => plain(raw).replace(/[\[【〔〚⟦]{2}[\s\S]*?([\]】〕〛⟧]{2}|$)/g, '')
+  .replace(/[\[【〔〚⟦(]\s*(RULE|VEHICLE)\b[\s\S]*?([\]】〕〛⟧)]|$)/gi, '').replace(/\S*\b(VEHICLE|RULE)\s*[:=]\s*[A-Za-z0-9 .-]*[^\s\w.?!,]*/g, '').replace(/[*#`_]/g, '');
+// The vehicle number inside her "check this vehicle" tag. VEHICLE in capitals followed by a colon is only ever the tag.
 function vehicleTag(raw) {
-  const t = raw.normalize('NFKC').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
-  const m = t.match(/[\[【〔(]\s*VEHICLE\s*[:=-]?\s*([A-Za-z0-9 .-]{4,30})/i);
-  if (!m) return '';
-  const n = m[1].replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  return /[A-Z]/.test(n) && /\d/.test(n) ? n : '';
+  const m = plain(raw).match(/\bVEHICLE\s*[:=]\s*([A-Za-z0-9 .-]{1,30})/);
+  return m ? m[1].replace(/[^A-Za-z0-9]/g, '').toUpperCase() : '';
 }
+// A whole number plate: AP39BP0042, TS09EK1111, or the newer 22BH1234AA. Four digits alone are not enough to find a vehicle.
+const fullPlate = (n) => /^[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{4}$/.test(n) || /^\d{2}BH\d{4}[A-Z]{1,2}$/.test(n);
 
 // ---------- sir or madam ----------
 // How high the caller's voice is, measured on short slices of what they said. A phone line removes the
@@ -409,7 +413,7 @@ async function reply(S, hearMs, ack, afterCheck) {
   let system = (S.cfg.prompts && S.cfg.prompts[lang]) || S.cfg.prompt;
   if (S.gender) system += "\n\nThe caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.';
   if (ack) system += '\n\nYou have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.';
-  if (S.vehicle) system += '\n\nResult of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this number again.';
+  if (S.vehicle) system += '\n\nResult of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.';
   const messages = [{ role: 'system', content: system }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
   if (afterCheck) messages.push({ role: 'user', content: '(The vehicle check has finished. Tell the caller the result now.)' });
@@ -480,13 +484,19 @@ async function reply(S, hearMs, ack, afterCheck) {
 
   // She asked for a vehicle to be checked: search the GPS servers, then let her tell the caller what was found.
   const number = vehicleTag(raw);
-  if (!number && /VEHICLE/i.test(raw)) log('call', S.cfg.call_id, 'vehicle tag not understood:', JSON.stringify(raw.slice(-80)));
-  if (number && !afterCheck && S.checks < 4) {
-    S.checks++;
-    let found;
-    try { found = await ivr('live_vehicle', { token: S.token, number }, 22000); log('call', S.cfg.call_id, 'vehicle check', number, found.status); }
-    catch (e) { log('vehicle check failed:', e.message); found = { text: 'The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.' }; }
-    S.vehicle = found.text || '';
+  if (number && !afterCheck) {
+    if (!fullPlate(number)) {
+      log('call', S.cfg.call_id, 'vehicle check skipped, not a full number:', number);
+      S.vehicle = 'You tried to check "' + number + '", which is only part of a vehicle number, so nothing was checked. Ask the caller for the full vehicle number starting with the state letters, like A P three nine B P zero zero four two. Do not say you are checking until you have the full number.';
+    } else if (S.checks >= 4) {
+      S.vehicle = 'No more checks can be made on this call. Say you could not check right now and that the team will call them back.';
+    } else {
+      S.checks++;
+      let found;
+      try { found = await ivr('live_vehicle', { token: S.token, number }, 22000); log('call', S.cfg.call_id, 'vehicle check', number, found.status); }
+      catch (e) { log('vehicle check failed:', e.message); found = { text: 'The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and continue without the expiry date.' }; }
+      S.vehicle = found.text || '';
+    }
     if (g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
   }
 }
@@ -740,7 +750,7 @@ function vobizCall(ws, key, q) {
 // ---------- server ----------
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok'); return; }
+  if (url.pathname === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok v' + VERSION); return; }
   if (url.pathname === '/vobiz/answer') return vobizAnswer(req, res, url);
   if (url.pathname === '/vobiz/hangup') { req.resume(); res.writeHead(204); res.end(); return; }
   if (url.pathname.startsWith('/rec/')) return void recServe(req, res, url).catch(() => { try { res.writeHead(500); res.end(); } catch (e) { /* already sent */ } });
