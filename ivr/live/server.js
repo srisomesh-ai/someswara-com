@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 12;
+const VERSION = 13;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -320,6 +320,32 @@ async function recServe(req, res, url) {
   fs.createReadStream(file, { start: from, end: to }).on('error', () => res.destroy()).pipe(res);
 }
 
+// ---------- only the instructions this call needs ----------
+// The dashboard marks two parts of her instructions: what is only for new customers (selling steps, the product
+// list) and what is only for existing ones (complaints, renewals, the vehicle check). Once the caller's words show
+// clearly which they are, the other part is left out, which makes every reply cheaper. When it is not clear, or the
+// caller touches both, she gets everything.
+const OLD_WORDS = /renew|రెన్యూ|రిన్యూ|రెన్యువల్|expir|validity|వాలిడిటీ|licen[sc]e|లైసెన్స్|recharge|రీఛార్జ్|రీచార్జ్|offline|ఆఫ్\s?లైన్|not working|పని\s?చేయ|work అవ్వ|రావడం లేదు|రావట్లేదు|complaint|కంప్లైంట్|already|ఆల్రెడీ|नवीनीकरण|रिन्यू|रिचार्ज|काम नहीं|बंद है|ऑफलाइन|शिकायत/i;
+const NEW_WORDS = /కొత్త|\bnew\b|price|ధర|\brate\b|రేట్|రేటు|ఎంత|\bcost\b|\bbuy\b|కొనా|కొనుక్కో|purchase|कीमत|दाम|नया|नई|खरीद|कितन/i;
+function noteKind(S, text) {
+  if (S.kind === 'all') return;
+  const o = OLD_WORDS.test(text), n = NEW_WORDS.test(text);
+  if (o && n) S.kind = 'all';
+  else if (o) S.kind = S.kind === 'new' ? 'all' : 'old';
+  else if (n) S.kind = S.kind === 'old' ? 'all' : 'new';
+}
+function promptFor(S, lang) {
+  const full = (S.cfg.prompts && S.cfg.prompts[lang]) || S.cfg.prompt || '';
+  const key = lang + '|' + S.kind;
+  if (S.promptCache[key] === undefined) {
+    let p = full;
+    if (S.kind === 'new') p = p.replace(/<<OLD>>[\s\S]*?<<\/OLD>>\n?/g, '');
+    if (S.kind === 'old') p = p.replace(/<<NEW>>[\s\S]*?<<\/NEW>>\n?/g, '');
+    S.promptCache[key] = p.replace(/<<\/?(NEW|OLD)>>\n?/g, '').replace(/\n{3,}/g, '\n\n');
+  }
+  return S.promptCache[key];
+}
+
 // ---------- one call ----------
 function send(S, msg) {
   if (S.out) return S.out(msg);              // a phone call has its own way of sending (see phoneOut)
@@ -404,19 +430,26 @@ async function speechEnd(S) {
   send(S, { type: 'heard', text });
   const ack = sayAck(S);                     // first, so nothing delays it
   hearGender(S, pcm);
+  noteKind(S, text);
   S.replying = reply(S, hearMs, ack).catch((e) => log('reply crashed:', e.message));
 }
 
 async function reply(S, hearMs, ack, afterCheck) {
   const g = S.gen, t1 = Date.now(), lang = S.lang;
   const ctrl = new AbortController(); S.abort = ctrl;
-  let system = (S.cfg.prompts && S.cfg.prompts[lang]) || S.cfg.prompt;
-  if (S.gender) system += "\n\nThe caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.';
-  if (ack) system += '\n\nYou have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.';
-  if (S.vehicle) system += '\n\nResult of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.';
-  const messages = [{ role: 'system', content: system }, { role: 'user', content: '(The call has just connected.)' },
+  // Her instructions stay word for word the same through the call, and the things that change from reply to reply
+  // go at the very end. Sarvam charges less for text it has already read, so this keeps the cost of each reply down.
+  const notes = [];
+  if (S.gender) notes.push("The caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.');
+  if (ack) notes.push('You have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.');
+  if (S.vehicle) notes.push('Result of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.');
+  const messages = [{ role: 'system', content: promptFor(S, lang) }, { role: 'user', content: '(The call has just connected.)' },
     ...S.turns.map((t) => ({ role: t.who === 'agent' ? 'assistant' : 'user', content: t.text }))];
   if (afterCheck) messages.push({ role: 'user', content: '(The vehicle check has finished. Tell the caller the result now.)' });
+  if (notes.length) {
+    const last = messages[messages.length - 1], note = '(Notes for you from the system, not said by the caller. ' + notes.join(' ') + ')';
+    if (last.role === 'user') last.content += '\n\n' + note; else messages.push({ role: 'user', content: note });
+  }
   let raw = '', done = 0, queued = 0, first = true, tThink = 0, problem = null, onlyAck = false;
   const said = [];
   let chain = Promise.resolve();
@@ -484,6 +517,7 @@ async function reply(S, hearMs, ack, afterCheck) {
 
   // She asked for a vehicle to be checked: search the GPS servers, then let her tell the caller what was found.
   const number = vehicleTag(raw);
+  if (number && S.kind !== 'all') S.kind = S.kind === 'new' ? 'all' : 'old';   // a vehicle check means an existing customer
   if (number && !afterCheck) {
     if (!fullPlate(number)) {
       log('call', S.cfg.call_id, 'vehicle check skipped, not a full number:', number);
@@ -504,7 +538,7 @@ async function reply(S, hearMs, ack, afterCheck) {
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0 };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {} };
 }
 
 function greet(S) {
@@ -512,7 +546,9 @@ function greet(S) {
   if (S.cfg.allowed !== false) warmAcks(S, S.lang);
   const ctrl = new AbortController(); S.abort = ctrl;
   const g = S.gen;
-  S.replying = tts(S.cfg, S.cfg.greeting, ctrl.signal, S.lang)
+  // The greeting is the same on every call, so its sound is made once and kept, like the quick "ok" clips.
+  const k = clipKey(S.cfg, S.lang, 'greeting:' + S.cfg.greeting), kept = clips.get(k);
+  S.replying = (kept ? Promise.resolve(kept) : tts(S.cfg, S.cfg.greeting, ctrl.signal, S.lang).then((a) => { clips.set(k, a); return a; }))
     .then((a) => { if (g === S.gen) send(S, { type: 'audio', audio: a }); })
     .catch((e) => { if (g === S.gen) send(S, { type: 'error', message: e.message }); });
 }

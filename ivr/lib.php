@@ -311,7 +311,7 @@ function voice_for_lang(string $l): string {
 function live_payload(string $lang, bool $trainer): array {
     $prompts = []; $voices = []; $codes = [];
     foreach (LIVE_LANGS as $l => $info) {
-        $prompts[$l] = system_prompt($l, true, $trainer);
+        $prompts[$l] = system_prompt($l, true, $trainer, !$trainer && (int)($_GET['sv'] ?? 0) >= 13);
         $voices[$l] = voice_for_lang($l);
         $codes[$l] = $info['code'];
     }
@@ -320,9 +320,15 @@ function live_payload(string $lang, bool $trainer): array {
         'retry' => ['te' => RETRY_TE, 'hi' => RETRY_HI, 'en' => RETRY_EN], 'retry_text' => $lang === 'hi' ? RETRY_HI : RETRY_TE];
 }
 
-function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = false): string {
+// $parts: mark what is only for new customers and what is only for existing ones, so the call server (version 13
+// and later) can leave out the part a call does not need. Without it the text is exactly as before.
+function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = false, bool $parts = false): string {
     $t = training();
     $p = SYSTEM_PROMPT;
+    if ($parts) {
+        $p = str_replace(["\nNew customer:\n", "\nExisting customer, GPS not working or offline:\n", "\nAlways:\n"],
+            ["\n<<NEW>>\nNew customer:\n", "\n<</NEW>>\n<<OLD>>\nExisting customer, GPS not working or offline:\n", "\n<</OLD>>\nAlways:\n"], $p);
+    }
     if ($lang === 'hi' || $lang === 'en') {
         $a = strpos($p, 'How to speak:'); $b = strpos($p, 'What to do on the call:');
         $p = substr($p, 0, $a) . ($lang === 'hi' ? SPEAK_HI : SPEAK_EN) . "\n" . substr($p, $b);
@@ -334,7 +340,7 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
     $p = str_replace('{{VEHICLE}}', $check ? VEHICLE_CHECK : '', $p);
     $cat = catalog();
     $p = str_replace('{{PRICES}}', $cat === '' ? NO_PRICES : HAS_PRICES, $p);
-    if ($cat !== '') $p .= "\n\n" . $cat;
+    if ($cat !== '') $p .= "\n\n" . ($parts ? "<<NEW>>\n$cat\n<</NEW>>" : $cat);
     $notes = trim(products()['notes']);
     if ($notes !== '') $p .= "\n\nOther charges and notes from the owner. Say these only when they come up:\n" . $notes;
     if ($trainer) $p .= TRAIN_BLOCK;
@@ -598,7 +604,7 @@ function gps_result_text(array $r): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 12;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 13;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
