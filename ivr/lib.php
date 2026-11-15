@@ -861,6 +861,31 @@ function call_extract(array $c): array {
     return $none + ['failed' => true];
 }
 
+// The nearest technician to the caller's place, as a suggestion for whoever assigns the task. The task itself stays
+// unassigned: a misheard place or a technician on leave must not send the work to the wrong person.
+function tech_suggest(string $place): string {
+    if (trim($place) === '') return 'none, the caller did not give a place';
+    $a = area_check($place);
+    switch ($a['status']) {
+        case 'in': return "{$a['tech']}" . ($a['tech_place'] !== '' ? " ({$a['tech_place']})" : '') . ", about {$a['km']} km from {$a['label']}";
+        case 'out': return "{$a['tech']}" . ($a['tech_place'] !== '' ? " ({$a['tech_place']})" : '') . " is the nearest, about {$a['km']} km from {$a['label']}, which is outside the {$a['limit']} km service area";
+        case 'off': return 'none, no technician is added on the Service areas page of the call agent';
+        case 'unknown': return "none, the place \"{$a['place']}\" was not found on the map";
+        default: return 'none, the map could not be checked';
+    }
+}
+// What the technician or the team has to do, in one line, for the task remarks.
+function task_todo(array $x): string {
+    $v = ($x['vehicle'] ?? '') !== '' ? " for vehicle {$x['vehicle']}" : '';
+    $p = ($x['product'] ?? '') !== '' ? $x['product'] : 'GPS tracker';
+    switch ($x['type']) {
+        case 'new': return "Call the customer, confirm the time, then install or deliver: $p.";
+        case 'troubleshoot': return "Check why the GPS is not working$v. Call the customer to fix the visit time.";
+        case 'readd': return "Re-add the GPS$v: confirm re-installation of the same GPS or a new one with the customer.";
+        default: return 'Call the customer back about their request.';
+    }
+}
+
 // Everything that happens once a real phone call is over: understand it, raise a task in TaskManager for work
 // that needs the team (never for renewals), and send the team one email. Returns the fields to keep on the call.
 function call_wrap(array $c): array {
@@ -891,7 +916,8 @@ function call_wrap(array $c): array {
             $talk = '';
             foreach ((array)$c['turns'] as $t) $talk .= (($t['who'] ?? '') === 'agent' ? 'AI: ' : 'Caller: ') . $t['text'] . "\n";
             $r = http_post(TASK_URL, [], ['key' => task_key(), 'type' => $x['type'], 'phone' => $from, 'call_id' => (string)$c['id'], 'name' => $x['name'], 'location' => $x['location'],
-                'vehicle' => $x['vehicle'], 'product' => $x['product'], 'summary' => $x['summary'], 'server_note' => $note, 'transcript' => mb_substr($talk, 0, 2800)], 20);
+                'vehicle' => $x['vehicle'], 'product' => $x['product'], 'summary' => $x['summary'], 'server_note' => $note, 'transcript' => mb_substr($talk, 0, 2800),
+                'suggest' => tech_suggest((string)$x['location']), 'todo' => task_todo($x)], 20);
             if ($r['code'] === 200 && !empty($r['data']['task_id'])) $keep['task_id'] = (string)$r['data']['task_id'];
             else $keep['task_error'] = (string)($r['data']['error'] ?? ($r['err'] ?: 'TaskManager did not answer (' . $r['code'] . ').'));
         }
