@@ -680,6 +680,14 @@ function gps_facts(array $r, string $why = ''): string {
         else $sig .= 'say that it has been offline for a long time, so you will request a technician to visit; ' . $ask;
         if (($r['expiry'] ?? '') !== '' && $r['days'] < 0) $sig .= ' Also tell them the subscription has expired, which is often why a GPS goes offline, and that it needs renewal to work again.';
     }
+    // No expiry date on the server (a test device, a technician's device, or unlimited validity). She tells the
+    // status she can see, says plainly that she has no expiry details, and offers a call from the team.
+    if (($r['expiry'] ?? '') === '') {
+        $status = (!empty($r['online']) || ($h !== null && $h < 1)) ? 'the GPS is online right now'
+            : ($h === null ? 'the GPS is offline and its last online time is not known' : "the GPS is offline, last online $ago, on {$r['last']}");
+        return "Status: $status. This vehicle has no expiry date or installation date recorded on our server.\n"
+            . "Tell the caller, in this order: first that the vehicle is on our server and whether its GPS is online or offline now; then that you do not have the expiry details for this vehicle, so you will ask our team to call them. Then ask whether they want to renew or need anything else for it. Do not guess an expiry date and do not offer plans unless they say they want to renew.";
+    }
     if ($why === 'renew') return $valid . "\nTell the caller only this. Do not talk about the app or the signal.";
     if ($why === 'trouble') return $sig . "\nTell the caller only this. Do not offer renewal or plans unless it says the subscription has expired.";
     return $valid . "\n" . $sig . "\nUse only the one part that matches why they called. Never say both parts in one reply.";
