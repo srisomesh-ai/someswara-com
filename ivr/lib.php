@@ -66,7 +66,7 @@ New customer:
 - Step one, the vehicle. Ask: మీ దగ్గర ఏ type vehicle ఉందో చెప్తే, దానికి best GPS suggest చేస్తాను. Never offer a list of choices such as car, bike or lorry.
 - Step two, the use. Ask: ఇది personal use కోసమా, లేదా commercial purpose కోసమా? Do not ask whether it is their own vehicle or a rented one. Only if they do not understand, explain once: personal use means tracking their own vehicle, commercial purpose means vehicles given on rent or run for any business or service.
 - Step three, suggest the one product that fits the vehicle and the use, with the one or two features that matter for that use, such as live location on the phone for personal use, or switching off the engine from the phone for rented vehicles. Do not read out every feature.
-- Step four, the price, when they ask or when you have suggested the product. Every tracker comes with one year subscription, five years warranty and free installation by our technician: say this once with the price.
+- Step four, the price, when they ask or when you have suggested the product. Say the price together with what the list says that product's price includes, once. The subscription, warranty and installation are not the same for every product, so say only what the list says for that one.
 {{PRICES}}
 - Step five, answer their doubts, one at a time, in short replies.
 - Step six, offer the booking yourself: ask whether you can book the installation for today or tomorrow.
@@ -355,7 +355,14 @@ function voice_for_lang(string $l): string {
 }
 
 // Everything the live call server needs to run one call.
+// The owner asked for Telugu only on calls (15 Nov 2026). false brings back following the caller into Hindi and English.
+const TELUGU_ONLY = true;
+const TELUGU_RULE = '- Always answer in Telugu, whatever language the caller speaks. If the caller clearly cannot understand Telugu, tell them in simple words that a team member will call them back.';
 function live_payload(string $lang, bool $trainer): array {
+    if (TELUGU_ONLY) {   // one language: the call server then listens for Telugu only and never switches voice or language
+        return ['key' => sarvam_key(), 'lang' => 'te', 'lang_code' => LIVE_LANGS['te']['code'], 'voice' => voice_for_lang('te'),
+            'prompt' => system_prompt('te', true, $trainer, !$trainer && (int)($_GET['sv'] ?? 0) >= 13), 'trainer' => $trainer, 'retry_text' => RETRY_TE];
+    }
     $prompts = []; $voices = []; $codes = [];
     foreach (LIVE_LANGS as $l => $info) {
         $prompts[$l] = system_prompt($l, true, $trainer, !$trainer && (int)($_GET['sv'] ?? 0) >= 13);
@@ -380,7 +387,7 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
         $a = strpos($p, 'How to speak:'); $b = strpos($p, 'What to do on the call:');
         $p = substr($p, 0, $a) . ($lang === 'hi' ? SPEAK_HI : SPEAK_EN) . "\n" . substr($p, $b);
     }
-    $rule = $live ? sprintf(LIVE_LANG_RULE, LIVE_LANGS[$lang]['name']) : ($lang === 'hi' ? OTHER_LANG_HI : OTHER_LANG_TE);
+    $rule = $live && TELUGU_ONLY ? TELUGU_RULE : ($live ? sprintf(LIVE_LANG_RULE, LIVE_LANGS[$lang]['name']) : ($lang === 'hi' ? OTHER_LANG_HI : OTHER_LANG_TE));
     $p = str_replace(OTHER_LANG_TE, $rule, $p);
     $check = $live && gps_on();
     $p = str_replace('{{TROUBLE}}', $check ? TROUBLE_CHECK : TROUBLE_ASK, $p);
@@ -420,8 +427,35 @@ function num_words(int $n): string {
 
 // The owner's own price list (Products and prices page) as text for her instructions. '' means no product yet.
 const FITS = ['Bike', 'Scooter', 'Car', 'Auto', 'Truck', 'Bus', 'Tractor or JCB', 'Person, bag or pet'];
+const PRICE_LIST_V2 = [
+    ['name' => 'Basic GPS Tracker', 'price' => 3500, 'fits' => ['Bike', 'Scooter', 'Car', 'Auto', 'Truck', 'Bus', 'Tractor or JCB'],
+        'for' => 'Any vehicle, to see where it is', 'inc' => '1 year subscription, 5 years warranty, free installation within our service range', 'feat' => []],
+    ['name' => 'Engine Cutoff GPS Tracker', 'price' => 4500, 'fits' => ['Bike', 'Scooter', 'Car', 'Auto', 'Truck', 'Bus', 'Tractor or JCB'],
+        'for' => 'Any vehicle, when more security is needed, such as rented vehicles', 'inc' => '1 year subscription, 5 years warranty, free installation within our service range',
+        'feat' => ['The engine can be cut off through the mobile app']],
+    ['name' => 'Micro GPS Tracker', 'price' => 3500, 'fits' => ['Person, bag or pet'],
+        'for' => 'Handheld device, no installation required', 'inc' => '1 year subscription, 1 year warranty',
+        'feat' => ['One charge gives 2 to 3 days of backup', 'Inbuilt mic with two-way communication, and can also listen to the voice',
+            'To use the mic the customer must put their own SIM card, because our company SIM card cannot make calls', 'No engine on and off alerts']],
+    ['name' => 'Magnet GPS Tracker', 'price' => 5500, 'fits' => ['Person, bag or pet'],
+        'for' => 'Handheld device with a magnet, no installation required', 'inc' => '1 year subscription, 1 year warranty',
+        'feat' => ['One charge gives 10 to 15 days of backup', 'Inbuilt mic to listen to the voice only',
+            'To use the mic the customer must put their own SIM card, because our company SIM card cannot make calls', 'No engine on and off alerts']],
+    ['name' => 'VLTD GPS Tracker (government / RTO approved AIS140)', 'price' => 9000, 'fits' => ['Car', 'Auto', 'Truck', 'Bus'],
+        'for' => 'Vehicles that need the government or RTO approved AIS140 GPS', 'inc' => '1 year subscription, 1 year warranty',
+        'feat' => ['Comes with an SOS button']],
+];
+const PRICE_NOTES_V2 = "Features of every GPS tracker: live location on phone; vehicle movement alert when it is on standby; engine on and off alert (not on Micro and Magnet); geofencing alert; overspeed alert; GPS offline alert; GPS power fail alert; can be tracked on up to 5 phones at a time.\nReports: more than 20 types of report, downloaded in Excel or PDF, and can come by email daily, weekly or monthly.\nThese prices are final.";
 function products(): array {
     $d = read_json('products.json');
+    if (empty($d['price_v2'])) {   // one time: the owner's final price list of 15 Nov 2026 replaces the list that was there
+        $d['old_products'] = $d['products'] ?? []; $d['old_notes'] = $d['notes'] ?? '';
+        $d['products'] = [];
+        foreach (PRICE_LIST_V2 as $row) $d['products'][] = ['id' => bin2hex(random_bytes(6))] + $row;
+        $d['notes'] = PRICE_NOTES_V2;
+        $d['site_import'] = 1; $d['price_v2'] = 1;
+        write_json('products.json', $d);
+    }
     $list = [];
     foreach ((array)($d['products'] ?? []) as $p) if (is_array($p) && ($p['name'] ?? '') !== '' && (int)($p['price'] ?? 0) > 0) $list[] = $p;
     return ['products' => $list, 'notes' => (string)($d['notes'] ?? ''), 'fits' => FITS];
