@@ -849,7 +849,7 @@ function call_extract(array $c): array {
         . "\"location\": the place or area the caller gave, in English letters, or \"\".\n"
         . "\"product\": the product they want, or \"\".\n"
         . "\"plan\": for a renewal, \"3 months\", \"6 months\" or \"1 year\", or \"\".\n"
-        . "\"email\": only if the agent offered to send the discount booking form by email, read an email ID back, and the caller clearly said it is correct: that email ID exactly as the agent last read it back, in small English letters with no spaces, like ravi123@gmail.com. In every other case \"\".\n"
+        . "\"email\": only if the agent offered to send the discount booking form by email, read an email ID back, and the caller clearly said it is correct: that email ID, rebuilt from what the agent last read back: join the letters and numbers she spelled out, turn the words at, dot, underscore and their Telugu spellings (ఎట్, డాట్) into the signs, and write it in small English letters with no spaces, like ravi123@gmail.com. In every other case \"\".\n"
         . "\"summary\": one short English sentence saying what the caller needs from the team.\n\nThe call:\n" . mb_substr($talk, -6000);
     $key = sarvam_key();
     $text = '';
@@ -943,6 +943,11 @@ const FORM_URL = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php';
 const FORM_DISCOUNT = 200;
 function form_mail(string $email, string $name, string $phone): bool {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || preg_match('~[\r\n,;<>]~', $email)) return false;
+    // First choice: TaskManager sends it from the company mailbox, like all its other emails, so it is not
+    // dropped or put in spam the way a plain email from this website can be.
+    $r = http_post(TASK_URL, [], ['key' => task_key(), 'form_email' => $email, 'name' => $name, 'phone' => $phone, 'discount' => FORM_DISCOUNT], 25);
+    if ($r['code'] === 200 && !empty($r['data']['sent'])) return true;
+    // TaskManager did not send it (not updated yet, or its mailbox failed): send a plain email from this website.
     $url = FORM_URL . '?name=' . rawurlencode($name) . '&phone=' . rawurlencode($phone) . '&disc=' . FORM_DISCOUNT;
     $body = 'Hello' . ($name !== '' ? " $name" : '') . "!\n\nThank you for your interest in Bharat GPS Tracker.\n\n"
         . 'Special offer: Rs.' . FORM_DISCOUNT . " OFF - applied automatically when you fill this form.\n\n"
