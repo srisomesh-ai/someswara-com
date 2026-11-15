@@ -72,7 +72,8 @@ New customer:
 - Step six, offer the booking yourself: ask whether you can book the installation for today or tomorrow.
 - Step seven, when they agree, take their name and area, once, and say our team will call to fix the time.
 - Company or corporate vehicles always need a GST bill: tell them a GST bill is given.
-- For a discount or an offer, do not decide: say our team will confirm it on WhatsApp on this same number.
+- The prices are fixed. Never reduce a price yourself. Only when the customer asks for a discount or a lower price, say this: you will send a booking form to their email, and if they fill that form they get two hundred rupees discount. Then ask for their email ID.
+- Taking an email ID: when they say it, read the whole email ID back slowly in English letters, the name part letter by letter and the rest as at gmail dot com, and ask whether it is correct. If they correct any part, read the whole ID back again. Only after they clearly say it is correct, say the form will reach their email right after this call. Never say the form is sent or coming before they confirm the email ID. If they have no email ID, say our team will call them.
 - If they say they will think about it, do not pressure them. Give one honest reason that fits their use and offer to send the details on WhatsApp to this number.
 - After the first year the yearly renewal is one thousand two hundred rupees. Say this only if they ask.
 - This is the right style and the right amount of sir. The same style applies in every language:
@@ -160,7 +161,7 @@ TRAINING MODE. The person on this call is the owner of the business, and he is t
 Never write [[RULE: ...]] unless he has just said yes. The tag is not spoken; do not mention it. After that, wait for him to carry on as a customer.
 TXT;
 const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
-const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Once you know the vehicle and the need, suggest the one product from the list that fits that vehicle and need best, with its price and what the price includes. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For a discount, an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
+const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Once you know the vehicle and the need, suggest the one product from the list that fits that vehicle and need best, with its price and what the price includes. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
 // Which team gets the email about a finished phone call, by what the call was. Every email is also copied to MAIL_COPY.
 const MAIL_TO = [
     'renewal'      => ['support@bharatgps.com'],                            // licence and renewals
@@ -784,7 +785,7 @@ function gps_result_fact(array $r): string {
         $f .= !empty($r['online']) ? ', GPS online now' : (($r['last_ts'] ?? 0) ? ", GPS last online {$r['last']}" : '');
         return $f . '.';
     }
-    if ($r['status'] === 'none') return "vehicle $n is not in our records (expired earlier and removed). You offered re-adding the same GPS for 1700 rupees or a new GPS for 3300 rupees.";
+    if ($r['status'] === 'none') return "vehicle $n is not in our records (expired earlier and removed). You offered re-adding the same GPS for 1700 rupees or a new GPS for 3500 rupees.";
     return '';
 }
 
@@ -800,7 +801,7 @@ function gps_result_text(array $r, string $why = ''): string {
         default:
             // A missing or stolen vehicle is an emergency: never answer it with prices. The number was most likely misheard.
             if ($why === 'missing') return "Vehicle $n was not found on our servers, most likely because the number was not heard correctly. Say that you could not find this number and ask them to say the full vehicle number once more, slowly. If it is not found a second time, say our team will call them straight away to help. Do not mention re-adding, a new GPS or any price on this call.";
-            return "Vehicle $n is not on any of our servers. Tell the caller that this vehicle number is not in our records, which means its GPS expired earlier and was removed from the server. Then explain the two choices: adding it again by re-installing the same GPS costs one thousand seven hundred rupees; or, if that GPS no longer works, a new GPS is better, which costs three thousand three hundred rupees. Ask which they prefer, once. When they choose either one, do not explain it again: say you have noted it, take their name and where the vehicle is, and say our team will call to fix the technician's visit. Only if the caller says the number you checked was wrong, take the right number and check that.";
+            return "Vehicle $n is not on any of our servers. Tell the caller that this vehicle number is not in our records, which means its GPS expired earlier and was removed from the server. Then explain the two choices: adding it again by re-installing the same GPS costs one thousand seven hundred rupees; or, if that GPS no longer works, a new GPS is better, which costs three thousand five hundred rupees. Ask which they prefer, once. When they choose either one, do not explain it again: say you have noted it, take their name and where the vehicle is, and say our team will call to fix the technician's visit. Only if the caller says the number you checked was wrong, take the right number and check that.";
     }
 }
 
@@ -819,7 +820,7 @@ function task_key(): string {
 
 // Read the finished call once more and say what it was: which kind of request, and the details the caller gave.
 function call_extract(array $c): array {
-    $none = ['type' => 'none', 'name' => '', 'vehicle' => '', 'location' => '', 'product' => '', 'plan' => '', 'summary' => ''];
+    $none = ['type' => 'none', 'name' => '', 'vehicle' => '', 'location' => '', 'product' => '', 'plan' => '', 'email' => '', 'summary' => ''];
     $talk = '';
     foreach ((array)$c['turns'] as $t) $talk .= (($t['who'] ?? '') === 'agent' ? 'Agent: ' : 'Caller: ') . $t['text'] . "\n";
     if (!array_filter((array)$c['turns'], fn($t) => ($t['who'] ?? '') === 'caller')) return $none;
@@ -837,6 +838,7 @@ function call_extract(array $c): array {
         . "\"location\": the place or area the caller gave, in English letters, or \"\".\n"
         . "\"product\": the product they want, or \"\".\n"
         . "\"plan\": for a renewal, \"3 months\", \"6 months\" or \"1 year\", or \"\".\n"
+        . "\"email\": only if the agent offered to send the discount booking form by email, read an email ID back, and the caller clearly said it is correct: that email ID exactly as the agent last read it back, in small English letters with no spaces, like ravi123@gmail.com. In every other case \"\".\n"
         . "\"summary\": one short English sentence saying what the caller needs from the team.\n\nThe call:\n" . mb_substr($talk, -6000);
     $key = sarvam_key();
     $text = '';
@@ -848,6 +850,8 @@ function call_extract(array $c): array {
             $out = $none;
             foreach ($none as $k => $v) $out[$k] = clean_line(is_scalar($j[$k] ?? '') ? (string)($j[$k] ?? '') : '', $k === 'summary' ? 300 : 120);
             $out['type'] = in_array(strtolower($out['type']), ['renewal', 'troubleshoot', 'readd', 'new', 'other', 'none'], true) ? strtolower($out['type']) : 'none';
+            $out['email'] = strtolower(preg_replace('~\s+~', '', $out['email']));
+            if (!filter_var($out['email'], FILTER_VALIDATE_EMAIL)) $out['email'] = '';
             $out['vehicle'] = plate_key($out['vehicle']);
             if ($out['vehicle'] === '' && !empty($c['vehicles'])) $out['vehicle'] = (string)end($c['vehicles']);
             return $out;
@@ -864,7 +868,17 @@ function call_wrap(array $c): array {
     $keep = ['outcome' => $x['type']];
     foreach (['name', 'vehicle', 'location', 'plan', 'summary'] as $k) if (($x[$k] ?? '') !== '') $keep[$k] = $x[$k];
     $from = (string)($c['from'] ?? '');
-    if (in_array($x['type'], ['troubleshoot', 'readd', 'new', 'other'], true)) {
+    // The caller asked for a discount and confirmed an email ID: send the Quick Task booking form. Filling it creates
+    // the unassigned task in TaskManager, so no second task is made here for the same new customer.
+    $formSent = false;
+    if (($x['email'] ?? '') !== '') {
+        $formSent = form_mail($x['email'], (string)($x['name'] ?? ''), $from);
+        $keep['form_email'] = $x['email'];
+        $keep['form_sent'] = $formSent ? 1 : -1;
+        $keep['summary'] = trim(($keep['summary'] ?? '') . ($formSent ? " Booking form with Rs " . FORM_DISCOUNT . " discount emailed to {$x['email']}." : " The booking form could NOT be emailed to {$x['email']}."));
+    }
+    if ($formSent && $x['type'] === 'new') { /* the form makes the task */ }
+    elseif (in_array($x['type'], ['troubleshoot', 'readd', 'new', 'other'], true)) {
         if ($from === '') $keep['task_error'] = 'The caller number was hidden, so no task was made.';
         else {
             $note = '';
@@ -883,6 +897,24 @@ function call_wrap(array $c): array {
     }
     $keep['mailed'] = MAIL_ON ? (lead_mail($c + $keep) ? 1 : -1) : 3;   // 3: finished, emails are switched off
     return $keep;
+}
+
+// ---------- booking form email to the customer ----------
+// The same Quick Task enquiry form the team sends on WhatsApp from TaskManager. When the customer submits it,
+// TaskManager creates the task, unassigned, with the discount applied.
+const FORM_URL = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php';
+const FORM_DISCOUNT = 200;
+function form_mail(string $email, string $name, string $phone): bool {
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || preg_match('~[\r\n,;<>]~', $email)) return false;
+    $url = FORM_URL . '?name=' . rawurlencode($name) . '&phone=' . rawurlencode($phone) . '&disc=' . FORM_DISCOUNT;
+    $body = 'Hello' . ($name !== '' ? " $name" : '') . "!\n\nThank you for your interest in Bharat GPS Tracker.\n\n"
+        . 'Special offer: Rs.' . FORM_DISCOUNT . " OFF - applied automatically when you fill this form.\n\n"
+        . "Please fill your details to book your GPS installation:\n\n$url\n\n"
+        . "The form takes 2 minutes. Our team will contact you to schedule.\n\nFor help call: 9849849824\n\nBharat GPS Tracker";
+    $host = preg_replace('~[^a-z0-9.-]~', '', strtolower(preg_replace('~^www\.|:\d+$~', '', (string)($_SERVER['HTTP_HOST'] ?? '')))) ?: 'someswara.com';
+    $subject = '=?UTF-8?B?' . base64_encode('Bharat GPS Tracker: your booking form with Rs.' . FORM_DISCOUNT . ' discount') . '?=';
+    $headers = "From: Bharat GPS Tracker <noreply@$host>\r\nReply-To: sales@bharatgps.com\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64";
+    return function_exists('mail') && @mail($email, $subject, chunk_split(base64_encode($body)), $headers);
 }
 
 // ---------- lead email ----------
