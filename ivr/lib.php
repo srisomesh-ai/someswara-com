@@ -86,6 +86,8 @@ Existing customer whose GPS has already stopped because it was not renewed for a
 - Take the vehicle number, their name and where the vehicle is, and say our team will call to fix the visit.
 
 Always:
+- When a caller tells you something bad, such as a missing or stolen vehicle, an accident, or a problem that has troubled them for days, first say one short, sincere sentence that you are sorry to hear it, and only then help. Stay on what they called about: on such a call never bring up renewal, plans or expiry dates unless they ask.
+- A caller who says the vehicle itself is missing, lost or stolen is an existing customer who needs the vehicle found: ask the vehicle number, check it, and tell them what the check shows about where it can be seen.
 {{PLACE}}- Never say again what you said in your previous reply. When the caller answers your question, accept the answer and move to the next step. If you did not understand their answer, ask only about the part you missed, in different words.
 - A caller who calls you madam or sir is addressing you. It tells you nothing about them. Until you are told whether the caller is a man or a woman, address them as sir.
 - Address the caller only as sir or madam, or గారు with their name (in Hindi सर, मैडम or जी). Callers often call you అమ్మా, అన్నా, అక్కా, చెల్లి, బాబు, తల్లి, bro, dear, बेटा, भैया or दीदी. Never copy the word they use for you and never use any such family or friendly word for them. Stay polite and professional however casually they speak.
@@ -667,26 +669,33 @@ function gps_facts(array $r, string $why = ''): string {
     }
     // signal
     $h = $r['off_hours'] ?? null;
+    $ago = $h === null ? '' : ($h < 48 ? "$h hours ago" : intdiv($h, 24) . ' days ago');
     $ask = 'take their name and where the vehicle is now, and say our team will call to confirm the visit time.';
     if (!empty($r['online']) || ($h !== null && $h < 1)) {
         $sig = 'Signal: the GPS is online on our server right now. If they called because it is not working: tell them it is showing online on our side, and ask them to close the app, open it again and check. If they still cannot see it, say our team will call them.';
     } elseif ($h === null) {
         $sig = 'Signal: the last online time is not known. If they called because it is not working: say you have noted the complaint and the team will check it, then ' . $ask;
     } else {
-        $ago = $h < 48 ? "$h hours ago" : intdiv($h, 24) . ' days ago';
         $sig = "Signal: the GPS is offline. It was last online $ago, on {$r['last']}. If they called because it is not working: tell them when it was last online, then ";
         if ($h < 72) $sig .= 'ask them to start the vehicle and drive it a little, and check the app after some time. If it still does not come online, they should call us back. Do not arrange a technician now.';
         elseif ($h <= 15 * 24) $sig .= 'ask whether any service or repair was done on the vehicle or the battery was removed in recent days. Then say you have noted the complaint and our team will check and arrange a technician; ' . $ask;
         else $sig .= 'say that it has been offline for a long time, so you will request a technician to visit; ' . $ask;
         if (($r['expiry'] ?? '') !== '' && $r['days'] < 0) $sig .= ' Also tell them the subscription has expired, which is often why a GPS goes offline, and that it needs renewal to work again.';
     }
-    // No expiry date on the server (a test device, a technician's device, or unlimited validity). She tells the
-    // status she can see, says plainly that she has no expiry details, and offers a call from the team.
+    $live = !empty($r['online']) || ($h !== null && $h < 1);
+    // The caller says the vehicle itself is missing or stolen. Sympathy first, then only what helps to find it.
+    if ($why === 'missing') {
+        $where = $live ? 'Its GPS is online right now, so the live location of the vehicle can be seen in their mobile app this minute. Ask them to open the app now and look at the live location.'
+            : ($h === null ? 'Its GPS is offline and the last online time is not known.' : "Its GPS is offline. It was last online $ago, on {$r['last']}; the last place it was seen is in their mobile app.");
+        return "The caller's vehicle is missing. Begin by saying, sincerely and in one short sentence, that you are very sorry to hear this. Then tell them: $where Then say our team will call them straight away to help trace it. Do not talk about expiry dates, renewal or plans on this call, and do not ask what else they need.";
+    }
+    // No expiry date on the server (a test device, a technician's device, or unlimited validity).
     if (($r['expiry'] ?? '') === '') {
-        $status = (!empty($r['online']) || ($h !== null && $h < 1)) ? 'the GPS is online right now'
-            : ($h === null ? 'the GPS is offline and its last online time is not known' : "the GPS is offline, last online $ago, on {$r['last']}");
-        return "Status: $status. This vehicle has no expiry date or installation date recorded on our server.\n"
+        $status = $live ? 'the GPS is online right now' : ($h === null ? 'the GPS is offline and its last online time is not known' : "the GPS is offline, last online $ago, on {$r['last']}");
+        if ($why === 'renew') return "Status: $status. This vehicle has no expiry date or installation date recorded on our server.\n"
             . "Tell the caller, in this order: first that the vehicle is on our server and whether its GPS is online or offline now; then that you do not have the expiry details for this vehicle, so you will ask our team to call them. Then ask whether they want to renew or need anything else for it. Do not guess an expiry date and do not offer plans unless they say they want to renew.";
+        if ($why === 'trouble') return $sig . "\nTell the caller only this. Do not talk about expiry dates, renewal or plans.";
+        return "Status: $status.\nTell the caller that the vehicle is on our server and whether its GPS is online or offline now, then ask how you can help with it. Do not bring up expiry dates, renewal or plans yourself. Only if they ask about validity or renewal: say you do not have the expiry details for this vehicle and that our team will call them.";
     }
     if ($why === 'renew') return $valid . "\nTell the caller only this. Do not talk about the app or the signal.";
     if ($why === 'trouble') return $sig . "\nTell the caller only this. Do not offer renewal or plans unless it says the subscription has expired.";
@@ -721,7 +730,7 @@ function gps_result_text(array $r, string $why = ''): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 19;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 20;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 

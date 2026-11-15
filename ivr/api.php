@@ -133,7 +133,7 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
             $c['vehicles'] = array_values(array_unique(array_merge((array)($c['vehicles'] ?? []), [$r['status'] === 'found' ? $r['plate'] : $r['number']])));
             call_save($c);
         }
-        $why = in_array($_POST['why'] ?? '', ['renew', 'trouble'], true) ? $_POST['why'] : '';
+        $why = in_array($_POST['why'] ?? '', ['renew', 'trouble', 'missing'], true) ? $_POST['why'] : '';
         out(['status' => $r['status'], 'near' => !empty($r['near']), 'text' => gps_result_text($r, $why), 'fact' => gps_result_fact($r)]);
     }
     if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes

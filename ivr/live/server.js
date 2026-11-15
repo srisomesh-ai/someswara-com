@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 19;
+const VERSION = 20;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -330,8 +330,11 @@ async function recServe(req, res, url) {
 // or '' when it is not clear. She is then given only that part of what the GPS server shows.
 const TROUBLE_WORDS = /offline|ఆఫ్\s?లైన్|not working|పని\s?చేయ|work అవ్వ|రావడం లేదు|రావట్లేదు|చూపించ(డం|ట్లే)|complaint|కంప్లైంట్|problem|ప్రాబ్లం|काम नहीं|बंद है|ऑफलाइन|शिकायत|दिख नहीं/i;
 const RENEW_WORDS = /renew|రెన్యూ|రిన్యూ|రెన్యువల్|expir|validity|వాలిడిటీ|licen[sc]e|లైసెన్స్|recharge|రీఛార్జ్|రీచార్జ్|नवीनीकरण|रिन्यू|रिचार्ज|वैलिडिटी/i;
+// The vehicle itself is missing or stolen. This comes before everything else.
+const MISSING_WORDS = /miss(ing)?\s?(అయ|అయి|ayy|ayi)|మిస్\s?(అయ|అయి)|missing|stolen|theft|దొంగ|చోరీ|పోయింది|ఎత్తుకెళ్ల|चोरी|गुम|गायब|खो गय/i;
 function whyCalling(S) {
   const said = S.turns.filter((t) => t.who === 'caller').map((t) => t.text).join(' ');
+  if (MISSING_WORDS.test(said)) return 'missing';
   const t = TROUBLE_WORDS.test(said), r = RENEW_WORDS.test(said);
   return t && !r ? 'trouble' : r && !t ? 'renew' : '';
 }
@@ -341,7 +344,7 @@ function whyCalling(S) {
 // list) and what is only for existing ones (complaints, renewals, the vehicle check). Once the caller's words show
 // clearly which they are, the other part is left out, which makes every reply cheaper. When it is not clear, or the
 // caller touches both, she gets everything.
-const OLD_WORDS = /renew|రెన్యూ|రిన్యూ|రెన్యువల్|expir|validity|వాలిడిటీ|licen[sc]e|లైసెన్స్|recharge|రీఛార్జ్|రీచార్జ్|offline|ఆఫ్\s?లైన్|not working|పని\s?చేయ|work అవ్వ|రావడం లేదు|రావట్లేదు|complaint|కంప్లైంట్|already|ఆల్రెడీ|नवीनीकरण|रिन्यू|रिचार्ज|काम नहीं|बंद है|ऑफलाइन|शिकायत/i;
+const OLD_WORDS = /miss(ing)?\s?(అయ|అయి)|మిస్\s?(అయ|అయి)|missing|stolen|theft|దొంగ|చోరీ|चोरी|गुम|गायब|renew|రెన్యూ|రిన్యూ|రెన్యువల్|expir|validity|వాలిడిటీ|licen[sc]e|లైసెన్స్|recharge|రీఛార్జ్|రీచార్జ్|offline|ఆఫ్\s?లైన్|not working|పని\s?చేయ|work అవ్వ|రావడం లేదు|రావట్లేదు|complaint|కంప్లైంట్|already|ఆల్రెడీ|नवीनीकरण|रिन्यू|रिचार्ज|काम नहीं|बंद है|ऑफलाइन|शिकायत/i;
 const NEW_WORDS = /కొత్త|\bnew\b|price|ధర|\brate\b|రేట్|రేటు|ఎంత|\bcost\b|\bbuy\b|కొనా|కొనుక్కో|purchase|कीमत|दाम|नया|नई|खरीद|कितन/i;
 function noteKind(S, text) {
   if (S.kind === 'all') return;
