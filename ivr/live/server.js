@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 18;
+const VERSION = 19;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -457,7 +457,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   // go at the very end. Sarvam charges less for text it has already read, so this keeps the cost of each reply down.
   const notes = [];
   if (S.gender) notes.push("The caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.');
-  else notes.push('It is not known yet whether the caller is a man or a woman. Do not say sir or madam, and do not use అండి as an address word; speak politely with no address word.');
+  else notes.push('It is not known yet whether the caller is a man or a woman. Address the caller as sir for now.');
   if (ack) notes.push('You have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.');
   // A check result is news once. After she has told the caller, it stays only as background, otherwise she keeps
   // repeating it or asking the same question again on every later reply.
@@ -487,12 +487,14 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   // Start turning a sentence into speech straight away, but deliver the sentences in order.
   let held = '';
   const speak = (sentence, keep) => {
-    if (!queued && !keep) {                  // no "ok", "సరే" or "sir," in front of the answer: the owner wants her to start with the answer itself
-      const whole = sentence;
-      for (let i = 0; i < 2; i++) sentence = sentence.replace(SAME_START, '');
-      sentence = sentence.trim();
-      if (sentence.replace(/[\s,.!?।]/g, '').length < 2) { onlyAck = true; held = whole; return; }   // kept in case it is all she says
-      sentence = sentence[0].toUpperCase() + sentence.slice(1);
+    if (!queued && !keep) {
+      if (ack) {                             // only when the quick "ok sir" clip was played: do not say it twice
+        const whole = sentence;
+        for (let i = 0; i < 2; i++) sentence = sentence.replace(SAME_START, '');
+        sentence = sentence.trim();
+        if (sentence.replace(/[\s,.!?।]/g, '').length < 2) { onlyAck = true; held = whole; return; }   // kept in case it is all she says
+        sentence = sentence[0].toUpperCase() + sentence.slice(1);
+      }
       const cur = squash(sentence);
       if (!noRepeat && cur.length >= 12 && prev.startsWith(cur)) { repeated = true; return; }          // the same opening as her last reply
     }
@@ -510,9 +512,11 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   };
   const emit = (final) => {
     let rest = cleanReply(raw).slice(done);
+    // Her voice starts as soon as the first whole sentence is ready. Everything after it is spoken as ONE piece,
+    // because every join between pieces is heard as a small gap in the wrong place.
     for (;;) {
-      // The very first piece may also end at a comma, so her voice starts sooner; after that, whole sentences.
-      const m = rest.match(!queued && !done ? /^([\s\S]{12,}?[.?!।,])\s+/ : /^([\s\S]{12,}?[.?!।])\s+/);
+      if (queued) break;
+      const m = rest.match(/^([\s\S]{12,}?[.?!।])\s+/);
       if (!m) break;
       done += m[0].length; rest = rest.slice(m[0].length);
       const s = m[1].replace(/\s+/g, ' ').trim();

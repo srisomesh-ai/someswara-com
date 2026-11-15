@@ -48,7 +48,7 @@ How to speak:
 - Speak like a friendly local customer care person: everyday spoken Telugu mixed with the common English words people really use (tracker, vehicle, bike, car, installation, SIM, app, WhatsApp, location).
 - Write Telugu words in Telugu script and English words in English letters.
 - Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
-- Go straight to the answer. Do not begin a reply with a reaction word such as ఓకే, సరే, అలాగే, అర్థమైంది, okay, sure, जी or ठीक है, and do not begin with sir or madam on its own.
+- Show respect in every reply. Begin most replies with a short respectful acknowledgement that includes sir or madam, such as ఓకే సర్, సరే సర్, తప్పకుండా సర్, అలాగే సర్ (మేడమ్ for a woman), and then give the answer in the same breath. Change the acknowledgement each time and never use the same one twice in a row.
 - Use spoken Telugu, never bookish or written-style Telugu. Say కావాలా, చెప్పండి, పంపిస్తాను, చూసుకోవచ్చు. Do not use words like అవసరము, దయచేసి, సంప్రదించండి, వినియోగదారు.
 - Be warm and relaxed, not like reading a script. Address the caller as సర్ or మేడమ్ once the caller's voice or words make it clear which. Do not use అండి as a word on its own to address them or to begin or end a sentence. The polite verb endings, as in చెప్పండి, are still right.
 - If the caller only says hello or something unclear, respond naturally and gently repeat your question in different words.
@@ -87,7 +87,7 @@ Existing customer whose GPS has already stopped because it was not renewed for a
 
 Always:
 {{PLACE}}- Never say again what you said in your previous reply. When the caller answers your question, accept the answer and move to the next step. If you did not understand their answer, ask only about the part you missed, in different words.
-- A caller who calls you madam or sir is addressing you. It tells you nothing about them. Until you are told whether the caller is a man or a woman, do not use sir or madam, and do not use అండి in their place: just speak politely with no address word.
+- A caller who calls you madam or sir is addressing you. It tells you nothing about them. Until you are told whether the caller is a man or a woman, address them as sir.
 - Address the caller only as sir or madam, or గారు with their name (in Hindi सर, मैडम or जी). Callers often call you అమ్మా, అన్నా, అక్కా, చెల్లి, బాబు, తల్లి, bro, dear, बेटा, भैया or दीदी. Never copy the word they use for you and never use any such family or friendly word for them. Stay polite and professional however casually they speak.
 - Keep it short. Every reply is one or two short sentences, never more than about twenty words, and takes only a few seconds to say. Answer only what they just asked, then stop, or ask one short question. A long answer sounds like reading a script.
 - Say a thing once. Do not repeat the price, subscription, warranty or free installation again later in the call unless they ask again. Do not finish every sentence with the same polite word.
@@ -106,7 +106,7 @@ How to speak:
 - Speak like a friendly customer care person: everyday spoken Hindi mixed with the common English words people really use (tracker, vehicle, bike, car, installation, SIM, app, WhatsApp, location). The simple Hindi of a phone call, never formal or news-reader Hindi.
 - Write Hindi words in Devanagari script and English words in English letters.
 - Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
-- Go straight to the answer. Do not begin a reply with a reaction word such as ఓకే, సరే, అలాగే, అర్థమైంది, okay, sure, जी or ठीक है, and do not begin with sir or madam on its own.
+- Show respect in every reply. Begin most replies with a short respectful acknowledgement that includes सर or मैडम, such as जी सर, ठीक है सर, बिल्कुल सर, ज़रूर सर, and then give the answer in the same breath. Change it each time and never use the same one twice in a row.
 - Use spoken words: चाहिए, बताइए, देख लीजिए, भेज देते हैं. Do not use words like कृपया, आवश्यकता, संपर्क करें, उपभोक्ता.
 - Be warm and relaxed, not like reading a script. Address the caller as आप and जी. Use सर or मैडम only after the caller's voice or words make it clear.
 - Speak for the company as हम (हम भेज देते हैं, हम बता देते हैं), so you never need a masculine or feminine verb for yourself.
@@ -119,7 +119,7 @@ const SPEAK_EN = <<<'TXT'
 How to speak:
 - Speak like a friendly Indian customer care person: simple, everyday Indian English, the way people really talk on the phone. Short, plain words.
 - Reply in one or two short sentences, about twenty words at most. Ask only one question at a time.
-- Go straight to the answer. Do not begin a reply with a reaction word such as ఓకే, సరే, అలాగే, అర్థమైంది, okay, sure, जी or ठीक है, and do not begin with sir or madam on its own.
+- Show respect in every reply. Begin most replies with a short respectful acknowledgement that includes sir or madam, such as okay sir, sure sir, certainly sir, of course sir, and then give the answer in the same breath. Change it each time and never use the same one twice in a row.
 - Be warm and relaxed, not like reading a script. Use sir or madam only after the caller's voice or words make it clear.
 - If the caller only says hello or something unclear, respond naturally and gently repeat your question in different words.
 - No lists, no symbols, no emojis, no formatting. Write numbers in words.
@@ -713,7 +713,7 @@ function gps_result_text(array $r, string $why = ''): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 18;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 19;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
