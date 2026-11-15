@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 20;
+const VERSION = 21;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -459,8 +459,9 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   // Her instructions stay word for word the same through the call, and the things that change from reply to reply
   // go at the very end. Sarvam charges less for text it has already read, so this keeps the cost of each reply down.
   const notes = [];
-  if (S.gender) notes.push("The caller's voice sounds like a " + (S.gender === 'm' ? 'man. Address him as sir' : 'woman. Address her as madam') + ', unless their words show otherwise.');
-  else notes.push('It is not known yet whether the caller is a man or a woman. Address the caller as sir for now.');
+  // Only which word fits, never an order to say it: said in every reply, it made her say sir in every sentence.
+  if (S.gender) notes.push("The caller's voice sounds like a " + (S.gender === 'm' ? 'man, so the word for him is sir' : 'woman, so the word for her is madam') + ', unless their words show otherwise. Use it only as often as your instructions say.');
+  else notes.push('It is not known yet whether the caller is a man or a woman, so the word for them is sir for now. Use it only as often as your instructions say.');
   if (ack) notes.push('You have just said "' + ack + '" aloud to show you heard them. Do not begin this reply with another reaction word or with sir or madam again; go straight to the answer.');
   // A check result is news once. After she has told the caller, it stays only as background, otherwise she keeps
   // repeating it or asking the same question again on every later reply.
