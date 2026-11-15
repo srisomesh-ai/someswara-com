@@ -33,8 +33,10 @@ const RETRY_EN = 'Sorry, could you say that once more?';
 // On live calls she follows the caller's language. These are the languages she can switch between.
 const LIVE_LANGS = ['te' => ['name' => 'Telugu', 'code' => 'te-IN'], 'hi' => ['name' => 'Hindi', 'code' => 'hi-IN'], 'en' => ['name' => 'English', 'code' => 'en-IN']];
 const VOICE_EN = 'priya';   // voice used when a caller speaks English
-const GREETING = 'నమస్తే, Bharat GPS Tracker కి call చేసినందుకు thanks. చెప్పండి, మీకు ఏ vehicle కి tracker కావాలి?';
-const GREETING_HI = 'नमस्ते, Bharat GPS Tracker में call करने के लिए धन्यवाद. बताइए, आपको किस vehicle के लिए tracker चाहिए?';
+// The opening line. "good morning" in it is changed to the right words for the time of day when a call starts.
+const GREETING = 'Hi, good morning, welcome to Bharat GPS. How may I help you?';
+const GREETING_HI = GREETING;
+const GREETING_PLAIN = 'Hi, welcome to Bharat GPS Tracker. How may I help you?';   // said now and then instead, for variety
 const LANGS = ['te' => ['name' => 'Telugu', 'code' => 'te-IN'], 'hi' => ['name' => 'Hindi', 'code' => 'hi-IN']];
 const VOICES_HI = ['aparna_hi_customer', 'aarti_hi_customer', 'shubh_hi_customer'];   // Sarvam's Hindi customer-care voices
 const VOICES = ['kavitha_te_conversation', 'pooja_te_conversation', 'shubh', 'aditya', 'ritu', 'priya', 'neha', 'rahul', 'pooja', 'rohan', 'simran', 'kavya', 'amit', 'dev',
@@ -290,9 +292,24 @@ function clean_line($s, int $max): string {
     return mb_substr(trim(preg_replace('~\s+~u', ' ', (string)$s)), 0, $max);
 }
 
+// The greeting for a call that starts now: good morning before noon, good afternoon until 5 pm, good evening after that
+// and through the night. The standard greeting is sometimes said without the time words, so calls do not all sound the same.
+function call_greeting(): string {
+    $g = training()['greeting'];
+    if ($g === GREETING && mt_rand(1, 3) === 1) return GREETING_PLAIN;
+    $h = (int)date('G');
+    $now = $h >= 5 && $h < 12 ? 'morning' : ($h >= 12 && $h < 17 ? 'afternoon' : 'evening');
+    return preg_replace('~\b(good)\s+(morning|afternoon|evening|night)\b~iu', '$1 ' . $now, $g);
+}
+
 function training(): array {
     $t = read_json('training.json');
     $hi = lang() === 'hi';   // each language keeps its own greeting; rules and examples are shared
+    if (empty($t['greet_v2'])) {   // one time: the owner asked for the new time-of-day greeting in place of the old one
+        unset($t['greeting'], $t['greeting_hi']);
+        $t['greet_v2'] = 1;
+        write_json('training.json', $t);
+    }
     $greeting = clean_line($t[$hi ? 'greeting_hi' : 'greeting'] ?? '', 400);
     return [
         'lang' => lang(),

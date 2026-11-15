@@ -78,7 +78,7 @@ if ($action === 'phone_config') {
     $trainer = !empty($s['train_on']) && $from !== '' && in_array($from, (array)($s['train_nums'] ?? []), true);
     $allowed = $trainer || ($s['phone_mode'] ?? 'test') === 'all' || ($from !== '' && in_array($from, (array)($s['phone_tests'] ?? []), true));
     $lang = lang(); $voice = current_voice();
-    $greeting = $allowed ? training()['greeting'] : ($lang === 'hi' ? BUSY_HI : BUSY_TE);
+    $greeting = $allowed ? call_greeting() : ($lang === 'hi' ? BUSY_HI : BUSY_TE);
     $call = ['id' => bin2hex(random_bytes(8)), 'started' => time(), 'last' => time(), 'voice' => $voice, 'lang' => $lang,
         'live' => true, 'phone' => true, 'from' => $from, 'answered' => $allowed, 'turns' => [['who' => 'agent', 'text' => $greeting]]];
     call_save($call);
@@ -102,7 +102,7 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
     if ($action === 'live_config') {
         if (!empty($all[$tok]['call_id'])) fail('Token already used.', 403);
         if (sarvam_key() === '') fail('Add your Sarvam API key in Settings first.');
-        $lang = lang(); $voice = current_voice(); $greeting = training()['greeting'];
+        $lang = lang(); $voice = current_voice(); $greeting = call_greeting();
         $call = ['id' => bin2hex(random_bytes(8)), 'started' => time(), 'last' => time(), 'voice' => $voice, 'lang' => $lang,
             'live' => true, 'turns' => [['who' => 'agent', 'text' => $greeting]]];
         call_save($call);
@@ -287,7 +287,7 @@ case 'call_start':
     $voice = current_voice();
     $typed = ($_POST['mode'] ?? '') === 'type';
     $lang = lang();
-    $greeting = training()['greeting'];
+    $greeting = call_greeting();
     $audio = null;
     if (!$typed || ($_POST['speak'] ?? '') === '1') {
         $tts = sarvam_tts($greeting, $voice, $lang);
