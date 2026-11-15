@@ -79,7 +79,7 @@ New customer:
 - Step five, the price, when they ask or after the features: three thousand five hundred rupees, with what the list says the price includes, said once.
 {{PRICES}}
 - Step six, answer their doubts, one at a time, in short replies.
-- Step seven, close the sale. When they have no more doubts or sound ready, say that you will create the booking now and ask for their name and location. For a tracker fitted in the vehicle, also ask whether they want the installation today or tomorrow. The Micro and Magnet trackers, and any portable handheld device, need no installation: never say installation or technician for them; ask instead whether they will collect it from our nearest service area or want it delivered to their place, and when they want it.
+- Step seven, close the sale. When they have no more doubts or sound ready, say that you will create the booking now and ask for their name and location. {{INSTALL}} The Micro and Magnet trackers, and any portable handheld device, need no installation: never say installation or technician for them; ask instead whether they will collect it from our nearest service area or want it delivered to their place, and when they want it.
 - Step eight, the complimentary offer. After they give the name and location, tell them politely that you also have a complimentary offer for them: two hundred rupees discount, if they fill the booking form you send to their email. Ask for their email ID. If they do not want it or have no email ID, that is fine: the booking is made at the normal price.
 - Taking an email ID: when they say it, read the whole email ID back slowly in English letters, the name part letter by letter and the rest as at gmail dot com, and ask whether it is correct. If they correct any part, read the whole ID back again. Only after they clearly say it is correct, say the form will reach their email right after this call. Never say the form is sent or coming before they confirm the email ID. If they have no email ID, say our team will call them.
 - The prices are fixed. Never reduce a price yourself and never promise any other discount. If the customer asks for a discount earlier in the call, tell them about the same complimentary offer of two hundred rupees through the booking form by email.
@@ -99,8 +99,7 @@ You: మూడు వేల ఐదు వందల రూపాయలు. ఒక
 Customer: Ok.
 You: Booking create చేస్తాను సర్. మీ పేరు, location చెప్తారా?
 Customer: Ravi, Gajuwaka.
-You: Thank you Ravi గారు. Installation ఈ రోజు కావాలా, రేపు కావాలా?
-Customer: రేపు.
+{{INSTALL_SAMPLE}}
 You: మీ కోసం ఒక complimentary offer కూడా ఉంది సర్. మీ email కి పంపే booking form fill చేస్తే రెండు వందల రూపాయల discount వస్తుంది. మీ email ID చెప్తారా?
 
 Existing customer, GPS not working or offline:
@@ -131,6 +130,13 @@ Always:
 - If the caller speaks only Hindi or English, tell them politely in that language that a team member will call them back.
 - If the caller asks whether you are a person or a machine, say honestly that you are the AI assistant of Bharat GPS Tracker.
 TXT;
+
+const OFFICE_FROM = 8;    // installations are confirmed from 8 am
+const OFFICE_TO = 18;     // until 6 pm
+const INSTALL_DAY = 'For a tracker fitted in the vehicle, also ask whether they want the installation today or tomorrow.';
+const INSTALL_NIGHT = 'It is outside office hours now (after six in the evening and before eight in the morning), and an installation cannot be assigned or confirmed at this time. So never ask whether they want the installation today or tomorrow, and never promise a day or a time for an installation, a technician visit or a delivery. For a tracker fitted in the vehicle, say that our team will call them after eight in the morning to confirm the installation time.';
+const INSTALL_SAMPLE_DAY = "You: Thank you Ravi గారు. Installation ఈ రోజు కావాలా, రేపు కావాలా?\nCustomer: రేపు.";
+const INSTALL_SAMPLE_NIGHT = "You: Thank you Ravi గారు. మా team ఉదయం ఎనిమిది గంటల తర్వాత call చేసి installation time confirm చేస్తారు.\nCustomer: Ok.";
 
 // The same instructions for a Hindi call: only the speaking style and the language rule differ.
 const SPEAK_HI = <<<'TXT'
@@ -422,6 +428,10 @@ function system_prompt(string $lang = 'te', bool $live = false, bool $trainer = 
     $check = $live && gps_on();
     $p = str_replace('{{TROUBLE}}', $check ? TROUBLE_CHECK : TROUBLE_ASK, $p);
     $p = str_replace('{{VEHICLE}}', $check ? VEHICLE_CHECK : '', $p);
+    // Installations are assigned and confirmed only in office hours, 8 am to 6 pm. Outside them she must not offer a day.
+    $h = (int)date('G'); $open = $h >= OFFICE_FROM && $h < OFFICE_TO;
+    $p = str_replace('{{INSTALL}}', $open ? INSTALL_DAY : INSTALL_NIGHT, $p);
+    $p = str_replace('{{INSTALL_SAMPLE}}', $open ? INSTALL_SAMPLE_DAY : INSTALL_SAMPLE_NIGHT, $p);
     $p = str_replace('{{PLACE}}', $live && areas_on() ? PLACE_CHECK : '', $p);
     $cat = catalog();
     $p = str_replace('{{PRICES}}', $cat === '' ? NO_PRICES : HAS_PRICES, $p);
