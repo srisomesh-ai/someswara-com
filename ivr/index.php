@@ -253,6 +253,7 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
       <div class="head"><div><h1>Call history</h1><div class="sub">The last 50 calls</div></div></div>
       <div class="card hide" id="detail" style="display:flex;flex-direction:column;gap:14px">
         <div class="thead"><h2 id="detail-title">Call</h2><button type="button" class="btn" id="detail-close">Close</button></div>
+        <div id="detail-after" class="hide" style="font-size:14px"><b>After the call:</b> <span id="detail-after-text"></span></div>
         <div id="detail-rec" class="hide" style="display:flex;flex-direction:column;gap:6px">
           <span class="lbl">Call recording</span>
           <audio id="detail-audio" controls preload="none" style="width:100%"></audio>
@@ -697,6 +698,8 @@ async function openCall(id) {
     const d = await api('call_get', { __get: { id } });
     document.querySelector('.nav [data-view="history"]').click();
     $('detail-title').textContent = 'Call on ' + when(d.call.started) + ', ' + mmss(d.call.seconds);
+    $('detail-after-text').textContent = d.call.after || '';
+    $('detail-after').classList.toggle('hide', !d.call.after);
     $('detail-lines').textContent = '';
     for (const l of d.call.lines) addLine($('detail-lines'), l.who, l.text, l.flagged, { typed: l.typed });
     const au = $('detail-audio'); au.pause(); au.removeAttribute('src'); au.load();

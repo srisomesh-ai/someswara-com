@@ -571,7 +571,7 @@ case 'rec_token':   // a two-hour pass for the logged-in owner to play one call'
 case 'call_get':
     $call = call_find((string)($_GET['id'] ?? ''));
     if (!$call) fail('Call not found.', 404);
-    out(['call' => call_summary($call) + ['lines' => $call['turns']]]);
+    out(['call' => call_summary($call) + ['lines' => $call['turns'], 'after' => call_after($call)]]);
 
 default:
     fail('Unknown action.', 404);

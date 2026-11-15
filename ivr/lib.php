@@ -302,6 +302,24 @@ function call_summary(array $c): array {
     ];
 }
 
+// What happened after the call, in one line, for the Call history page.
+function call_after(array $c): string {
+    if (empty($c['phone'])) return 'Test inside the dashboard. Tasks and emails are made only after a real phone call.';
+    if (isset($c['answered']) && !$c['answered']) return 'Call not answered by her (not a test number).';
+    $m = (int)($c['mailed'] ?? 0);
+    if ($m === 0) return empty($c['ended']) ? 'The call has not finished yet.' : 'Nothing was done. This was a training call, or the call server did not report the end of the call.';
+    if ($m === 2 && !isset($c['outcome'])) return 'Still working on it. Open this call again in a minute.';
+    $kind = ['renewal' => 'Renewal request', 'troubleshoot' => 'GPS complaint', 'readd' => 'Re-adding request', 'new' => 'New customer', 'other' => 'Customer request', 'none' => 'Nothing for the team to do'][$c['outcome'] ?? 'none'] ?? 'Nothing for the team to do';
+    $parts = [$kind];
+    if (!empty($c['extract_failed'])) $parts[] = 'The call could not be read (Sarvam did not answer)';
+    if (($c['task_id'] ?? '') !== '') $parts[] = "Task {$c['task_id']} created";
+    elseif (($c['task_error'] ?? '') !== '') $parts[] = 'Task not created: ' . rtrim((string)$c['task_error'], '.');
+    elseif (($c['outcome'] ?? '') === 'renewal') $parts[] = 'No task for renewals';
+    if (($c['form_email'] ?? '') !== '') $parts[] = ((int)($c['form_sent'] ?? 0) === 1 ? 'Form emailed to ' : 'Form could NOT be emailed to ') . $c['form_email'];
+    elseif (($c['outcome'] ?? '') === 'new') $parts[] = 'No email ID was confirmed, so no form was sent';
+    return implode(' · ', $parts);
+}
+
 // ---------- phone line ----------
 // A phone number as its last ten digits, so +91, 0 and spaces do not matter when comparing.
 function phone_digits($n): string { return substr(preg_replace('~\D~', '', (string)$n), -10); }
@@ -902,6 +920,7 @@ function call_wrap(array $c): array {
     $answered = !isset($c['answered']) || $c['answered'];
     $x = $answered ? call_extract($c) : ['type' => 'none'];
     $keep = ['outcome' => $x['type']];
+    if (!empty($x['failed'])) $keep['extract_failed'] = 1;
     foreach (['name', 'vehicle', 'location', 'plan', 'summary'] as $k) if (($x[$k] ?? '') !== '') $keep[$k] = $x[$k];
     $from = (string)($c['from'] ?? '');
     // The caller confirmed an email ID for the complimentary discount: send the Quick Task booking form.
