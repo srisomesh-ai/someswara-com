@@ -144,6 +144,8 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         $all = read_json('live.json');
         $ver = $found && (in_array($key, (array)($all[$tok]['verified'] ?? []), true) || (($f = phone10((string)(($c ?: [])['from'] ?? ''))) !== '' && in_array($f, $r['phones'], true)));
         if ($ver && !in_array($key, (array)($all[$tok]['verified'] ?? []), true)) { $all[$tok]['verified'][] = $key; write_json('live.json', $all); }
+        // The fixed-script flow asks for the full number again when it is not found (it is usually misheard), so it is told plainly.
+        if (!empty($_POST['script']) && $r['status'] === 'none') out(['status' => 'none', 'near' => false, 'text' => '', 'fact' => '', 'data' => ['state' => 'none']]);
         // A complaint or a missing vehicle: she may not even say whether the number is in our records until verified.
         if (!$ver && in_array($why, ['trouble', 'missing'], true) && in_array($r['status'], ['found', 'none'], true) && empty($r['near'])) {
             $all[$tok]['pending'] = ['number' => (string)($r['number'] ?? ''), 'why' => $why, 'tries' => 0];
@@ -151,6 +153,11 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
             out(['status' => 'verify', 'near' => false, 'text' => 'The check is done. ' . VERIFY_ASK, 'fact' => '', 'data' => ['state' => 'verify']]);
         }
         if (!$ver && $found) { $all[$tok]['pending'] = ['number' => (string)$r['number'], 'why' => $why, 'tries' => 0]; write_json('live.json', $all); }
+        if ($found && ($cc = call_find((string)$all[$tok]['call_id']))) {   // a plain note for the Call history page
+            $cc['verify_note'] = "Vehicle {$r['plate']} found; customer mobiles saved on it: " . (count($r['phones']) ? count($r['phones']) . ' (ending ' . implode(', ', array_map(fn($n) => substr($n, -4), $r['phones'])) . ')' : 'none') . '. '
+                . ($ver ? 'Verified: the caller was phoning from a saved mobile, or was verified earlier on this call.' : 'The caller was not phoning from a saved mobile.');
+            call_save($cc);
+        }
         // For the fixed-script flow: plain values. Nothing about the vehicle's status leaves here until the owner is verified.
         $data = $ver ? gps_data($r) : ($found ? ['state' => 'verify'] : (!empty($r['near']) ? ['state' => 'near', 'plate' => (string)$r['plate']] : ['state' => $r['status'] === 'none' ? 'none' : 'down']));
         out(['status' => $r['status'] . ($ver ? ' verified' : ''), 'near' => !empty($r['near']), 'plate' => !empty($r['near']) ? (string)$r['plate'] : '', 'text' => gps_result_text($r, $why, $ver), 'fact' => gps_result_fact($r, $ver), 'data' => $data]);
@@ -239,7 +246,12 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         $r = $tries <= 3 ? gps_find((string)$p['number']) : ['status' => 'none'];
         $why = in_array($_POST['why'] ?? '', ['renew', 'trouble', 'missing'], true) ? $_POST['why'] : (string)($p['why'] ?? '');
         if ($why === 'renew') $why = (string)($p['why'] ?? '') ?: 'trouble';   // they were asked to verify, so it is not about validity only
-        if ($said !== '' && $r['status'] === 'found' && empty($r['near']) && in_array($said, $r['phones'], true)) {
+        $hit = $said !== '' && $r['status'] === 'found' && empty($r['near']) && in_array($said, $r['phones'], true);
+        if ($cc = call_find((string)$all[$tok]['call_id'])) {
+            $cc['verify_note'] = trim(($cc['verify_note'] ?? '') . ' Mobile said' . ($said !== '' ? ' (ending ' . substr($said, -4) . ')' : ' (not ten digits)') . ($hit ? ': matched, verified.' : ': no match.'));
+            call_save($cc);
+        }
+        if ($hit) {
             $all = read_json('live.json');
             $all[$tok]['verified'][] = $r['plate']; unset($all[$tok]['pending']);
             write_json('live.json', $all);

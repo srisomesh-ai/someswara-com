@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 31;
+const VERSION = 32;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -579,9 +579,8 @@ async function sayLine(S, text, hearMs, keep, hang) {
 }
 
 const LINE = {
-  askPlate: 'Sure సర్, తప్పకుండా help చేస్తాను. మీ vehicle number లో చివరి నాలుగు అంకెలు చెప్తారా?',
-  digitsAgain: 'Sorry, సరిగ్గా అర్థం కాలేదు. మీ vehicle number లో చివరి నాలుగు అంకెలు ఒకసారి నెమ్మదిగా చెప్తారా?',
-  digitsNone: 'ఆ number తో vehicle కనిపించలేదు. Vehicle number లో చివరి నాలుగు అంకెలు మరోసారి చెప్తారా?',
+  askPlate: 'Sure సర్, తప్పకుండా help చేస్తాను. మీ full vehicle number చెప్తారా?',
+  plateNone: 'ఆ number మా records లో కనిపించలేదు. Full vehicle number మరోసారి నెమ్మదిగా చెప్తారా?',
   notFound: 'ఆ number తో vehicle మా records లో కనిపించలేదు. మా team check చేసి మీకు call చేస్తారు.',
   plateAgain: 'Sorry, number సరిగ్గా అర్థం కాలేదు. State letters తో full vehicle number ఒకసారి నెమ్మదిగా చెప్తారా?',
   checking: 'ఒక్క నిమిషం, check చేస్తున్నాను.',
@@ -611,7 +610,7 @@ function answerLine(kind, d) {
   const ymd = String(d.expiry).match(/(\d{4})-(\d{2})-(\d{2})/) || [0, 2000, 1, 1], date = TE_MONTHS[+ymd[2] - 1] + ' ' + +ymd[3] + ', ' + ymd[1];
   const pay = ' Payment link మీ email కి పంపిస్తున్నాము. Payment చేసిన వెంటనే renewal automatic గా అవుతుంది. Thank you.';
   if (d.days < 0) return { text: 'మీ vehicle validity ' + date + ' న expire అయింది.' + pay };
-  if (d.days < 30) return { text: 'మీ vehicle validity ' + date + ' వరకు ఉంది, ఇంకా ' + d.days + ' రోజులే ఉన్నాయి.' + pay };
+  if (d.days < 30) return { text: 'మీ vehicle validity ' + date + ' వరకు ఉంది, ' + (d.days === 0 ? 'ఈ రోజే expire అవుతుంది.' : d.days === 1 ? 'రేపే expire అవుతుంది.' : 'ఇంకా ' + d.days + ' రోజులే ఉన్నాయి.') + pay };
   return { text: 'మీ vehicle validity ' + date + ' వరకు ఉంది, ఇంకా ' + d.days + ' రోజులు ఉన్నాయి. ఇప్పుడు renewal అవసరం లేదు. Expiry కి దగ్గరలో మళ్ళీ call చేయండి. Thank you.' };
 }
 
@@ -624,24 +623,37 @@ async function scriptTurn(S, text, hearMs) {
     if (S.flowDone || S.kind === 'new' || S.kind === 'all' || MISSING_WORDS.test(text)) return false;
     const t = START_TROUBLE.test(text), r = START_RENEW.test(text);
     if (t === r) return false;                                                   // neither, or both: not a clear match
-    S.flow = { kind: t ? 'trouble' : 'renew', step: 'digits', said: [], tries: 0, misses: 0, last4: '' };
+    S.flow = { kind: t ? 'trouble' : 'renew', step: 'plate', said: [], tries: 0, misses: 0, parts: 0, plate: '' };
     log('call', S.cfg.call_id, 'script:', S.flow.kind);
-    S.flow.step = 'digits';
-    const d = last4In(text);
-    if (!d) return sayLine(S, LINE.askPlate, hearMs, true);
-    return scriptLookup(S, d, hearMs);
+    S.flow.step = 'plate';
+    const p = plateIn(text);
+    if (!p) return sayLine(S, LINE.askPlate, hearMs, true);
+    return scriptLookup(S, p, hearMs);
   }
   const F = S.flow;
   if (MISSING_WORDS.test(text)) return leave();                                  // it became an emergency: the model handles that
   if (F.result) { const r = F.result; F.result = null; return scriptResult(S, r, hearMs); }   // a result she could not say because the caller spoke over it
 
-  if (F.step === 'digits') {
+  if (F.step === 'plate') {                                                       // the full vehicle number, said in one go or in pieces
     F.said.push(text);
-    const d = await readLast4(S, F.said.slice(-2).join(' '));
+    const p = await readPlate(S, F.said.slice(-3).join(' '));
     if (stale()) return true;
-    if (!d) { if (++F.tries >= 3) return leave(); return sayLine(S, LINE.digitsAgain, hearMs, true); }
-    F.said = [];
-    return scriptLookup(S, d, hearMs);
+    if (!p) {
+      // Only the first part so far ("AP 39 WE"): they are still saying it, so just let them go on.
+      if (/^[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{0,3}$/.test(digitWords(F.said.slice(-3).join(' ')).toUpperCase().replace(/[^A-Z0-9]/g, '')) && ++F.parts <= 2) return sayLine(S, 'చెప్పండి.', hearMs, true);
+      if (++F.tries >= 3) return leave();
+      return sayLine(S, LINE.plateAgain, hearMs, true);
+    }
+    F.said = []; F.tries = 0;
+    return scriptLookup(S, p, hearMs);
+  }
+
+  if (F.step === 'confirm') {                                                     // "is AP39BP0042 your number?" about a close match
+    const other = plateIn(text);
+    if (other && other !== F.plate) return scriptLookup(S, other, hearMs);
+    if (other === F.plate || (YES_WORDS.test(text) && !NO_WORDS.test(text))) return scriptLookup(S, F.plate, hearMs);
+    if (NO_WORDS.test(text) || ++F.tries >= 2) { F.step = 'plate'; F.tries = 0; F.said = []; return sayLine(S, LINE.plateAgain, hearMs, true); }
+    return sayLine(S, 'మీ vehicle number ' + spellPlate(F.plate) + ' ఆ?', hearMs);
   }
 
   if (F.step === 'mobile') {
@@ -661,14 +673,14 @@ async function scriptTurn(S, text, hearMs) {
   return leave();
 }
 
-// Search the servers for vehicles ending in these four digits, then say what follows.
-async function scriptLookup(S, d4, hearMs) {
+// Check this full vehicle number on the servers, then say what follows.
+async function scriptLookup(S, plate, hearMs) {
   const F = S.flow, g = S.gen;
-  F.last4 = d4;
+  F.plate = plate; F.step = 'plate';
   if (!(await sayLine(S, LINE.checking, hearMs, true))) return true;
   let found;
-  try { found = await ivr('live_last4', { token: S.token, last4: d4, why: F.kind }, 22000); log('call', S.cfg.call_id, 'script: vehicle search', found.status); }
-  catch (e) { log('script: vehicle search failed:', e.message); found = { data: { state: 'down' } }; }
+  try { found = await ivr('live_vehicle', { token: S.token, number: plate, why: F.kind, script: 1 }, 22000); log('call', S.cfg.call_id, 'script: vehicle check', plate, found.status); }
+  catch (e) { log('script: vehicle check failed:', e.message); found = { data: { state: 'down' } }; }
   if (g !== S.gen || S.closed) { F.result = found; return true; }
   return scriptResult(S, found, 0);
 }
@@ -684,8 +696,8 @@ async function scriptResult(S, found, hearMs) {
     return sayLine(S, a.text, hearMs, a.keep, a.hang);
   }
   if (d.state === 'verify') { F.step = 'mobile'; F.tries = 0; F.said = []; return sayLine(S, LINE.askMobile, hearMs, true); }
-  if (d.state === 'none' && F.step === 'digits') {                               // no vehicle ends with those four digits
-    if (++F.misses < 2) { F.tries = 0; F.said = []; return sayLine(S, LINE.digitsNone, hearMs, true); }
+  if (d.state === 'none') {                                                       // not on any server: most often the number was misheard
+    if (++F.misses < 2) { F.step = 'plate'; F.tries = 0; F.said = []; return sayLine(S, LINE.plateNone, hearMs, true); }
     end();
     return sayLine(S, F.kind === 'renew' ? LINE.notInRecords : LINE.notFound, hearMs, true);
   }
