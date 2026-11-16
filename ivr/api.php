@@ -140,6 +140,8 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         // Anything beyond the expiry date (online or offline, last signal, location) is told only to the owner. The
         // owner is known by the mobile number saved for the vehicle: the number they are calling from, or one they say.
         $found = $r['status'] === 'found' && empty($r['near']);
+        $direct = false;
+        if ($found && !$r['phones']) { $r['phones'] = gps_more_phones($r); $direct = (bool)$r['phones']; }   // not in the list: read the vehicle's own page
         $key = $found ? $r['plate'] : (string)($r['number'] ?? '');
         $all = read_json('live.json');
         $ver = $found && (in_array($key, (array)($all[$tok]['verified'] ?? []), true) || (($f = phone10((string)(($c ?: [])['from'] ?? ''))) !== '' && in_array($f, $r['phones'], true)));
@@ -154,7 +156,7 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         }
         if (!$ver && $found) { $all[$tok]['pending'] = ['number' => (string)$r['number'], 'why' => $why, 'tries' => 0]; write_json('live.json', $all); }
         if ($found && ($cc = call_find((string)$all[$tok]['call_id']))) {   // a plain note for the Call history page
-            $cc['verify_note'] = "Vehicle {$r['plate']} found; customer mobiles saved on it: " . (count($r['phones']) ? count($r['phones']) . ' (ending ' . implode(', ', array_map(fn($n) => substr($n, -4), $r['phones'])) . ')' : 'none') . '. '
+            $cc['verify_note'] = "Vehicle {$r['plate']} found; customer mobiles saved on it: " . (count($r['phones']) ? count($r['phones']) . ' (ending ' . implode(', ', array_map(fn($n) => substr($n, -4), $r['phones'])) . ')' . ($direct ? ', read from the vehicle\'s own page' : '') : 'none, in the list and on the vehicle\'s own page') . '. '
                 . ($ver ? 'Verified: the caller was phoning from a saved mobile, or was verified earlier on this call.' : 'The caller was not phoning from a saved mobile.');
             call_save($cc);
         }
@@ -246,6 +248,7 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         $r = $tries <= 3 ? gps_find((string)$p['number']) : ['status' => 'none'];
         $why = in_array($_POST['why'] ?? '', ['renew', 'trouble', 'missing'], true) ? $_POST['why'] : (string)($p['why'] ?? '');
         if ($why === 'renew') $why = (string)($p['why'] ?? '') ?: 'trouble';   // they were asked to verify, so it is not about validity only
+        if ($r['status'] === 'found' && empty($r['near']) && !$r['phones']) $r['phones'] = gps_more_phones($r);
         $hit = $said !== '' && $r['status'] === 'found' && empty($r['near']) && in_array($said, $r['phones'], true);
         if ($cc = call_find((string)$all[$tok]['call_id'])) {
             $cc['verify_note'] = trim(($cc['verify_note'] ?? '') . ' Mobile said' . ($said !== '' ? ' (ending ' . substr($said, -4) . ')' : ' (not ten digits)') . ($hit ? ': matched, verified.' : ': no match.'));

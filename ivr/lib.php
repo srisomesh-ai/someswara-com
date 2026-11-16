@@ -679,17 +679,17 @@ function plate_key(string $t): string { return preg_replace('~[^A-Z0-9]~', '', s
 // A small copy of every server's vehicle list (number, expiry, last signal), refreshed when older than five minutes.
 function gps_index(bool $fresh = false): array {
     $c = read_json('gps.json');
-    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 300 && ($c['v'] ?? 0) === 4) return $c;
+    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 300 && ($c['v'] ?? 0) === 5) return $c;
     $keys = array_filter(gps_keys());
     $multi = curl_multi_init(); $hs = [];
     foreach ($keys as $id => $key) {
         $ch = curl_init('https://' . GPS_SERVERS[$id] . '/api/get_devices?lang=en&user_api_hash=' . rawurlencode($key));
-        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => 18, CURLOPT_USERAGENT => 'Mozilla/5.0']);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => 40, CURLOPT_USERAGENT => 'Mozilla/5.0']);
         curl_multi_add_handle($multi, $ch); $hs[$id] = $ch;
     }
     do { curl_multi_exec($multi, $run); if ($run) curl_multi_select($multi, 1.0); } while ($run > 0);
     $old = is_array($c) ? $c : [];
-    $new = ['at' => time(), 'v' => 4, 'servers' => [], 'dev' => []];
+    $new = ['at' => time(), 'v' => 5, 'servers' => [], 'dev' => []];
     foreach (GPS_SERVERS as $id => $host) {
         if (!isset($hs[$id])) { $new['servers'][$id] = ['state' => 'nokey']; continue; }
         $body = curl_multi_getcontent($hs[$id]); $code = curl_getinfo($hs[$id], CURLINFO_HTTP_CODE);
@@ -710,7 +710,7 @@ function gps_index(bool $fresh = false): array {
             foreach (['expiration_date', 'sim_expiration_date'] as $f) { $v = substr((string)($dd[$f] ?? ''), 0, 10); if (preg_match('~^[12]\d{3}-\d\d-\d\d$~', $v)) { $exp = $v; break; } }
             $name = clean_line($dv['name'] ?? '', 80);
             $new['dev'][] = [$id, plate_key($name), plate_key((string)($dd['plate_number'] ?? '')), $name, $exp, clean_line((string)($dv['time'] ?? ($dd['time'] ?? ($dv['timestamp'] ?? ''))), 30), strtolower((string)($dv['online'] ?? '')),
-                gps_phones($dv), round((float)($dv['lat'] ?? 0), 5), round((float)($dv['lng'] ?? 0), 5), (int)round((float)($dv['speed'] ?? 0))];
+                gps_phones($dv), round((float)($dv['lat'] ?? 0), 5), round((float)($dv['lng'] ?? 0), 5), (int)round((float)($dv['speed'] ?? 0)), (int)($dv['id'] ?? ($dd['id'] ?? 0))];
             $n++;
         }
         $new['servers'][$id] = ['state' => 'ok', 'count' => $n];
@@ -772,6 +772,20 @@ function gps_raw_numbers(int $server, string $name): array {
         return array_slice($out, 0, 30);
     }
     return [];
+}
+// When the vehicle list has no customer mobile for a vehicle, read that one vehicle's own page from its server.
+// The list some servers send leaves out the "Registration/Asset number" box; the vehicle's own page has it.
+function gps_more_phones(array $r): array {
+    $server = (int)($r['server'] ?? 0); $id = (int)($r['dev_id'] ?? 0);
+    $key = gps_keys()[$server] ?? '';
+    if ($id < 1 || $key === '' || !isset(GPS_SERVERS[$server])) return [];
+    $ch = curl_init('https://' . GPS_SERVERS[$server] . '/api/edit_device_data?lang=en&device_id=' . $id . '&user_api_hash=' . rawurlencode($key));
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 9, CURLOPT_USERAGENT => 'Mozilla/5.0']);
+    $body = curl_exec($ch); curl_close($ch);
+    $j = is_string($body) ? json_decode($body, true) : null;
+    if (!is_array($j)) return [];
+    $item = is_array($j['item'] ?? null) ? $j['item'] : (is_array($j['device'] ?? null) ? $j['device'] : []);
+    return $item ? gps_phones($item) : [];
 }
 function phone10(string $n): string { $d = preg_replace('~\D~', '', $n); return strlen($d) >= 10 ? substr($d, -10) : ''; }
 
@@ -852,7 +866,7 @@ function gps_record(array $e, string $q, bool $near = false): array {
     foreach ([$e[2], $e[1]] as $k) if ($k !== '' && ($pp = plate_parts($k)) && preg_match('~[A-Z]{2}0?' . $pp[1] . $pp[2] . '0*' . $pp[3] . '(?!\d)~', $k, $pm)) { $plate = $pm[0]; break; }
     $ts = gps_time($last);
     $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near, 'online' => $online, 'plate' => $plate,
-        'phones' => (array)($e[7] ?? []), 'lat' => (float)($e[8] ?? 0), 'lng' => (float)($e[9] ?? 0), 'speed' => (int)($e[10] ?? 0)];
+        'phones' => (array)($e[7] ?? []), 'lat' => (float)($e[8] ?? 0), 'lng' => (float)($e[9] ?? 0), 'speed' => (int)($e[10] ?? 0), 'dev_id' => (int)($e[11] ?? 0)];
     if ($ts) { $r['last_ts'] = $ts; $r['off_hours'] = max(0, (int)floor((time() - $ts) / 3600)); $r['last'] = date('j M Y, g:i A', $ts); }
     if ($exp !== '') {
         $r['days'] = (int)(new DateTime('today'))->diff(new DateTime($exp))->format('%r%a');
