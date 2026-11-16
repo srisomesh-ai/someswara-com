@@ -78,7 +78,7 @@ New customer:
   If they said no, do not explain; go to the next step.
 - Step five, the price, when they ask or after the features: three thousand five hundred rupees, with what the list says the price includes, said once.
 {{PRICES}}
-- Step six, answer their doubts, one at a time, in short replies.
+- Step six, when they raise a doubt, answer it clearly in a short reply. Do not ask whether they have doubts; wait for them to ask.
 - Step seven, close the sale. When they have no more doubts or sound ready, say that you will create the booking now and ask for their name and location. {{INSTALL}} The Micro and Magnet trackers, and any portable handheld device, need no installation: never say installation or technician for them; ask instead whether they will collect it from our nearest service area or want it delivered to their place, and when they want it.
 - Step eight, the complimentary offer. After they give the name and location, tell them politely that you also have a complimentary offer for them: two hundred rupees discount, if they fill the booking form you send to their email. Ask for their email ID. If they do not want it or have no email ID, that is fine: the booking is made at the normal price.
 - Taking an email ID: when they say it, read the whole email ID back slowly in English letters, the name part letter by letter and the rest as at gmail dot com, and ask whether it is correct. If they correct any part, read the whole ID back again. Only after they clearly say it is correct, say the form will reach their email right after this call. Never say the form is sent or coming before they confirm the email ID. If they have no email ID, say our team will call them.
@@ -126,7 +126,7 @@ Always:
 {{PLACE}}- Say a thing once. Never say again what you said in your previous reply, and do not repeat the price, subscription, warranty or free installation later in the call unless they ask. When the caller answers your question, accept the answer and move to the next step. If you did not understand, ask only about the part you missed, in different words.
 - A caller who calls you madam or sir is addressing you. It tells you nothing about them. Until you are told whether the caller is a man or a woman, the word for them is sir.
 - The only address words are sir or madam, or గారు with their name (in Hindi सर, मैडम or जी). Callers often call you అమ్మా, అన్నా, అక్కా, చెల్లి, బాబు, తల్లి, bro, dear, बेटा, भैया or दीदी. Never copy the word they use for you and never use any such family or friendly word for them.
-- Never end a reply by asking whether they need any other help or anything else. Ask it at most once in the whole call, and only when their work is completely finished, such as after a booking, a renewal or a complaint is noted.
+- Answer what the caller asked, fully and clearly, and then stop or ask the next step's question. Never end a reply with ఇంకేమైనా help కావాలా, ఇంకేమైనా doubts ఉన్నాయా, or any question of that kind: the caller is often not finished and will ask the next thing themselves. Such a question may be asked at most once in the whole call, only when their work is completely finished, such as after a booking, a renewal or a complaint is noted, and never in the same words twice.
 - Do not repeat a vehicle number back to the caller unless you are unsure of a letter or a digit, or a check result tells you to. When you do say a vehicle number, it is always said in English, one letter and one digit at a time, whatever language the call is in. Write it exactly like this: A P, three nine, W A, one five seven five. Never say it as Telugu or Hindi number words, and never join the digits into a big number.
 - Callers say the number in many ways: letters in any language, digits one by one or in pairs like fifteen seventy five or పదిహేను డెబ్బై ఐదు. An Indian vehicle number is two letters for the state, two digits, one to three letters, then four digits. Work out the number in that shape before you use it.
 - If the caller is angry, do not argue. If they are angry or ask something you do not know, say our team will call them back shortly on this number.
@@ -849,7 +849,7 @@ function gps_result_text(array $r, string $why = ''): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 21;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 22;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 

@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 21;
+const VERSION = 22;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -365,6 +365,20 @@ function promptFor(S, lang) {
   return S.promptCache[key];
 }
 
+// "Anything else? Any other doubts?" at the end of every reply irritates callers and cuts in before they have finished.
+// Her instructions forbid it, but she still adds it, so it is taken out here: it may be said once in a call, and
+// only after the conversation has gone on for a while.
+const ASK_MORE = /(ఇంకేమైనా|ఇంకేమన్నా|ఇంకేదైనా|ఇంకా\s*ఏమైనా|ఇంకా\s*ఏదైనా|మరేమైనా|మరేదైనా|వేరే\s*ఏమైనా|anything else|any other (help|doubt|question))[^.?!।]*[?？]\s*$/i;
+function trimAskMore(S, text) {
+  const parts = text.split(/(?<=[.?!।])\s+/);
+  const out = [];
+  for (const part of parts) {
+    if (!ASK_MORE.test(part)) { out.push(part); continue; }
+    if (!S.askedMore && S.turns.length >= 10) { S.askedMore = true; out.push(part); }   // once, late in the call
+  }
+  return out.join(' ').trim();
+}
+
 // ---------- one call ----------
 function send(S, msg) {
   if (S.out) return S.out(msg);              // a phone call has its own way of sending (see phoneOut)
@@ -514,6 +528,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
       first = false;
     });
   };
+  let skipped = '';
   const emit = (final) => {
     let rest = cleanReply(raw).slice(done);
     // Her voice starts as soon as the first whole sentence is ready. Everything after it is spoken as ONE piece,
@@ -523,13 +538,14 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
       const m = rest.match(/^([\s\S]{12,}?[.?!।])\s+/);
       if (!m) break;
       done += m[0].length; rest = rest.slice(m[0].length);
-      const s = m[1].replace(/\s+/g, ' ').trim();
-      if (s) speak(s);
+      const s = m[1].replace(/\s+/g, ' ').trim(), t = trimAskMore(S, s);
+      if (t) speak(t); else if (s) skipped = s;
     }
     if (final) {
       done += rest.length;
-      const s = rest.replace(/\s+/g, ' ').trim();
-      if (s) speak(s);
+      const s = rest.replace(/\s+/g, ' ').trim(), t = trimAskMore(S, s);
+      if (t) speak(t);
+      else if (!queued && (s || skipped)) speak(s || skipped);   // it was all she had to say: better said than silence
     }
   };
 
