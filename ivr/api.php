@@ -90,7 +90,10 @@ if ($action === 'phone_config') {
     write_json('settings.json', $s);
     $pay = live_payload($lang, $trainer);
     $memory = $allowed && !$trainer ? caller_memory($from, $call['id']) : '';   // an earlier call from this same number
-    if ($memory !== '') { foreach ($pay['prompts'] as $l => $x) $pay['prompts'][$l] = $x . "\n\n" . $memory; $pay['prompt'] = $pay['prompts'][$lang]; }
+    if ($memory !== '') {   // with one language (Telugu only) there is no per-language list, only the one prompt
+        foreach ((array)($pay['prompts'] ?? []) as $l => $x) $pay['prompts'][$l] = $x . "\n\n" . $memory;
+        $pay['prompt'] = (string)$pay['prompt'] . "\n\n" . $memory;
+    }
     out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id'], 'returning' => $memory !== ''] + $pay);
 }
 
