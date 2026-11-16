@@ -97,7 +97,7 @@ if ($action === 'phone_config') {
     out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id'], 'returning' => $memory !== ''] + $pay);
 }
 
-if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 'live_place', 'live_verify', 'live_last4'], true)) {
+if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 'live_place', 'live_verify', 'live_last4', 'live_book'], true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
     $tok = (string)($_POST['token'] ?? '');
     $all = read_json('live.json');
@@ -154,6 +154,27 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         // For the fixed-script flow: plain values. Nothing about the vehicle's status leaves here until the owner is verified.
         $data = $ver ? gps_data($r) : ($found ? ['state' => 'verify'] : (!empty($r['near']) ? ['state' => 'near', 'plate' => (string)$r['plate']] : ['state' => $r['status'] === 'none' ? 'none' : 'down']));
         out(['status' => $r['status'] . ($ver ? ' verified' : ''), 'near' => !empty($r['near']), 'plate' => !empty($r['near']) ? (string)$r['plate'] : '', 'text' => gps_result_text($r, $why, $ver), 'fact' => gps_result_fact($r, $ver), 'data' => $data]);
+    }
+    if ($action === 'live_book') {   // she has the name and place for a booking: make the task now, so she can say its number
+        if (empty($all[$tok]['call_id'])) fail('Bad token.', 403);
+        if (!empty($all[$tok]['booked'])) out(['status' => 'already', 'text' => 'The booking for this call is already made: ' . $all[$tok]['booked'] . ' Do not make another one.']);
+        session_write_close();
+        $c = call_find((string)$all[$tok]['call_id']);
+        $soft = 'Say that the booking is noted and that our team will call them with the booking ID. Do not say any booking ID yourself.';
+        if (!$c || empty($c['phone'])) out(['status' => 'test', 'text' => "This is a test inside the dashboard, so no real booking is made and there is no booking ID. $soft"]);
+        $from = phone10((string)($c['from'] ?? ''));
+        if ($from === '') out(['status' => 'no number', 'text' => "The caller's number is hidden, so the booking could not be numbered. Ask for a mobile number our team can call. $soft"]);
+        $name = clean_line($_POST['name'] ?? '', 150); $place = clean_line($_POST['location'] ?? '', 200);
+        $product = clean_line($_POST['product'] ?? '', 120); $when = clean_line($_POST['when'] ?? '', 60);
+        $x = ['type' => 'new', 'name' => $name, 'location' => $place, 'vehicle' => '', 'product' => $product];
+        $r = http_post(TASK_URL, [], ['key' => task_key(), 'type' => 'new', 'phone' => $from, 'call_id' => (string)$c['id'], 'name' => $name, 'location' => $place, 'product' => $product,
+            'summary' => 'Booking taken by the AI call agent during the call.' . ($when !== '' ? " Customer wants it: $when." : ''), 'suggest' => tech_suggest($place), 'todo' => task_todo($x)], 20);
+        if ($r['code'] !== 200 || empty($r['data']['task_id'])) out(['status' => 'failed ' . $r['code'], 'text' => "The booking could not be given a number just now. $soft"]);
+        $id = (string)$r['data']['task_id'];
+        $text = 'The booking is created. The booking ID is ' . say_task_id($id) . '. Tell the customer the booking ID exactly in those words, once, slowly. Then say once that our team will call them to confirm the time. Do not promise that a technician will come today or at any time, and do not say whether their place is in our service area unless a place check said so.';
+        $all = read_json('live.json'); $all[$tok]['booked'] = $text; write_json('live.json', $all);
+        if ($c2 = call_find((string)$c['id'])) { $c2['task_id'] = $id; call_save($c2); }
+        out(['status' => 'booked ' . $id, 'text' => $text]);
     }
     if ($action === 'live_last4') {   // fixed-script flow: the caller said the last four digits of the vehicle number
         if (empty($all[$tok]['call_id'])) fail('Bad token.', 403);

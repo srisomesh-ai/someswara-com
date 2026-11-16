@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 28;
+const VERSION = 29;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -145,7 +145,7 @@ async function chatOnce(cfg, messages, signal) {
 // Whatever brackets, colon or hidden characters the model types, a tag must never be heard or shown.
 const plain = (raw) => raw.normalize('NFKC').replace(/[​-‍⁠﻿\\]/g, '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
 const cleanReply = (raw) => plain(raw).replace(/[\[【〔〚⟦]{2}[\s\S]*?([\]】〕〛⟧]{2}|$)/g, '')
-  .replace(/[\[【〔〚⟦(]\s*(RULE|VEHICLE|PLACE|PHONE)\b[\s\S]*?([\]】〕〛⟧)]|$)/gi, '').replace(/\S*\b(VEHICLE|RULE|PLACE|PHONE)\s*[:=]\s*[A-Za-z0-9 .,+-]*[^\s\w.?!,]*/g, '').replace(/[*#`_]/g, '');
+  .replace(/[\[【〔〚⟦(]\s*(RULE|VEHICLE|PLACE|PHONE|BOOK)\b[\s\S]*?([\]】〕〛⟧)]|$)/gi, '').replace(/\S*\b(VEHICLE|RULE|PLACE|PHONE)\s*[:=]\s*[A-Za-z0-9 .,+-]*[^\s\w.?!,]*/g, '').replace(/[*#`_]/g, '');
 // The place inside her "is this place in our service area" tag.
 function placeTag(raw) {
   const m = plain(raw).match(/\bPLACE\s*[:=]\s*([^\]\n】〕〛⟧)]{2,80})/);
@@ -156,6 +156,13 @@ function phoneTag(raw) {
   const m = plain(raw).match(/\bPHONE\s*[:=]\s*([0-9 +.-]{10,20})/);
   const d = m ? m[1].replace(/\D/g, '') : '';
   return d.length >= 10 ? d.slice(-10) : '';
+}
+// The details inside her "make the booking" tag: name | location | product | when.
+function bookTag(raw) {
+  const m = plain(raw).match(/\bBOOK\s*[:=]\s*([^\]\n】〕〛⟧]{2,240})/);
+  if (!m) return null;
+  const p = m[1].split('|').map((x) => x.replace(/\s+/g, ' ').trim());
+  return { name: p[0] || '', location: p[1] || '', product: p[2] || '', when: p[3] || '' };
 }
 // The vehicle number inside her "check this vehicle" tag. VEHICLE in capitals followed by a colon is only ever the tag.
 function vehicleTag(raw) {
@@ -704,6 +711,8 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   if (S.vehicle && S.vehicleNear) notes.push(S.vehicle);
   else if (freshResult) notes.push('Result of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.');
   else if (S.vehicleFact) notes.push('Background, already told to the caller, do not say it again: ' + S.vehicleFact + ' Now answer only what the caller has just said and move to the next step.');
+  const freshBook = S.book && !S.bookTold;
+  if (freshBook) notes.push('Result of the booking you asked for, from our task system just now: ' + S.book + ' Do not write the BOOK tag again.');
   const freshPlace = S.place && !S.placeTold;
   if (freshPlace) notes.push('Result of the place check you asked for, from the map just now: ' + S.place + ' Do not write the PLACE tag for this same place again.');
   else if (S.placeFact) notes.push('Background, already known, do not say it again: ' + S.placeFact);
@@ -801,6 +810,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
     S.turns.push({ who: 'agent', text });
     if (freshResult) S.vehicleTold = true;
     if (freshPlace) S.placeTold = true;
+    if (freshBook) S.bookTold = true;
     // A vehicle number is said slowly, with gaps. After she asks for one, wait longer before deciding the caller has finished.
     S.waitMs = /number|నంబర్|నెంబర్|नंबर/i.test(text) ? 1200 : 350;
     await syncCall(S, false);
@@ -852,13 +862,21 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
     catch (e) { log('caller check failed:', e.message); found = { text: 'The mobile number could not be checked just now. Do not tell the caller anything about the vehicle. Say you could not verify at the moment and that the team will call them back.' }; }
     S.vehicle = found.text || ''; S.vehicleFact = found.fact || ''; S.vehicleNear = false; S.vehicleTold = false;
   }
-  if ((number || place || (phone && !number)) && !afterCheck && g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
+  // She has the name and place for a booking: the task is made now, so that she can tell the caller its number.
+  const book = bookTag(raw);
+  if (book && !afterCheck && !S.book) {
+    let made;
+    try { made = await ivr('live_book', Object.assign({ token: S.token }, book), 25000); log('call', S.cfg.call_id, 'booking', made.status); }
+    catch (e) { log('booking failed:', e.message); made = { text: 'The booking could not be given a number just now. Say that the booking is noted and that our team will call them with the booking ID. Do not say any booking ID yourself.' }; }
+    S.book = made.text || ''; S.bookTold = false;
+  }
+  if ((number || place || (phone && !number) || (book && S.book && !S.bookTold)) && !afterCheck && g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
 }
 
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false, flow: null, flowDone: false };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false, flow: null, flowDone: false, book: '', bookTold: false };
 }
 
 function greet(S) {

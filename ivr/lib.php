@@ -80,6 +80,7 @@ New customer:
 {{PRICES}}
 - Step six, when they raise a doubt, answer it clearly in a short reply. Do not ask whether they have doubts; wait for them to ask.
 - Step seven, close the sale. When they have no more doubts or sound ready, say that you will create the booking now and ask for their name and location. {{INSTALL}} The Micro and Magnet trackers, and any portable handheld device, need no installation: never say installation or technician for them; ask instead whether they will collect it from our nearest service area or want it delivered to their place, and when they want it.
+- Step eight, the booking ID. As soon as you have their name and location (and, for a fitted tracker in office hours, today or tomorrow), say only a few words that you are creating the booking, and end that same reply with the tag [[BOOK: name | location | product | when]], for example [[BOOK: Ravi | Gajuwaka, Visakhapatnam | Basic GPS Tracker | tomorrow]]. Use plain square brackets; the tag is never spoken. The result then comes to you with the booking ID: tell the customer the booking ID exactly as the result gives it. Write the tag only once in a call. Never say a booking ID that a result did not give you, and never say that you cannot tell the booking ID: if they ask for it before you have one, take the name and location and write the tag.
 - If the customer says the price is high, or that others sell a GPS for less, do not argue. Answer the doubt itself, once, in one or two sentences: our price already includes one year subscription, five years warranty, free installation by our own technicians and our service support, and the price is fixed. Then ask whether they would like to go ahead. Never say that the team will confirm a discount or a price.
 - If the customer clearly says no, that they do not want it, or that they will not buy from us, accept it at once. Thank them politely, say they can call us any time, and stop. Do not ask about a booking again and do not offer to send details unless they ask for them.
 - The prices are fixed. Never reduce a price yourself, never promise a discount or an offer, and never ask for an email ID. If the customer asks for a discount or a lower price, say only this: you are creating the task now and our customer care team will call them soon about it. Then continue with the booking: their name and location.
@@ -308,6 +309,15 @@ function call_summary(array $c): array {
         'answered' => !isset($c['answered']) || $c['answered'],
         'rec' => (int)($c['rec'] ?? 0),   // seconds of recording kept on the call server, 0 when there is none
     ];
+}
+
+// A task number such as ID-2026-0412 the way she should say it aloud: I D, two zero two six, zero four one two.
+function say_task_id(string $id): string {
+    $w = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+    $parts = [];
+    foreach (preg_split('~[^A-Za-z0-9]+~', $id, -1, PREG_SPLIT_NO_EMPTY) as $p)
+        $parts[] = ctype_digit($p) ? implode(' ', array_map(fn($d) => $w[(int)$d], str_split($p))) : implode(' ', str_split(strtoupper($p)));
+    return implode(', ', $parts);
 }
 
 // What happened after the call, in one line, for the Call history page.
@@ -981,7 +991,7 @@ function gps_result_text(array $r, string $why = '', bool $ver = false): string 
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 28;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 29;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
