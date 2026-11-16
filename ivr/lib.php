@@ -731,6 +731,34 @@ function gps_phones(array $dv): array {
     }
     return array_slice(array_keys($out), 0, 8);
 }
+// For the owner's check on the GPS servers page: every field of one vehicle's record that holds a long number, read
+// fresh from its server, with all but the last four digits hidden. It shows where a customer's mobile is really kept.
+function gps_raw_numbers(int $server, string $name): array {
+    $key = gps_keys()[$server] ?? '';
+    if ($key === '' || !isset(GPS_SERVERS[$server])) return [];
+    $ch = curl_init('https://' . GPS_SERVERS[$server] . '/api/get_devices?lang=en&user_api_hash=' . rawurlencode($key));
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => 18, CURLOPT_USERAGENT => 'Mozilla/5.0']);
+    $body = curl_exec($ch); curl_close($ch);
+    $data = is_string($body) ? json_decode($body, true) : null;
+    if (!is_array($data)) return [];
+    foreach ($data as $g) foreach ((array)($g['items'] ?? []) as $dv) {
+        if (!is_array($dv) || clean_line($dv['name'] ?? '', 80) !== $name) continue;
+        $out = [];
+        $walk = function ($v, string $path, int $depth) use (&$walk, &$out) {
+            foreach ((array)$v as $k => $x) {
+                $here = $path === '' ? (string)$k : "$path > $k";
+                if (is_array($x)) { if ($depth < 4 && !in_array((string)$k, ['tail', 'sensors', 'services', 'latest_positions'], true)) $walk($x, $here, $depth + 1); continue; }
+                if (!is_string($x) && !is_int($x)) continue;
+                $digits = preg_replace('~\D~', '', (string)$x);
+                if (strlen($digits) < 8 || strlen((string)$x) > 60 || preg_match('~^\d{4}-\d\d-\d\d~', (string)$x)) continue;
+                $out[] = $here . ': ' . (strlen($digits) === strlen(trim((string)$x)) ? '' : '(with other text) ') . str_repeat('•', max(0, strlen($digits) - 4)) . substr($digits, -4) . ' (' . strlen($digits) . ' digits)';
+            }
+        };
+        $walk($dv, '', 0);
+        return array_slice($out, 0, 30);
+    }
+    return [];
+}
 function phone10(string $n): string { $d = preg_replace('~\D~', '', $n); return strlen($d) >= 10 ? substr($d, -10) : ''; }
 
 // The name of the place at a point on the map, for telling a verified caller where the vehicle is.

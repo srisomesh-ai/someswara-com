@@ -1256,6 +1256,8 @@ $('gs-try').addEventListener('submit', async (e) => {
       out.appendChild(ppLine('Last signal:', r.last || 'Not known'));
       const pe = r.phone_ends || [];
       out.appendChild(ppLine('Customer mobile saved:', pe.length ? 'Yes, ' + pe.length + (pe.length === 1 ? ' number (ending ' : ' numbers (ending ') + pe.join(', ') + ')' : 'No. She cannot verify a caller for this vehicle, so she will not share its status or location.'));
+      if ((r.raw_numbers || []).length) { out.appendChild(ppLine('Long numbers on this vehicle (for checking):', '')); for (const n of r.raw_numbers) out.appendChild(ppLine('', n)); }
+      else out.appendChild(ppLine('Long numbers on this vehicle (for checking):', 'None found in what the server sends.'));
     } else if (r.status === 'many') { head(r.number); out.appendChild(ppLine('', r.count + ' vehicles match this. Type the full vehicle number.'));
     } else if (r.status === 'off') { head('No server connected yet'); out.appendChild(ppLine('', 'Paste the API keys above and tap Save and check.'));
     } else if (r.status === 'down') { head(r.number); out.appendChild(ppLine('', 'Not found, but one of the servers could not be checked just now. Tap Save and check above to see which.'));
