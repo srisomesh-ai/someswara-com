@@ -179,16 +179,19 @@ TXT;
 const NO_PRICES = '- The price list is not loaded yet. Do not say any price, model name, offer or discount. Say you will send the full details and price on WhatsApp to this same number.';
 const HAS_PRICES = '- Our products and prices are listed at the end. Each price is the final price: say exactly that amount and add nothing to it. Sell the Basic GPS Tracker as the steps above say; the other products are in the list only for when the customer asks about them. Never read out the whole list. Say a price in rupees, in words, the way people say it on the phone. Say only a product, price or charge that is in the list. For an offer or anything not in the list, say the team will confirm it on WhatsApp on this same number.';
 // Which team gets the email about a finished phone call, by what the call was. Every email is also copied to MAIL_COPY.
+// For now the owner wants every call email at one address only (16 Nov 2026). Before that: renewals and re-adding
+// went to support@, complaints to support@ and manager@, other requests to manager@, new customers to sales@,
+// with a copy of everything to admin@.
 const MAIL_TO = [
-    'renewal'      => ['support@bharatgps.com'],                            // licence and renewals
-    'readd'        => ['support@bharatgps.com'],
-    'troubleshoot' => ['support@bharatgps.com', 'manager@bharatgps.com'],   // GPS not working
-    'other'        => ['manager@bharatgps.com'],                            // complaints and other requests
+    'renewal'      => ['sales@bharatgps.com'],
+    'readd'        => ['sales@bharatgps.com'],
+    'troubleshoot' => ['sales@bharatgps.com'],
+    'other'        => ['sales@bharatgps.com'],
     'new'          => ['sales@bharatgps.com'],
-    'none'         => ['sales@bharatgps.com'],                              // questions only, missed calls
+    'none'         => ['sales@bharatgps.com'],
 ];
-const MAIL_COPY = 'admin@bharatgps.com';
-const MAIL_ON = false;   // the owner switched call emails off during testing (14 Nov 2026); true sends them again
+const MAIL_COPY = '';    // nobody is copied for now
+const MAIL_ON = true;    // one email to the team after every real phone call
 const VEHICLE_CHECK = "- You need the full vehicle number: two state letters, two digits, one to three letters, then four digits, like AP39BP0042. If the caller gives only part of it, such as only the last four digits, do not check: ask them for the full number starting with the state letters.\n- Callers often say the number in pieces, over two or three turns, for example AP 31 DZ and then 5531. Join the pieces in the order they were said. As soon as the joined pieces make a full number, check that number at once. Never ask for the full number again when the pieces already said make one.\n- As soon as they have said the full number, do not repeat it back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the full vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n- Never tell the caller an expiry date, a validity, or whether the GPS is online unless a check result gave it to you. If no result has come, say you could not check just now and that the team will call them. Never guess.\n- Some check results tell you to verify the caller first. Then ask only for the mobile number registered with us for that vehicle. When they have told a ten-digit mobile number, do not repeat it back: say only a few words that you are checking and end that same reply with the tag [[PHONE: NUMBER]], where NUMBER is the ten digits with no spaces, for example [[PHONE: 9876543210]]. The tag is never spoken. Until the result comes and says the caller is verified, tell them nothing about the vehicle: not whether it is in our records, not its status, not its location. Never tell the caller which mobile number is registered, not even a part of it.\n";
 const TROUBLE_ASK = "- Do not sell anything. Say sorry for the trouble, then ask these one at a time: since when it is offline; whether any service or repair work was done on the vehicle in recent days, or the battery was removed or changed; the vehicle number; their name; and where the vehicle is now.\n- Then say a technician will be assigned and our team will call them to confirm the visit time.\n";
 const TROUBLE_CHECK = "- Do not sell anything. Say sorry for the trouble in a few words and ask only the vehicle number. Do not ask since when it is offline; our server shows that.\n{{VEHICLE}}- The result tells you when the GPS was last online and exactly what to do next: follow it. Do not promise a technician unless the result says so.\n";
@@ -1144,7 +1147,7 @@ function lead_mail(array $c): bool {
     $host = preg_replace('~[^a-z0-9.-]~', '', strtolower(preg_replace('~^www\.|:\d+$~', '', (string)($_SERVER['HTTP_HOST'] ?? '')))) ?: 'someswara.com';
     $subject = '=?UTF-8?B?' . base64_encode($what . ($tail !== '' ? ": $tail" : '') . (($c['task_id'] ?? '') !== '' ? " [{$c['task_id']}]" : '') . " ($num)") . '?=';
     $to = MAIL_TO[$c['outcome'] ?? 'none'] ?? MAIL_TO['none'];
-    $headers = "From: Bharat GPS call agent <noreply@$host>\r\nCc: " . MAIL_COPY . "\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64";
+    $headers = "From: Bharat GPS call agent <noreply@$host>" . (MAIL_COPY !== '' ? "\r\nCc: " . MAIL_COPY : '') . "\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64";
     return function_exists('mail') && @mail(implode(', ', $to), $subject, chunk_split(base64_encode($body)), $headers);
 }
 
