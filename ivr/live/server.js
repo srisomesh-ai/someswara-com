@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 27;
+const VERSION = 28;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -524,6 +524,13 @@ function plateIn(text) {
   const m = flat.match(/[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}|\d{2}BH\d{4}[A-Z]{1,2}|[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{4}/);
   return m ? m[0] : '';
 }
+// The last four digits of the vehicle number in what the caller said, or ''. A full number works too: its last four are used.
+function last4In(text) {
+  const runs = digitWords(text).replace(/[^0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+  const all = runs.join('');
+  if (all.length < 4 || all.length >= 10) return '';           // too few, or it is a mobile number
+  return all.slice(-4);
+}
 // A ten-digit mobile number inside what the caller said, or ''.
 function mobileIn(text) {
   const d = digitWords(text).replace(/\D/g, '');
@@ -538,6 +545,7 @@ async function askModel(S, task, said) {
   } catch (e) { log('call', S.cfg.call_id, 'script: the model could not read a number:', e.message); return ''; }
 }
 const readPlate = async (S, said) => plateIn(said) || plateIn(await askModel(S, 'From the caller\'s words, write the Indian vehicle registration number they said, in capital English letters and digits with no spaces, like AP39BP0042. Letters may be spoken in Telugu (ఏపీ is AP, టీఎస్ is TS, బీపీ is BP) and digits as words in any language, singly or in pairs (ముప్పై తొమ్మిది is 39). Join the pieces in the order said.', said));
+const readLast4 = async (S, said) => last4In(said) || last4In(await askModel(S, 'From the caller\'s words, write the last four digits of the vehicle number they said, as four digits. Digits may be spoken as words in Telugu or English, singly or in pairs (యాభై ఏడు ఇరవై ఏడు is 5727).', said));
 const readMobile = async (S, said) => mobileIn(said) || mobileIn(await askModel(S, 'From the caller\'s words, write the ten-digit mobile number they said, as digits with no spaces. Digits may be spoken as words in Telugu or English, singly or in pairs.', said));
 
 // One fixed line, spoken and recorded exactly like a reply of hers. Lines that never change keep their sound.
@@ -562,10 +570,13 @@ async function sayLine(S, text, hearMs, keep, hang) {
 }
 
 const LINE = {
-  askPlate: 'Sure సర్, తప్పకుండా help చేస్తాను. Check చేయడానికి మీ vehicle number చెప్తారా?',
+  askPlate: 'Sure సర్, తప్పకుండా help చేస్తాను. మీ vehicle number లో చివరి నాలుగు అంకెలు చెప్తారా?',
+  digitsAgain: 'Sorry, సరిగ్గా అర్థం కాలేదు. మీ vehicle number లో చివరి నాలుగు అంకెలు ఒకసారి నెమ్మదిగా చెప్తారా?',
+  digitsNone: 'ఆ number తో vehicle కనిపించలేదు. Vehicle number లో చివరి నాలుగు అంకెలు మరోసారి చెప్తారా?',
+  notFound: 'ఆ number తో vehicle మా records లో కనిపించలేదు. మా team check చేసి మీకు call చేస్తారు.',
   plateAgain: 'Sorry, number సరిగ్గా అర్థం కాలేదు. State letters తో full vehicle number ఒకసారి నెమ్మదిగా చెప్తారా?',
   checking: 'ఒక్క నిమిషం, check చేస్తున్నాను.',
-  askMobile: 'Security కోసం verify చేయాలి సర్. ఈ vehicle కి register చేసిన mobile number చెప్తారా?',
+  askMobile: 'Verify చేయడానికి, ఈ vehicle కి register చేసిన mobile number చెప్తారా?',
   mobileAgain: 'Mobile number సరిగ్గా అర్థం కాలేదు. పది అంకెల mobile number ఒకసారి నెమ్మదిగా చెప్తారా?',
   noMatch: 'ఆ number match కాలేదు. GPS install చేసినప్పుడు ఇచ్చిన mobile number ఒకసారి చెప్తారా?',
   noVerify: 'Details verify చేయలేకపోయాను. Security కోసం vehicle details ఈ call లో చెప్పలేను. మా team check చేసి మీకు call చేస్తారు.',
@@ -602,40 +613,24 @@ async function scriptTurn(S, text, hearMs) {
     if (S.flowDone || S.kind === 'new' || S.kind === 'all' || MISSING_WORDS.test(text)) return false;
     const t = START_TROUBLE.test(text), r = START_RENEW.test(text);
     if (t === r) return false;                                                   // neither, or both: not a clear match
-    S.flow = { kind: t ? 'trouble' : 'renew', step: 'plate', said: [], tries: 0, plate: '' };
+    S.flow = { kind: t ? 'trouble' : 'renew', step: 'digits', said: [], tries: 0, misses: 0, last4: '' };
     log('call', S.cfg.call_id, 'script:', S.flow.kind);
-    const p = plateIn(text);
-    if (!p) return sayLine(S, LINE.askPlate, hearMs, true);
-    S.flow.plate = p; S.flow.step = 'confirm';
-    return sayLine(S, 'Sure సర్, తప్పకుండా help చేస్తాను. మీ vehicle number ' + spellPlate(p) + ', correct ఏనా?', hearMs);
+    S.flow.step = 'digits';
+    const d = last4In(text);
+    if (!d) return sayLine(S, LINE.askPlate, hearMs, true);
+    return scriptLookup(S, d, hearMs);
   }
   const F = S.flow;
   if (MISSING_WORDS.test(text)) return leave();                                  // it became an emergency: the model handles that
   if (F.result) { const r = F.result; F.result = null; return scriptResult(S, r, hearMs); }   // a result she could not say because the caller spoke over it
 
-  if (F.step === 'plate') {
+  if (F.step === 'digits') {
     F.said.push(text);
-    const p = await readPlate(S, F.said.slice(-3).join(' '));
+    const d = await readLast4(S, F.said.slice(-2).join(' '));
     if (stale()) return true;
-    if (!p) { if (++F.tries >= 3) return leave(); return sayLine(S, LINE.plateAgain, hearMs, true); }
-    F.plate = p; F.step = 'confirm'; F.tries = 0; F.said = [];
-    return sayLine(S, 'మీ vehicle number ' + spellPlate(p) + ', correct ఏనా?', hearMs);
-  }
-
-  if (F.step === 'confirm') {
-    const other = plateIn(text);
-    if (other && other !== F.plate) { F.plate = other; return sayLine(S, 'మీ vehicle number ' + spellPlate(other) + ', correct ఏనా?', hearMs); }
-    const yes = other === F.plate || (YES_WORDS.test(text) && !NO_WORDS.test(text));
-    if (!yes) {
-      if (NO_WORDS.test(text) || ++F.tries >= 2) { F.step = 'plate'; F.tries = 0; F.said = []; return sayLine(S, LINE.plateAgain, hearMs, true); }
-      return sayLine(S, 'మీ vehicle number ' + spellPlate(F.plate) + ', correct ఏనా?', hearMs);
-    }
-    if (!(await sayLine(S, LINE.checking, hearMs, true))) return true;
-    let found;
-    try { found = await ivr('live_vehicle', { token: S.token, number: F.plate, why: F.kind }, 22000); log('call', S.cfg.call_id, 'script: vehicle check', F.plate, found.status); }
-    catch (e) { log('script: vehicle check failed:', e.message); found = { data: { state: 'down' } }; }
-    if (stale()) { F.result = found; return true; }
-    return scriptResult(S, found, 0);
+    if (!d) { if (++F.tries >= 3) return leave(); return sayLine(S, LINE.digitsAgain, hearMs, true); }
+    F.said = [];
+    return scriptLookup(S, d, hearMs);
   }
 
   if (F.step === 'mobile') {
@@ -655,6 +650,18 @@ async function scriptTurn(S, text, hearMs) {
   return leave();
 }
 
+// Search the servers for vehicles ending in these four digits, then say what follows.
+async function scriptLookup(S, d4, hearMs) {
+  const F = S.flow, g = S.gen;
+  F.last4 = d4;
+  if (!(await sayLine(S, LINE.checking, hearMs, true))) return true;
+  let found;
+  try { found = await ivr('live_last4', { token: S.token, last4: d4, why: F.kind }, 22000); log('call', S.cfg.call_id, 'script: vehicle search', found.status); }
+  catch (e) { log('script: vehicle search failed:', e.message); found = { data: { state: 'down' } }; }
+  if (g !== S.gen || S.closed) { F.result = found; return true; }
+  return scriptResult(S, found, 0);
+}
+
 // What to say for a result that came back from the website.
 async function scriptResult(S, found, hearMs) {
   const F = S.flow, d = found.data || { state: 'nomatch', final: true };
@@ -666,6 +673,11 @@ async function scriptResult(S, found, hearMs) {
     return sayLine(S, a.text, hearMs, a.keep, a.hang);
   }
   if (d.state === 'verify') { F.step = 'mobile'; F.tries = 0; F.said = []; return sayLine(S, LINE.askMobile, hearMs, true); }
+  if (d.state === 'none' && F.step === 'digits') {                               // no vehicle ends with those four digits
+    if (++F.misses < 2) { F.tries = 0; F.said = []; return sayLine(S, LINE.digitsNone, hearMs, true); }
+    end();
+    return sayLine(S, F.kind === 'renew' ? LINE.notInRecords : LINE.notFound, hearMs, true);
+  }
   if (d.state === 'near') { F.plate = d.plate; F.step = 'confirm'; F.tries = 0; return sayLine(S, 'ఆ number మా records లో కనిపించలేదు. మీ vehicle number ' + spellPlate(d.plate) + ' ఆ?', hearMs); }
   if (d.state === 'none') { end(); S.vehicleFact = found.fact || ''; return sayLine(S, LINE.notInRecords, hearMs, true); }
   if (d.state === 'nomatch' && !d.final) { F.step = 'mobile'; return sayLine(S, LINE.noMatch, hearMs, true); }

@@ -97,7 +97,7 @@ if ($action === 'phone_config') {
     out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id'], 'returning' => $memory !== ''] + $pay);
 }
 
-if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 'live_place', 'live_verify'], true)) {
+if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 'live_place', 'live_verify', 'live_last4'], true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
     $tok = (string)($_POST['token'] ?? '');
     $all = read_json('live.json');
@@ -155,15 +155,48 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         $data = $ver ? gps_data($r) : ($found ? ['state' => 'verify'] : (!empty($r['near']) ? ['state' => 'near', 'plate' => (string)$r['plate']] : ['state' => $r['status'] === 'none' ? 'none' : 'down']));
         out(['status' => $r['status'] . ($ver ? ' verified' : ''), 'near' => !empty($r['near']), 'plate' => !empty($r['near']) ? (string)$r['plate'] : '', 'text' => gps_result_text($r, $why, $ver), 'fact' => gps_result_fact($r, $ver), 'data' => $data]);
     }
+    if ($action === 'live_last4') {   // fixed-script flow: the caller said the last four digits of the vehicle number
+        if (empty($all[$tok]['call_id'])) fail('Bad token.', 403);
+        $n = (int)($all[$tok]['lookups'] ?? 0);
+        if ($n >= 8) fail('Too many checks on this call.', 429);
+        $all[$tok]['lookups'] = $n + 1;
+        $d4 = substr(preg_replace('~\D~', '', (string)($_POST['last4'] ?? '')), -4);
+        $why = in_array($_POST['why'] ?? '', ['renew', 'trouble'], true) ? $_POST['why'] : 'trouble';
+        $all[$tok]['pending'] = ['last4' => $d4, 'why' => $why, 'tries' => 0];
+        write_json('live.json', $all);
+        session_write_close();
+        $found = gps_last4($d4);
+        if ($found['state'] !== 'found') out(['status' => 'last4 ' . $found['state'], 'data' => ['state' => $found['state']]]);
+        // Calling from the mobile number saved for one of these vehicles: that is their vehicle, and they are verified.
+        $c = call_find((string)$all[$tok]['call_id']);
+        $r = gps_pick($found['list'], phone10((string)(($c ?: [])['from'] ?? '')));
+        if (!$r) out(['status' => 'last4 found ' . count($found['list']) . ', verify', 'data' => ['state' => 'verify']]);
+        $all = read_json('live.json');
+        $all[$tok]['verified'][] = $r['plate']; unset($all[$tok]['pending']);
+        write_json('live.json', $all);
+        if ($c) { $c['vehicles'] = array_values(array_unique(array_merge((array)($c['vehicles'] ?? []), [$r['plate']]))); call_save($c); }
+        out(['status' => 'last4 verified by caller number', 'fact' => gps_result_fact($r, true), 'data' => gps_data($r)]);
+    }
     if ($action === 'live_verify') {   // the caller said the mobile number registered for the vehicle
         $p = (array)($all[$tok]['pending'] ?? []);
         $no = 'Do not tell the caller anything about the vehicle, not even whether it is in our records.';
-        if (empty($p['number'])) out(['status' => 'nothing', 'text' => "No vehicle is waiting to be verified. $no Ask for the full vehicle number first.", 'fact' => '']);
+        if (empty($p['number']) && empty($p['last4'])) out(['status' => 'nothing', 'text' => "No vehicle is waiting to be verified. $no Ask for the full vehicle number first.", 'fact' => '']);
         $tries = (int)($p['tries'] ?? 0) + 1;
         $all[$tok]['pending']['tries'] = $tries;
         write_json('live.json', $all);
         session_write_close();
         $said = phone10((string)($_POST['phone'] ?? ''));
+        if (isset($p['last4'])) {   // asked by the last four digits: the mobile number picks the vehicle among those that end with them
+            $r = $tries <= 3 ? gps_pick(gps_last4((string)$p['last4'])['list'], $said) : null;
+            if ($r) {
+                $all = read_json('live.json');
+                $all[$tok]['verified'][] = $r['plate']; unset($all[$tok]['pending']);
+                write_json('live.json', $all);
+                if ($c = call_find((string)$all[$tok]['call_id'])) { $c['vehicles'] = array_values(array_unique(array_merge((array)($c['vehicles'] ?? []), [$r['plate']]))); call_save($c); }
+                out(['status' => 'verified', 'text' => '', 'fact' => gps_result_fact($r, true), 'data' => gps_data($r)]);
+            }
+            out(['status' => 'no match', 'text' => "The details could not be verified. $no Say politely that our team will check and call them back.", 'fact' => '', 'data' => ['state' => 'nomatch', 'final' => $tries >= 2]]);
+        }
         $r = $tries <= 3 ? gps_find((string)$p['number']) : ['status' => 'none'];
         $why = in_array($_POST['why'] ?? '', ['renew', 'trouble', 'missing'], true) ? $_POST['why'] : (string)($p['why'] ?? '');
         if ($why === 'renew') $why = (string)($p['why'] ?? '') ?: 'trouble';   // they were asked to verify, so it is not about validity only

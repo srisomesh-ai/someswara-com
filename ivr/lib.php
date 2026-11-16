@@ -790,20 +790,46 @@ function gps_find(string $number): array {
         return ['status' => $down ? 'down' : 'none', 'number' => $q];
     }
     if (count($hit) > 1) return ['status' => 'many', 'number' => $q, 'count' => count($hit)];
-    [$id, , , $name, $exp, $last] = $hit[0];
-    $online = in_array($hit[0][6] ?? '', ['online', 'ack'], true);
+    return gps_record($hit[0], $q, $near);
+}
+
+// One vehicle from the list, as a full result.
+function gps_record(array $e, string $q, bool $near = false): array {
+    [$id, , , $name, $exp, $last] = $e;
+    $online = in_array($e[6] ?? '', ['online', 'ack'], true);
     // The number plate as the server has it. The device name is often a customer name, so it is not used as the number.
     $plate = $q;
-    foreach ([$hit[0][2], $hit[0][1]] as $k) if ($k !== '' && ($pp = plate_parts($k)) && preg_match('~[A-Z]{2}0?' . $pp[1] . $pp[2] . '0*' . $pp[3] . '(?!\d)~', $k, $pm)) { $plate = $pm[0]; break; }
+    foreach ([$e[2], $e[1]] as $k) if ($k !== '' && ($pp = plate_parts($k)) && preg_match('~[A-Z]{2}0?' . $pp[1] . $pp[2] . '0*' . $pp[3] . '(?!\d)~', $k, $pm)) { $plate = $pm[0]; break; }
     $ts = gps_time($last);
     $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near, 'online' => $online, 'plate' => $plate,
-        'phones' => (array)($hit[0][7] ?? []), 'lat' => (float)($hit[0][8] ?? 0), 'lng' => (float)($hit[0][9] ?? 0), 'speed' => (int)($hit[0][10] ?? 0)];
+        'phones' => (array)($e[7] ?? []), 'lat' => (float)($e[8] ?? 0), 'lng' => (float)($e[9] ?? 0), 'speed' => (int)($e[10] ?? 0)];
     if ($ts) { $r['last_ts'] = $ts; $r['off_hours'] = max(0, (int)floor((time() - $ts) / 3600)); $r['last'] = date('j M Y, g:i A', $ts); }
     if ($exp !== '') {
         $r['days'] = (int)(new DateTime('today'))->diff(new DateTime($exp))->format('%r%a');
         $r['expiry_text'] = date('j F Y', strtotime($exp));
     }
     return $r;
+}
+
+// Every vehicle whose number, or whose name on the server (such as "Prasanna-5727"), ends with these four digits.
+// A vehicle number is hard to hear correctly on a phone line, but four digits are not; the registered mobile number
+// then tells which of these vehicles is the caller's, and proves they own it.
+function gps_last4(string $d4): array {
+    if (!preg_match('~^\d{4}$~', $d4)) return ['state' => 'none', 'list' => []];
+    $idx = gps_index();
+    $list = [];
+    foreach ((array)($idx['dev'] ?? []) as $e) {
+        foreach ([(string)($e[2] ?? ''), (string)($e[1] ?? ''), preg_replace('~\D~', '', (string)($e[3] ?? ''))] as $k) if ($k !== '' && substr($k, -4) === $d4) { $list[] = $e; break; }
+    }
+    $down = false;
+    foreach ((array)($idx['servers'] ?? []) as $sv) if (is_array($sv) && ($sv['state'] ?? '') === 'down') $down = true;
+    return ['state' => $list ? 'found' : ($down ? 'down' : 'none'), 'list' => $list];
+}
+// The one among those vehicles that has this mobile number saved, as a full result; null when none has it.
+function gps_pick(array $list, string $mobile): ?array {
+    if ($mobile === '') return null;
+    foreach ($list as $e) if (in_array($mobile, (array)($e[7] ?? []), true)) return gps_record($e, (string)(($e[2] ?? '') !== '' ? $e[2] : ($e[1] ?? '')));
+    return null;
 }
 
 // AP39WA1575 -> [AP, 39, WA, 1575]; null when the text is not a vehicle number.
@@ -920,7 +946,7 @@ function gps_result_text(array $r, string $why = '', bool $ver = false): string 
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 27;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 28;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
