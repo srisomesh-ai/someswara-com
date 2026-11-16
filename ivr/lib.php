@@ -80,12 +80,9 @@ New customer:
 {{PRICES}}
 - Step six, when they raise a doubt, answer it clearly in a short reply. Do not ask whether they have doubts; wait for them to ask.
 - Step seven, close the sale. When they have no more doubts or sound ready, say that you will create the booking now and ask for their name and location. {{INSTALL}} The Micro and Magnet trackers, and any portable handheld device, need no installation: never say installation or technician for them; ask instead whether they will collect it from our nearest service area or want it delivered to their place, and when they want it.
-- Step eight, the complimentary offer. After they give the name and location, tell them politely that you also have a complimentary offer for them: two hundred rupees discount, if they fill the booking form you send to their email. Ask for their email ID. If they do not want it or have no email ID, that is fine: the booking is made at the normal price.
-- Taking an email ID: when they say it, read the whole email ID back slowly in English letters, the name part letter by letter and the rest as at gmail dot com, and ask whether it is correct. If they correct any part, read the whole ID back again. Only after they clearly say it is correct, say the form will reach their email right after this call. Never say the form is sent or coming before they confirm the email ID. If they have no email ID, say our team will call them.
-- If the customer says the price is high, or that others sell a GPS for less, do not argue and do not talk about the email ID in that reply. Answer the doubt itself, once, in one or two sentences: our price already includes one year subscription, five years warranty, free installation by our own technicians and our service support, and the price is fixed. Then ask whether they would like to go ahead. Never say that the team will confirm a discount or a price.
-- Ask for the email ID only once. If the customer answers with a question or a doubt instead of an email ID, answer that question and do not ask for the email ID again in that reply. Ask for it again only after they say they want the offer.
-- If the customer clearly says no, that they do not want it, or that they will not buy from us, accept it at once. Thank them politely, say they can call us any time, and stop. Do not ask about a booking again, do not offer the discount again, and do not offer to send details unless they ask for them.
-- The prices are fixed. Never reduce a price yourself and never promise any other discount. If the customer asks for a discount earlier in the call, tell them about the same complimentary offer of two hundred rupees through the booking form by email.
+- If the customer says the price is high, or that others sell a GPS for less, do not argue. Answer the doubt itself, once, in one or two sentences: our price already includes one year subscription, five years warranty, free installation by our own technicians and our service support, and the price is fixed. Then ask whether they would like to go ahead. Never say that the team will confirm a discount or a price.
+- If the customer clearly says no, that they do not want it, or that they will not buy from us, accept it at once. Thank them politely, say they can call us any time, and stop. Do not ask about a booking again and do not offer to send details unless they ask for them.
+- The prices are fixed. Never reduce a price yourself, never promise a discount or an offer, and never ask for an email ID. If the customer asks for a discount or a lower price, say only this: you are creating the task now and our customer care team will call them soon about it. Then continue with the booking: their name and location.
 - After the booking is noted, say once that our team will call them to confirm. Say that our team will call them only once in the whole call; if you have already said it, do not say it again in any later reply.
 - Company or corporate vehicles always need a GST bill: tell them a GST bill is given.
 - If they say they will think about it, do not pressure them. Give one honest reason that fits their use and offer to send the details on WhatsApp to this number.
@@ -103,7 +100,6 @@ Customer: Ok.
 You: Booking create చేస్తాను సర్. మీ పేరు, location చెప్తారా?
 Customer: Ravi, Gajuwaka.
 {{INSTALL_SAMPLE}}
-You: మీ కోసం ఒక complimentary offer కూడా ఉంది సర్. మీ email కి పంపే booking form fill చేస్తే రెండు వందల రూపాయల discount వస్తుంది. మీ email ID చెప్తారా?
 
 Existing customer, GPS not working or offline:
 {{TROUBLE}}
@@ -325,7 +321,7 @@ function call_after(array $c): string {
     elseif (($c['task_error'] ?? '') !== '') $parts[] = 'Task not created: ' . rtrim((string)$c['task_error'], '.');
     elseif (($c['outcome'] ?? '') === 'renewal') $parts[] = 'No task for renewals';
     if (($c['form_email'] ?? '') !== '') $parts[] = ((int)($c['form_sent'] ?? 0) === 1 ? 'Form emailed to ' : 'Form could NOT be emailed to ') . $c['form_email'];
-    elseif (($c['outcome'] ?? '') === 'new') $parts[] = 'No email ID was confirmed, so no form was sent';
+    elseif (FORM_ON && ($c['outcome'] ?? '') === 'new') $parts[] = 'No email ID was confirmed, so no form was sent';
     return implode(' · ', $parts);
 }
 
@@ -1071,7 +1067,7 @@ function call_wrap(array $c): array {
     $from = (string)($c['from'] ?? '');
     // The caller confirmed an email ID for the complimentary discount: send the Quick Task booking form.
     $formSent = false;
-    if (($x['email'] ?? '') !== '') {
+    if (FORM_ON && ($x['email'] ?? '') !== '') {
         $formSent = form_mail($x['email'], (string)($x['name'] ?? ''), $from);
         $keep['form_email'] = $x['email'];
         $keep['form_sent'] = $formSent ? 1 : -1;
@@ -1106,6 +1102,7 @@ function call_wrap(array $c): array {
 // TaskManager creates the task, unassigned, with the discount applied.
 const FORM_URL = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php';
 const FORM_DISCOUNT = 200;
+const FORM_ON = false;   // the owner stopped the email form and the discount (16 Nov 2026): hearing email IDs on a call was unreliable
 function form_mail(string $email, string $name, string $phone): bool {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || preg_match('~[\r\n,;<>]~', $email)) return false;
     // First choice: TaskManager sends it from the company mailbox, like all its other emails, so it is not
