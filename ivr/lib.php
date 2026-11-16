@@ -881,6 +881,14 @@ function gps_facts(array $r, string $why = '', bool $ver = false): string {
     return $valid . "\nYou may tell the validity. For the GPS status, whether it is online, or where the vehicle is, " . VERIFY_ASK_STATUS;
 }
 
+// The same result as plain values, for the fixed-script call flow on the call server (no wording, no instructions).
+// Only for a verified owner: it carries the GPS status.
+function gps_data(array $r): array {
+    $h = isset($r['off_hours']) ? (int)$r['off_hours'] : null;
+    return ['state' => 'ok', 'plate' => (string)$r['plate'], 'online' => !empty($r['online']) || ($h !== null && $h < 1), 'off_hours' => $h,
+        'last_ts' => (int)($r['last_ts'] ?? 0), 'expiry' => (string)($r['expiry'] ?? ''), 'days' => ($r['expiry'] ?? '') !== '' ? (int)$r['days'] : null];
+}
+
 // The same result as bare facts with no instructions, kept as background once she has told the caller.
 function gps_result_fact(array $r, bool $ver = false): string {
     $n = $r['number'] ?? '';
@@ -912,7 +920,7 @@ function gps_result_text(array $r, string $why = '', bool $ver = false): string 
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 25;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 26;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 

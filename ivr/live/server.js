@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 25;
+const VERSION = 26;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -470,7 +470,9 @@ async function speechEnd(S) {
   const ack = ACK_ON ? sayAck(S) : '';       // the quick "ok sir" clip; the owner asked for it to be removed (14 Nov 2026)
   hearGender(S, pcm);
   noteKind(S, text);
-  S.replying = reply(S, hearMs, ack).catch((e) => log('reply crashed:', e.message));
+  // A fixed-script step if her words match one; otherwise the model answers.
+  S.replying = scriptTurn(S, text, hearMs).catch((e) => { log('script crashed:', e.message); S.flow = null; S.flowDone = true; return false; })
+    .then((done) => (done ? null : reply(S, hearMs, ack))).catch((e) => log('reply crashed:', e.message));
 }
 
 // సర్, మేడమ్, sir, madam as a word of address (not inside another word such as ఆఫీసర్ or సర్వీస్), with the comma or space before it.
@@ -501,6 +503,177 @@ async function nearAnswer(S) {
   S.vehicle = 'The caller confirmed the number ' + number + ' and it has been checked. Do not ask about the number again. ' + (found.text || '');
   S.vehicleFact = found.fact || ''; S.vehicleTold = false;
 }
+
+// ---------- fixed-script calls ----------
+// The owner asked for this (16 Nov 2026): when a caller's words match a known request, she says fixed lines and
+// follows fixed steps, with no thinking by the model. Anything else is still answered by the model.
+// Two requests are scripted: "my GPS is not working" and "I want to renew". Steps: vehicle number, say it back to
+// confirm, check the servers, match the registered mobile number, then the answer for that request.
+const SCRIPT_ON = true;
+const START_TROUBLE = /not working|పని\s?చేయ(డం|ట)|work\s?అవ్వ|work\s?కావ|offline|ఆఫ్\s?లైన్|రావడం లేదు|రావట్లేదు|చూపించ(డం|ట్లే)|కనిపించ(డం|ట్లే)|complaint|కంప్లైంట్/i;
+const START_RENEW = /renew|రెన్యూ|రిన్యూ|రెన్యువల్|recharge|రీఛార్జ్|రీచార్జ్|validity|వాలిడిటీ|licen[sc]e|లైసెన్స్|expir|subscri|సబ్‌?స్క్రి/i;
+const TE_MONTHS = ['జనవరి', 'ఫిబ్రవరి', 'మార్చి', 'ఏప్రిల్', 'మే', 'జూన్', 'జూలై', 'ఆగస్టు', 'సెప్టెంబర్', 'అక్టోబర్', 'నవంబర్', 'డిసెంబర్'];
+const DIGITS = { zero: 0, oh: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  'సున్నా': 0, 'జీరో': 0, 'ఒకటి': 1, 'వన్': 1, 'రెండు': 2, 'టూ': 2, 'మూడు': 3, 'త్రీ': 3, 'నాలుగు': 4, 'ఫోర్': 4, 'ఐదు': 5, 'అయిదు': 5, 'ఫైవ్': 5,
+  'ఆరు': 6, 'సిక్స్': 6, 'ఏడు': 7, 'సెవెన్': 7, 'సెవన్': 7, 'ఎనిమిది': 8, 'ఎయిట్': 8, 'తొమ్మిది': 9, 'నైన్': 9 };
+const digitWords = (t) => t.replace(/[A-Za-zఀ-౿]+/g, (w) => (Object.prototype.hasOwnProperty.call(DIGITS, w.toLowerCase()) ? ' ' + DIGITS[w.toLowerCase()] + ' ' : w));
+const spellPlate = (p) => (p.match(/[A-Z]+|\d+/g) || []).map((x) => (/\d/.test(x) ? x.split('').map((d) => Object.keys(DIGITS)[+d === 0 ? 0 : +d + 1]).join(' ') : x.split('').join(' '))).join(', ');
+// A whole vehicle number inside what the caller said, or ''.
+function plateIn(text) {
+  const flat = digitWords(text).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const m = flat.match(/[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}|\d{2}BH\d{4}[A-Z]{1,2}|[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{4}/);
+  return m ? m[0] : '';
+}
+// A ten-digit mobile number inside what the caller said, or ''.
+function mobileIn(text) {
+  const d = digitWords(text).replace(/\D/g, '');
+  const m = d.match(/(?:91|0)?([6-9]\d{9})$/) || d.match(/([6-9]\d{9})/);
+  return m ? m[1] : '';
+}
+// When the plain reading fails (letters and numbers spoken as Telugu words), the model is asked only to write the number down.
+async function askModel(S, task, said) {
+  try {
+    const out = await chatOnce(S.cfg, [{ role: 'system', content: task + ' Write only that, nothing else. If it is not there, write NONE.' }, { role: 'user', content: said }], AbortSignal.timeout(9000));
+    return plain(out).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  } catch (e) { log('call', S.cfg.call_id, 'script: the model could not read a number:', e.message); return ''; }
+}
+const readPlate = async (S, said) => plateIn(said) || plateIn(await askModel(S, 'From the caller\'s words, write the Indian vehicle registration number they said, in capital English letters and digits with no spaces, like AP39BP0042. Letters may be spoken in Telugu (ఏపీ is AP, టీఎస్ is TS, బీపీ is BP) and digits as words in any language, singly or in pairs (ముప్పై తొమ్మిది is 39). Join the pieces in the order said.', said));
+const readMobile = async (S, said) => mobileIn(said) || mobileIn(await askModel(S, 'From the caller\'s words, write the ten-digit mobile number they said, as digits with no spaces. Digits may be spoken as words in Telugu or English, singly or in pairs.', said));
+
+// One fixed line, spoken and recorded exactly like a reply of hers. Lines that never change keep their sound.
+async function sayLine(S, text, hearMs, keep, hang) {
+  const g = S.gen, t0 = Date.now(), ctrl = new AbortController(); S.abort = ctrl;
+  let sirLeft = SIR_WORD.test(([...S.turns].reverse().find((t) => t.who === 'agent') || { text: '' }).text) ? 0 : 1;
+  text = text.replace(SIR_ALL, (m) => (sirLeft-- > 0 ? m : '')).replace(/\s+([.,!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  const k = clipKey(S.cfg, S.lang, 'line:' + text);
+  let a = clips.get(k);
+  if (!a) {
+    try { a = await tts(S.cfg, text, ctrl.signal, S.lang); } catch (e) { if (g === S.gen) send(S, { type: 'error', message: e.message }); return false; }
+    if (keep) clips.set(k, a);
+  }
+  if (g !== S.gen || S.closed) return false;                 // the caller started talking again
+  send(S, { type: 'audio', audio: a, ms: hearMs ? { hear: hearMs, think: 0, speak: Date.now() - t0 } : undefined });
+  S.turns.push({ who: 'agent', text });
+  S.waitMs = /number|నంబర్|నెంబర్/i.test(text) ? 1200 : 350;
+  await syncCall(S, false);
+  send(S, { type: 'reply_done', text, turn: S.turns.length - 1 });
+  if (hang && S.out) setTimeout(() => { try { S.ws.close(); } catch (e) { /* already closed */ } }, Math.max(0, (S.playUntil || 0) - Date.now()) + 1200);   // a phone call: end it after the goodbye
+  return true;
+}
+
+const LINE = {
+  askPlate: 'Sure సర్, తప్పకుండా help చేస్తాను. Check చేయడానికి మీ vehicle number చెప్తారా?',
+  plateAgain: 'Sorry, number సరిగ్గా అర్థం కాలేదు. State letters తో full vehicle number ఒకసారి నెమ్మదిగా చెప్తారా?',
+  checking: 'ఒక్క నిమిషం, check చేస్తున్నాను.',
+  askMobile: 'Security కోసం verify చేయాలి సర్. ఈ vehicle కి register చేసిన mobile number చెప్తారా?',
+  mobileAgain: 'Mobile number సరిగ్గా అర్థం కాలేదు. పది అంకెల mobile number ఒకసారి నెమ్మదిగా చెప్తారా?',
+  noMatch: 'ఆ number match కాలేదు. GPS install చేసినప్పుడు ఇచ్చిన mobile number ఒకసారి చెప్తారా?',
+  noVerify: 'Details verify చేయలేకపోయాను. Security కోసం vehicle details ఈ call లో చెప్పలేను. మా team check చేసి మీకు call చేస్తారు.',
+  down: 'ఇప్పుడు server check చేయడం కుదరలేదు. మా team మీకు call చేస్తారు.',
+  notInRecords: 'ఈ vehicle number మా records లో లేదు, అంటే GPS ఇంతకుముందే expire అయ్యి server నుండి remove అయింది. అదే GPS ని re-install చేసి add చేయడానికి ఒక వెయ్యి ఏడు వందల రూపాయలు అవుతుంది. ఆ GPS పని చేయకపోతే, కొత్త GPS మూడు వేల ఐదు వందల రూపాయలు. ఏది కావాలో చెప్తారా?',
+  online: 'మీ vehicle GPS ఇప్పుడు online లో ఉంది సర్. App లో login అయ్యి మీ vehicle track చేసుకోవచ్చు. Bharat GPS కి call చేసినందుకు thank you.',
+  afterService: 'సరే. ఒకసారి vehicle start చేసి కొంచెం దూరం నడిపి చూడండి. మీ complaint note చేసుకున్నాను, మా team మీకు call చేసి confirm చేస్తారు. Thank you.',
+  noExpiry: 'ఈ vehicle expiry details నా దగ్గర లేవు. మా team check చేసి మీకు call చేస్తారు.',
+};
+const istDate = (ts) => new Date(ts * 1000 + 5.5 * 3600 * 1000);   // read with getUTC* below
+function answerLine(kind, d) {
+  if (kind === 'trouble') {
+    const expired = d.days !== null && d.days < 0 ? ' మీ subscription కూడా expire అయింది, renewal చేస్తే GPS మళ్ళీ పని చేస్తుంది.' : '';
+    if (d.online) return { text: LINE.online, keep: true, hang: true };
+    if (d.off_hours === null) return { text: 'మీ GPS ఇప్పుడు offline లో ఉంది.' + expired + ' Vehicle ని service కి ఇచ్చారా, లేదా battery remove చేశారా?', next: 'service' };
+    if (d.off_hours < 48) return { text: 'మీ GPS దాదాపు ' + Math.max(1, d.off_hours) + ' గంటల నుండి offline లో ఉంది.' + expired + ' కొంచెం సేపు wait చేయండి, automatic గా online కి వస్తుంది. రాకపోతే మళ్ళీ call చేయండి. Thank you.' };
+    const t = istDate(d.last_ts);
+    return { text: 'మీ GPS ' + Math.floor(d.off_hours / 24) + ' రోజుల నుండి, అంటే ' + TE_MONTHS[t.getUTCMonth()] + ' ' + t.getUTCDate() + ' నుండి offline లో ఉంది.' + expired + ' Vehicle ని service కి ఇచ్చారా, లేదా battery remove చేశారా?', next: 'service' };
+  }
+  if (d.days === null) return { text: LINE.noExpiry, keep: true };
+  const ymd = String(d.expiry).match(/(\d{4})-(\d{2})-(\d{2})/) || [0, 2000, 1, 1], date = TE_MONTHS[+ymd[2] - 1] + ' ' + +ymd[3] + ', ' + ymd[1];
+  const pay = ' Payment link మీ email కి పంపిస్తున్నాము. Payment చేసిన వెంటనే renewal automatic గా అవుతుంది. Thank you.';
+  if (d.days < 0) return { text: 'మీ vehicle validity ' + date + ' న expire అయింది.' + pay };
+  if (d.days < 30) return { text: 'మీ vehicle validity ' + date + ' వరకు ఉంది, ఇంకా ' + d.days + ' రోజులే ఉన్నాయి.' + pay };
+  return { text: 'మీ vehicle validity ' + date + ' వరకు ఉంది, ఇంకా ' + d.days + ' రోజులు ఉన్నాయి. ఇప్పుడు renewal అవసరం లేదు. Expiry కి దగ్గరలో మళ్ళీ call చేయండి. Thank you.' };
+}
+
+// One caller turn in a scripted call. true = a fixed line was spoken; false = let the model answer this turn.
+async function scriptTurn(S, text, hearMs) {
+  if (!SCRIPT_ON || S.cfg.trainer || S.cfg.allowed === false) return false;
+  const g = S.gen, stale = () => g !== S.gen || S.closed;
+  const leave = () => { S.flow = null; S.flowDone = true; return false; };       // hand the rest of the call to the model
+  if (!S.flow) {
+    if (S.flowDone || S.kind === 'new' || S.kind === 'all' || MISSING_WORDS.test(text)) return false;
+    const t = START_TROUBLE.test(text), r = START_RENEW.test(text);
+    if (t === r) return false;                                                   // neither, or both: not a clear match
+    S.flow = { kind: t ? 'trouble' : 'renew', step: 'plate', said: [], tries: 0, plate: '' };
+    log('call', S.cfg.call_id, 'script:', S.flow.kind);
+    const p = plateIn(text);
+    if (!p) return sayLine(S, LINE.askPlate, hearMs, true);
+    S.flow.plate = p; S.flow.step = 'confirm';
+    return sayLine(S, 'Sure సర్, తప్పకుండా help చేస్తాను. మీ vehicle number ' + spellPlate(p) + ', correct ఏనా?', hearMs);
+  }
+  const F = S.flow;
+  if (MISSING_WORDS.test(text)) return leave();                                  // it became an emergency: the model handles that
+  if (F.result) { const r = F.result; F.result = null; return scriptResult(S, r, hearMs); }   // a result she could not say because the caller spoke over it
+
+  if (F.step === 'plate') {
+    F.said.push(text);
+    const p = await readPlate(S, F.said.slice(-3).join(' '));
+    if (stale()) return true;
+    if (!p) { if (++F.tries >= 3) return leave(); return sayLine(S, LINE.plateAgain, hearMs, true); }
+    F.plate = p; F.step = 'confirm'; F.tries = 0; F.said = [];
+    return sayLine(S, 'మీ vehicle number ' + spellPlate(p) + ', correct ఏనా?', hearMs);
+  }
+
+  if (F.step === 'confirm') {
+    const other = plateIn(text);
+    if (other && other !== F.plate) { F.plate = other; return sayLine(S, 'మీ vehicle number ' + spellPlate(other) + ', correct ఏనా?', hearMs); }
+    const yes = other === F.plate || (YES_WORDS.test(text) && !NO_WORDS.test(text));
+    if (!yes) {
+      if (NO_WORDS.test(text) || ++F.tries >= 2) { F.step = 'plate'; F.tries = 0; F.said = []; return sayLine(S, LINE.plateAgain, hearMs, true); }
+      return sayLine(S, 'మీ vehicle number ' + spellPlate(F.plate) + ', correct ఏనా?', hearMs);
+    }
+    if (!(await sayLine(S, LINE.checking, hearMs, true))) return true;
+    let found;
+    try { found = await ivr('live_vehicle', { token: S.token, number: F.plate, why: F.kind }, 22000); log('call', S.cfg.call_id, 'script: vehicle check', F.plate, found.status); }
+    catch (e) { log('script: vehicle check failed:', e.message); found = { data: { state: 'down' } }; }
+    if (stale()) { F.result = found; return true; }
+    return scriptResult(S, found, 0);
+  }
+
+  if (F.step === 'mobile') {
+    F.said.push(text);
+    const m = await readMobile(S, F.said.slice(-2).join(' '));
+    if (stale()) return true;
+    if (!m) { if (++F.tries >= 3) { leave(); return sayLine(S, LINE.noVerify, hearMs, true); } return sayLine(S, LINE.mobileAgain, hearMs, true); }
+    F.said = [];
+    let found;
+    try { found = await ivr('live_verify', { token: S.token, phone: m, why: F.kind }, 22000); log('call', S.cfg.call_id, 'script: caller check', found.status); }
+    catch (e) { log('script: caller check failed:', e.message); found = { data: { state: 'down' } }; }
+    if (stale()) { F.result = found; return true; }
+    return scriptResult(S, found, hearMs);
+  }
+
+  if (F.step === 'service') { leave(); return sayLine(S, LINE.afterService, hearMs, true); }
+  return leave();
+}
+
+// What to say for a result that came back from the website.
+async function scriptResult(S, found, hearMs) {
+  const F = S.flow, d = found.data || { state: 'nomatch', final: true };
+  const end = () => { S.flow = null; S.flowDone = true; };
+  if (d.state === 'ok') {
+    S.vehicle = ''; S.vehicleFact = found.fact || ''; S.vehicleTold = true;       // background for anything the caller asks next
+    const a = answerLine(F.kind, d);
+    if (a.next) F.step = a.next; else end();
+    return sayLine(S, a.text, hearMs, a.keep, a.hang);
+  }
+  if (d.state === 'verify') { F.step = 'mobile'; F.tries = 0; F.said = []; return sayLine(S, LINE.askMobile, hearMs, true); }
+  if (d.state === 'near') { F.plate = d.plate; F.step = 'confirm'; F.tries = 0; return sayLine(S, 'ఆ number మా records లో కనిపించలేదు. మీ vehicle number ' + spellPlate(d.plate) + ' ఆ?', hearMs); }
+  if (d.state === 'none') { end(); S.vehicleFact = found.fact || ''; return sayLine(S, LINE.notInRecords, hearMs, true); }
+  if (d.state === 'nomatch' && !d.final) { F.step = 'mobile'; return sayLine(S, LINE.noMatch, hearMs, true); }
+  end();
+  if (d.state === 'nomatch') { S.vehicle = found.text || ''; S.vehicleTold = false; return sayLine(S, LINE.noVerify, hearMs, true); }
+  return sayLine(S, LINE.down, hearMs, true);
+}
+
 
 async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   const g = S.gen, t1 = Date.now(), lang = S.lang;
@@ -673,7 +846,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false, flow: null, flowDone: false };
 }
 
 function greet(S) {

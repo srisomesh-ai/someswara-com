@@ -148,10 +148,12 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         if (!$ver && in_array($why, ['trouble', 'missing'], true) && in_array($r['status'], ['found', 'none'], true) && empty($r['near'])) {
             $all[$tok]['pending'] = ['number' => (string)($r['number'] ?? ''), 'why' => $why, 'tries' => 0];
             write_json('live.json', $all);
-            out(['status' => 'verify', 'near' => false, 'text' => 'The check is done. ' . VERIFY_ASK, 'fact' => '']);
+            out(['status' => 'verify', 'near' => false, 'text' => 'The check is done. ' . VERIFY_ASK, 'fact' => '', 'data' => ['state' => 'verify']]);
         }
         if (!$ver && $found) { $all[$tok]['pending'] = ['number' => (string)$r['number'], 'why' => $why, 'tries' => 0]; write_json('live.json', $all); }
-        out(['status' => $r['status'] . ($ver ? ' verified' : ''), 'near' => !empty($r['near']), 'plate' => !empty($r['near']) ? (string)$r['plate'] : '', 'text' => gps_result_text($r, $why, $ver), 'fact' => gps_result_fact($r, $ver)]);
+        // For the fixed-script flow: plain values. Nothing about the vehicle's status leaves here until the owner is verified.
+        $data = $ver ? gps_data($r) : ($found ? ['state' => 'verify'] : (!empty($r['near']) ? ['state' => 'near', 'plate' => (string)$r['plate']] : ['state' => $r['status'] === 'none' ? 'none' : 'down']));
+        out(['status' => $r['status'] . ($ver ? ' verified' : ''), 'near' => !empty($r['near']), 'plate' => !empty($r['near']) ? (string)$r['plate'] : '', 'text' => gps_result_text($r, $why, $ver), 'fact' => gps_result_fact($r, $ver), 'data' => $data]);
     }
     if ($action === 'live_verify') {   // the caller said the mobile number registered for the vehicle
         $p = (array)($all[$tok]['pending'] ?? []);
@@ -169,10 +171,10 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
             $all = read_json('live.json');
             $all[$tok]['verified'][] = $r['plate']; unset($all[$tok]['pending']);
             write_json('live.json', $all);
-            out(['status' => 'verified', 'text' => "The mobile number matches: the caller is verified as the owner of vehicle {$r['plate']}. Do not say the mobile number back.\n" . gps_facts($r, $why, true), 'fact' => gps_result_fact($r, true)]);
+            out(['status' => 'verified', 'text' => "The mobile number matches: the caller is verified as the owner of vehicle {$r['plate']}. Do not say the mobile number back.\n" . gps_facts($r, $why, true), 'fact' => gps_result_fact($r, true), 'data' => gps_data($r)]);
         }
-        if ($tries < 2) out(['status' => 'no match', 'text' => "The details could not be verified with that mobile number. $no Say that the number did not match and ask them, once more, to tell the mobile number that was given when the GPS was installed. When they tell it, check it with the PHONE tag again.", 'fact' => '']);
-        out(['status' => 'no match', 'text' => "The details could not be verified. $no Say politely that you could not verify the details, so for security you cannot share vehicle information on this call, and that our team will check and call them back. Do not ask for the number again.", 'fact' => '']);
+        if ($tries < 2) out(['status' => 'no match', 'text' => "The details could not be verified with that mobile number. $no Say that the number did not match and ask them, once more, to tell the mobile number that was given when the GPS was installed. When they tell it, check it with the PHONE tag again.", 'fact' => '', 'data' => ['state' => 'nomatch', 'final' => false]]);
+        out(['status' => 'no match', 'text' => "The details could not be verified. $no Say politely that you could not verify the details, so for security you cannot share vehicle information on this call, and that our team will check and call them back. Do not ask for the number again.", 'fact' => '', 'data' => ['state' => 'nomatch', 'final' => true]]);
     }    if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes
         if (empty($all[$tok]['trainer'])) fail('This call cannot teach her.', 403);
         $rule = clean_line($_POST['rule'] ?? '', 300);
