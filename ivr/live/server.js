@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 26;
+const VERSION = 27;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -56,7 +56,7 @@ async function tts(cfg, text, signal, lang) {
   const body = {
     text: speechText(text).slice(0, 2400), language_code: code,
     model: voice.includes('_') ? 'bulbul:v4-flash' : 'bulbul:v3',
-    speaker: voice, speech_sample_rate: cfg.pcm_rate || 24000, pace: 1.15,
+    speaker: voice, speech_sample_rate: cfg.pcm_rate || 24000, pace: 1.3,
   };
   if (!cfg.pcm_rate) body.output_audio_codec = 'mp3';   // browser gets MP3; a phone line gets the default WAV
   const post = () => fetch(S_HTTP + '/text-to-speech', {
