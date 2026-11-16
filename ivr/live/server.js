@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 24;
+const VERSION = 25;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -473,6 +473,10 @@ async function speechEnd(S) {
   S.replying = reply(S, hearMs, ack).catch((e) => log('reply crashed:', e.message));
 }
 
+// సర్, మేడమ్, sir, madam as a word of address (not inside another word such as ఆఫీసర్ or సర్వీస్), with the comma or space before it.
+const SIR_CORE = "(?<![\\u0C00-\\u0C7FA-Za-z])(?:సర్|సార్|మేడమ్|మేడం|sir|madam)(?![\\u0C00-\\u0C7FA-Za-z])";
+const SIR_WORD = new RegExp(SIR_CORE, 'i');
+const SIR_ALL = new RegExp('[\\s,]*' + SIR_CORE, 'gi');
 // She asked "is AP39BP0042 your number?" about a close match. The caller's answer is read here, not by her: left to her,
 // she kept asking the same question again and again even after a clear yes.
 const YES_WORDS = /అవును|ఔను|అవున|(^|\s)హా+(?=\s|$|[.,!?])|\byes\b|\byeah\b|\bya\b|correct|కరెక్ట్|అదే|అంతే|\bright\b|\bok\b|\bokay\b|ఓకే|సరే|हाँ|हां|सही/i;
@@ -536,7 +540,12 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
 
   // Start turning a sentence into speech straight away, but deliver the sentences in order.
   let held = '';
+  // Sir or madam: at most once in a reply, and not in two replies running. Her instructions say this, but she does not
+  // keep to it, so the extra ones are taken out here before she speaks.
+  let sirLeft = SIR_WORD.test(([...S.turns].reverse().find((t) => t.who === 'agent') || { text: '' }).text) ? 0 : 1;
   const speak = (sentence, keep) => {
+    const trimmed = sentence.replace(SIR_ALL, (m) => (sirLeft-- > 0 ? m : '')).replace(/^[\s,]+/, '').replace(/\s+([.,!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+    if (trimmed.replace(/[\s,.!?।]/g, '').length >= 2) sentence = trimmed;
     if (!queued && !keep) {
       if (ack) {                             // only when the quick "ok sir" clip was played: do not say it twice
         const whole = sentence;
