@@ -991,7 +991,7 @@ function gps_result_text(array $r, string $why = '', bool $ver = false): string 
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 29;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 30;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 

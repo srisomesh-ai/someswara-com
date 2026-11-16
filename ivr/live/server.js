@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 29;
+const VERSION = 30;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -486,6 +486,8 @@ async function speechEnd(S) {
 const SIR_CORE = "(?<![\\u0C00-\\u0C7FA-Za-z])(?:సర్|సార్|మేడమ్|మేడం|sir|madam)(?![\\u0C00-\\u0C7FA-Za-z])";
 const SIR_WORD = new RegExp(SIR_CORE, 'i');
 const SIR_ALL = new RegExp('[\\s,]*' + SIR_CORE, 'gi');
+const BOOK_ID_SAID = /booking\s*(id|i\.?d\.?|ఐడి|ఐడీ|number|నంబర్|నెంబర్)|బుకింగ్\s*(ఐడి|ఐడీ|నంబర్|నెంబర్)/i;
+const BOOK_DIGIT = /\d|\b(zero|one|two|three|four|five|six|seven|eight|nine)\b|సున్నా|ఒకటి|రెండు|మూడు|నాలుగు|ఐదు|ఆరు|ఏడు|ఎనిమిది|తొమ్మిది/i;
 // She asked "is AP39BP0042 your number?" about a close match. The caller's answer is read here, not by her: left to her,
 // she kept asking the same question again and again even after a clear yes.
 const YES_WORDS = /అవును|ఔను|అవున|(^|\s)హా+(?=\s|$|[.,!?])|\byes\b|\byeah\b|\bya\b|correct|కరెక్ట్|అదే|అంతే|\bright\b|\bok\b|\bokay\b|ఓకే|సరే|हाँ|हां|सही/i;
@@ -591,6 +593,7 @@ const LINE = {
   notInRecords: 'ఈ vehicle number మా records లో లేదు, అంటే GPS ఇంతకుముందే expire అయ్యి server నుండి remove అయింది. అదే GPS ని re-install చేసి add చేయడానికి ఒక వెయ్యి ఏడు వందల రూపాయలు అవుతుంది. ఆ GPS పని చేయకపోతే, కొత్త GPS మూడు వేల ఐదు వందల రూపాయలు. ఏది కావాలో చెప్తారా?',
   online: 'మీ vehicle GPS ఇప్పుడు online లో ఉంది సర్. App లో login అయ్యి మీ vehicle track చేసుకోవచ్చు. Bharat GPS కి call చేసినందుకు thank you.',
   afterService: 'సరే. ఒకసారి vehicle start చేసి కొంచెం దూరం నడిపి చూడండి. మీ complaint note చేసుకున్నాను, మా team మీకు call చేసి confirm చేస్తారు. Thank you.',
+  bookNoId: 'మీ booking note చేసుకున్నాను. Booking ID మా team call చేసి చెప్తారు.',
   noExpiry: 'ఈ vehicle expiry details నా దగ్గర లేవు. మా team check చేసి మీకు call చేస్తారు.',
 };
 const istDate = (ts) => new Date(ts * 1000 + 5.5 * 3600 * 1000);   // read with getUTC* below
@@ -711,8 +714,8 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   if (S.vehicle && S.vehicleNear) notes.push(S.vehicle);
   else if (freshResult) notes.push('Result of the vehicle check you asked for, from our GPS servers just now: ' + S.vehicle + ' Do not write the VEHICLE tag for this same number again.');
   else if (S.vehicleFact) notes.push('Background, already told to the caller, do not say it again: ' + S.vehicleFact + ' Now answer only what the caller has just said and move to the next step.');
-  const freshBook = S.book && !S.bookTold;
-  if (freshBook) notes.push('Result of the booking you asked for, from our task system just now: ' + S.book + ' Do not write the BOOK tag again.');
+  const freshBook = false;
+  if (S.book) notes.push(S.book + ' Do not write the BOOK tag again, and never say a booking ID in your own words.');
   const freshPlace = S.place && !S.placeTold;
   if (freshPlace) notes.push('Result of the place check you asked for, from the map just now: ' + S.place + ' Do not write the PLACE tag for this same place again.');
   else if (S.placeFact) notes.push('Background, already known, do not say it again: ' + S.placeFact);
@@ -740,6 +743,8 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   const speak = (sentence, keep) => {
     const trimmed = sentence.replace(SIR_ALL, (m) => (sirLeft-- > 0 ? m : '')).replace(/^[\s,]+/, '').replace(/\s+([.,!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
     if (trimmed.replace(/[\s,.!?।]/g, '').length >= 2) sentence = trimmed;
+    // A booking ID may only be the one our task system gave. Any other number she puts next to "booking ID" is replaced.
+    if (BOOK_ID_SAID.test(sentence) && BOOK_DIGIT.test(sentence)) sentence = S.bookSay ? 'మీ booking ID ' + S.bookSay + '.' : LINE.bookNoId;
     if (!queued && !keep) {
       if (ack) {                             // only when the quick "ok sir" clip was played: do not say it twice
         const whole = sentence;
@@ -864,19 +869,24 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   }
   // She has the name and place for a booking: the task is made now, so that she can tell the caller its number.
   const book = bookTag(raw);
+  let booked = false;
   if (book && !afterCheck && !S.book) {
     let made;
     try { made = await ivr('live_book', Object.assign({ token: S.token }, book), 25000); log('call', S.cfg.call_id, 'booking', made.status); }
-    catch (e) { log('booking failed:', e.message); made = { text: 'The booking could not be given a number just now. Say that the booking is noted and that our team will call them with the booking ID. Do not say any booking ID yourself.' }; }
-    S.book = made.text || ''; S.bookTold = false;
+    catch (e) { log('booking failed:', e.message); made = {}; }
+    // The booking ID is said in fixed words by the server. Left to the model, she once made up a number that did not exist.
+    S.bookSay = made.say ? String(made.say) : '';
+    S.book = S.bookSay ? 'The booking for this call is created and the caller has been told its booking ID, ' + S.bookSay + '.' : 'A booking was noted on this call but it has no booking ID. Our team will call the customer with it.';
+    S.bookTold = true;
+    if (g === S.gen && !S.closed) { booked = true; await sayLine(S, S.bookSay ? 'మీ booking create అయింది. మీ booking ID ' + S.bookSay + '. మా team మీకు call చేసి confirm చేస్తారు.' : LINE.bookNoId, 0, !S.bookSay); }
   }
-  if ((number || place || (phone && !number) || (book && S.book && !S.bookTold)) && !afterCheck && g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
+  if ((number || place || (phone && !number)) && !booked && !afterCheck && g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
 }
 
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false, flow: null, flowDone: false, book: '', bookTold: false };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false, flow: null, flowDone: false, book: '', bookTold: false, bookSay: '' };
 }
 
 function greet(S) {

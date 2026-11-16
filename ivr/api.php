@@ -174,7 +174,7 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         $text = 'The booking is created. The booking ID is ' . say_task_id($id) . '. Tell the customer the booking ID exactly in those words, once, slowly. Then say once that our team will call them to confirm the time. Do not promise that a technician will come today or at any time, and do not say whether their place is in our service area unless a place check said so.';
         $all = read_json('live.json'); $all[$tok]['booked'] = $text; write_json('live.json', $all);
         if ($c2 = call_find((string)$c['id'])) { $c2['task_id'] = $id; call_save($c2); }
-        out(['status' => 'booked ' . $id, 'text' => $text]);
+        out(['status' => 'booked ' . $id, 'text' => $text, 'id' => $id, 'say' => say_task_id($id)]);
     }
     if ($action === 'live_last4') {   // fixed-script flow: the caller said the last four digits of the vehicle number
         if (empty($all[$tok]['call_id'])) fail('Bad token.', 403);
