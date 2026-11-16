@@ -534,7 +534,10 @@ case 'gps_save':
 
 case 'gps_find':
     session_write_close();
-    out(gps_find((string)($_GET['q'] ?? '')));
+    $r = gps_find((string)($_GET['q'] ?? ''));
+    // The page only needs to show that a customer mobile is saved, not the whole number.
+    if (isset($r['phones'])) { $r['phone_ends'] = array_map(fn($n) => substr((string)$n, -4), (array)$r['phones']); unset($r['phones'], $r['lat'], $r['lng'], $r['speed']); }
+    out($r);
 
 case 'products_get':
     $n = import_site_products();   // the website's products are copied in once, the first time this page opens
