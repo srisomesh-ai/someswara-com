@@ -97,7 +97,7 @@ if ($action === 'phone_config') {
     out(['allowed' => $allowed, 'token' => $tok, 'greeting' => $greeting, 'call_id' => $call['id'], 'returning' => $memory !== ''] + $pay);
 }
 
-if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 'live_place'], true)) {
+if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 'live_place', 'live_verify'], true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') fail('Bad request.', 400);
     $tok = (string)($_POST['token'] ?? '');
     $all = read_json('live.json');
@@ -137,9 +137,43 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
             call_save($c);
         }
         $why = in_array($_POST['why'] ?? '', ['renew', 'trouble', 'missing'], true) ? $_POST['why'] : '';
-        out(['status' => $r['status'], 'near' => !empty($r['near']), 'text' => gps_result_text($r, $why), 'fact' => gps_result_fact($r)]);
+        // Anything beyond the expiry date (online or offline, last signal, location) is told only to the owner. The
+        // owner is known by the mobile number saved for the vehicle: the number they are calling from, or one they say.
+        $found = $r['status'] === 'found' && empty($r['near']);
+        $key = $found ? $r['plate'] : (string)($r['number'] ?? '');
+        $all = read_json('live.json');
+        $ver = $found && (in_array($key, (array)($all[$tok]['verified'] ?? []), true) || (($f = phone10((string)(($c ?: [])['from'] ?? ''))) !== '' && in_array($f, $r['phones'], true)));
+        if ($ver && !in_array($key, (array)($all[$tok]['verified'] ?? []), true)) { $all[$tok]['verified'][] = $key; write_json('live.json', $all); }
+        // A complaint or a missing vehicle: she may not even say whether the number is in our records until verified.
+        if (!$ver && in_array($why, ['trouble', 'missing'], true) && in_array($r['status'], ['found', 'none'], true) && empty($r['near'])) {
+            $all[$tok]['pending'] = ['number' => (string)($r['number'] ?? ''), 'why' => $why, 'tries' => 0];
+            write_json('live.json', $all);
+            out(['status' => 'verify', 'near' => false, 'text' => 'The check is done. ' . VERIFY_ASK, 'fact' => '']);
+        }
+        if (!$ver && $found) { $all[$tok]['pending'] = ['number' => (string)$r['number'], 'why' => $why, 'tries' => 0]; write_json('live.json', $all); }
+        out(['status' => $r['status'] . ($ver ? ' verified' : ''), 'near' => !empty($r['near']), 'text' => gps_result_text($r, $why, $ver), 'fact' => gps_result_fact($r, $ver)]);
     }
-    if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes
+    if ($action === 'live_verify') {   // the caller said the mobile number registered for the vehicle
+        $p = (array)($all[$tok]['pending'] ?? []);
+        $no = 'Do not tell the caller anything about the vehicle, not even whether it is in our records.';
+        if (empty($p['number'])) out(['status' => 'nothing', 'text' => "No vehicle is waiting to be verified. $no Ask for the full vehicle number first.", 'fact' => '']);
+        $tries = (int)($p['tries'] ?? 0) + 1;
+        $all[$tok]['pending']['tries'] = $tries;
+        write_json('live.json', $all);
+        session_write_close();
+        $said = phone10((string)($_POST['phone'] ?? ''));
+        $r = $tries <= 3 ? gps_find((string)$p['number']) : ['status' => 'none'];
+        $why = in_array($_POST['why'] ?? '', ['renew', 'trouble', 'missing'], true) ? $_POST['why'] : (string)($p['why'] ?? '');
+        if ($why === 'renew') $why = (string)($p['why'] ?? '') ?: 'trouble';   // they were asked to verify, so it is not about validity only
+        if ($said !== '' && $r['status'] === 'found' && empty($r['near']) && in_array($said, $r['phones'], true)) {
+            $all = read_json('live.json');
+            $all[$tok]['verified'][] = $r['plate']; unset($all[$tok]['pending']);
+            write_json('live.json', $all);
+            out(['status' => 'verified', 'text' => "The mobile number matches: the caller is verified as the owner of vehicle {$r['plate']}. Do not say the mobile number back.\n" . gps_facts($r, $why, true), 'fact' => gps_result_fact($r, true)]);
+        }
+        if ($tries < 2) out(['status' => 'no match', 'text' => "The details could not be verified with that mobile number. $no Say that the number did not match and ask them, once more, to tell the mobile number that was given when the GPS was installed. When they tell it, check it with the PHONE tag again.", 'fact' => '']);
+        out(['status' => 'no match', 'text' => "The details could not be verified. $no Say politely that you could not verify the details, so for security you cannot share vehicle information on this call, and that our team will check and call them back. Do not ask for the number again.", 'fact' => '']);
+    }    if ($action === 'live_rule') {   // she was taught something on a call and the owner said yes
         if (empty($all[$tok]['trainer'])) fail('This call cannot teach her.', 403);
         $rule = clean_line($_POST['rule'] ?? '', 300);
         if ($rule === '') fail('Empty rule.');

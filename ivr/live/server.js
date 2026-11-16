@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 22;
+const VERSION = 23;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -145,11 +145,17 @@ async function chatOnce(cfg, messages, signal) {
 // Whatever brackets, colon or hidden characters the model types, a tag must never be heard or shown.
 const plain = (raw) => raw.normalize('NFKC').replace(/[​-‍⁠﻿\\]/g, '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
 const cleanReply = (raw) => plain(raw).replace(/[\[【〔〚⟦]{2}[\s\S]*?([\]】〕〛⟧]{2}|$)/g, '')
-  .replace(/[\[【〔〚⟦(]\s*(RULE|VEHICLE|PLACE)\b[\s\S]*?([\]】〕〛⟧)]|$)/gi, '').replace(/\S*\b(VEHICLE|RULE|PLACE)\s*[:=]\s*[A-Za-z0-9 .,-]*[^\s\w.?!,]*/g, '').replace(/[*#`_]/g, '');
+  .replace(/[\[【〔〚⟦(]\s*(RULE|VEHICLE|PLACE|PHONE)\b[\s\S]*?([\]】〕〛⟧)]|$)/gi, '').replace(/\S*\b(VEHICLE|RULE|PLACE|PHONE)\s*[:=]\s*[A-Za-z0-9 .,+-]*[^\s\w.?!,]*/g, '').replace(/[*#`_]/g, '');
 // The place inside her "is this place in our service area" tag.
 function placeTag(raw) {
   const m = plain(raw).match(/\bPLACE\s*[:=]\s*([^\]\n】〕〛⟧)]{2,80})/);
   return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+}
+// The mobile number inside her "verify this caller" tag: the last ten digits.
+function phoneTag(raw) {
+  const m = plain(raw).match(/\bPHONE\s*[:=]\s*([0-9 +.-]{10,20})/);
+  const d = m ? m[1].replace(/\D/g, '') : '';
+  return d.length >= 10 ? d.slice(-10) : '';
 }
 // The vehicle number inside her "check this vehicle" tag. VEHICLE in capitals followed by a colon is only ever the tag.
 function vehicleTag(raw) {
@@ -328,7 +334,7 @@ async function recServe(req, res, url) {
 
 // Why an existing customer is calling, from their own words: 'trouble' (GPS not working), 'renew' (validity, renewal),
 // or '' when it is not clear. She is then given only that part of what the GPS server shows.
-const TROUBLE_WORDS = /offline|ఆఫ్\s?లైన్|not working|పని\s?చేయ|work అవ్వ|రావడం లేదు|రావట్లేదు|చూపించ(డం|ట్లే)|complaint|కంప్లైంట్|problem|ప్రాబ్లం|काम नहीं|बंद है|ऑफलाइन|शिकायत|दिख नहीं/i;
+const TROUBLE_WORDS = /ఎక్కడ\s?ఉం|where is|location|లొకేషన్|online|ఆన్\s?లైన్|status|స్టేటస్|offline|ఆఫ్\s?లైన్|not working|పని\s?చేయ|work అవ్వ|రావడం లేదు|రావట్లేదు|చూపించ(డం|ట్లే)|complaint|కంప్లైంట్|problem|ప్రాబ్లం|काम नहीं|बंद है|ऑफलाइन|शिकायत|दिख नहीं/i;
 const RENEW_WORDS = /renew|రెన్యూ|రిన్యూ|రెన్యువల్|expir|validity|వాలిడిటీ|licen[sc]e|లైసెన్స్|recharge|రీఛార్జ్|రీచార్జ్|नवीनीकरण|रिन्यू|रिचार्ज|वैलिडिटी/i;
 // The vehicle itself is missing or stolen. This comes before everything else.
 const MISSING_WORDS = /miss(ing)?\s?(అయ|అయి|ayy|ayi)|మిస్\s?(అయ|అయి)|missing|stolen|theft|దొంగ|చోరీ|పోయింది|ఎత్తుకెళ్ల|चोरी|गुम|गायब|खो गय/i;
@@ -617,7 +623,15 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
     }
     S.placeTold = false;
   }
-  if ((number || place) && !afterCheck && g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
+  // She asked the caller for the mobile number registered for the vehicle: only a match lets her tell its status and place.
+  const phone = phoneTag(raw);
+  if (phone && !number && !afterCheck) {
+    let found;
+    try { found = await ivr('live_verify', { token: S.token, phone, why: whyCalling(S) }, 22000); log('call', S.cfg.call_id, 'caller check', found.status); }
+    catch (e) { log('caller check failed:', e.message); found = { text: 'The mobile number could not be checked just now. Do not tell the caller anything about the vehicle. Say you could not verify at the moment and that the team will call them back.' }; }
+    S.vehicle = found.text || ''; S.vehicleFact = found.fact || ''; S.vehicleNear = false; S.vehicleTold = false;
+  }
+  if ((number || place || (phone && !number)) && !afterCheck && g === S.gen && !S.closed) await reply(S, 0, '', true);   // if the caller has started talking, the result is used in the next reply
 }
 
 function newState(ws, token, cfg, rate) {

@@ -121,7 +121,7 @@ Existing customer whose GPS has already stopped because it was not renewed for a
 
 Always:
 - When a caller tells you something bad, such as a missing or stolen vehicle, an accident, or a problem that has troubled them for days, first say one plain, simple apology and only then help: in English "I am sorry to hear that, sir", in Telugu "Sorry to hear that సర్", in Hindi "Sorry to hear that सर". No అయ్యో, no "చాలా బాధగా ఉంది", no dramatic or emotional words. Say the apology once on the call and never again.
-- A caller who says the vehicle itself is missing, lost or stolen is an existing customer in an emergency: say the simple apology, ask the vehicle number and check it. After the check, say only what the result tells you to say. Never tell the caller whether the GPS is online or offline, never say the vehicle is safe, and never tell them to look at the location in the app or anywhere else. Never offer products, prices, renewal or plans on such a call, never ask whether they need any other help, and do not suggest any other way.
+- A caller who says the vehicle itself is missing, lost or stolen is an existing customer in an emergency: say the simple apology, ask the vehicle number and check it. After the check, do exactly what the result tells you. It will usually tell you to verify the caller first. Until a result says the caller is verified, never tell whether the GPS is online or offline or where the vehicle is, and never say the vehicle is safe. Never offer products, prices, renewal or plans on such a call, never ask whether they need any other help, and do not suggest any other way.
 - Never invent a feature, a price, a charge, a promise, a website, a link, a login method or an app feature. Say only what is in these instructions or in a check result. For any charge you were not told, say the team will confirm it.
 {{PLACE}}- Say a thing once. Never say again what you said in your previous reply, and do not repeat the price, subscription, warranty or free installation later in the call unless they ask. When the caller answers your question, accept the answer and move to the next step. If you did not understand, ask only about the part you missed, in different words.
 - A caller who calls you madam or sir is addressing you. It tells you nothing about them. Until you are told whether the caller is a man or a woman, the word for them is sir.
@@ -193,7 +193,7 @@ const MAIL_TO = [
 ];
 const MAIL_COPY = 'admin@bharatgps.com';
 const MAIL_ON = false;   // the owner switched call emails off during testing (14 Nov 2026); true sends them again
-const VEHICLE_CHECK = "- You need the full vehicle number: two state letters, two digits, one to three letters, then four digits, like AP39BP0042. If the caller gives only part of it, such as only the last four digits, do not check: ask them for the full number starting with the state letters.\n- Callers often say the number in pieces, over two or three turns, for example AP 31 DZ and then 5531. Join the pieces in the order they were said. As soon as the joined pieces make a full number, check that number at once. Never ask for the full number again when the pieces already said make one.\n- As soon as they have said the full number, do not repeat it back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the full vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n- Never tell the caller an expiry date, a validity, or whether the GPS is online unless a check result gave it to you. If no result has come, say you could not check just now and that the team will call them. Never guess.\n";
+const VEHICLE_CHECK = "- You need the full vehicle number: two state letters, two digits, one to three letters, then four digits, like AP39BP0042. If the caller gives only part of it, such as only the last four digits, do not check: ask them for the full number starting with the state letters.\n- Callers often say the number in pieces, over two or three turns, for example AP 31 DZ and then 5531. Join the pieces in the order they were said. As soon as the joined pieces make a full number, check that number at once. Never ask for the full number again when the pieces already said make one.\n- As soon as they have said the full number, do not repeat it back and do not ask them to confirm it. Say only a few words that you are checking, like one minute, I will check, and end that same reply with the tag [[VEHICLE: NUMBER]], where NUMBER is the full vehicle number in capital English letters and digits with no spaces, for example [[VEHICLE: AP31TX4521]]. Use plain square brackets. The tag is never spoken. Do not say or ask anything else in that reply. The result of the check then comes to you: tell the caller the part that matches why they called, and follow it. Write the tag only once for each number.\n- Never tell the caller an expiry date, a validity, or whether the GPS is online unless a check result gave it to you. If no result has come, say you could not check just now and that the team will call them. Never guess.\n- Some check results tell you to verify the caller first. Then ask only for the mobile number registered with us for that vehicle. When they have told a ten-digit mobile number, do not repeat it back: say only a few words that you are checking and end that same reply with the tag [[PHONE: NUMBER]], where NUMBER is the ten digits with no spaces, for example [[PHONE: 9876543210]]. The tag is never spoken. Until the result comes and says the caller is verified, tell them nothing about the vehicle: not whether it is in our records, not its status, not its location. Never tell the caller which mobile number is registered, not even a part of it.\n";
 const TROUBLE_ASK = "- Do not sell anything. Say sorry for the trouble, then ask these one at a time: since when it is offline; whether any service or repair work was done on the vehicle in recent days, or the battery was removed or changed; the vehicle number; their name; and where the vehicle is now.\n- Then say a technician will be assigned and our team will call them to confirm the visit time.\n";
 const TROUBLE_CHECK = "- Do not sell anything. Say sorry for the trouble in a few words and ask only the vehicle number. Do not ask since when it is offline; our server shows that.\n{{VEHICLE}}- The result tells you when the GPS was last online and exactly what to do next: follow it. Do not promise a technician unless the result says so.\n";
 const PLACE_CHECK = "- Service area: whenever the caller says the town, village or area where the vehicle is, or where they want the installation, check that place before you promise anything. Say a few words that you are checking and end that same reply with the tag [[PLACE: NAME]], where NAME is the place in English letters, with the town or district too if they said it, for example [[PLACE: Gajuwaka, Visakhapatnam]]. The tag is never spoken. The result then comes to you: follow it. Until a place has been checked and found inside our service area, do not promise a technician visit, an installation or free installation there. Write the tag only once for each place.\n";
@@ -665,7 +665,7 @@ function plate_key(string $t): string { return preg_replace('~[^A-Z0-9]~', '', s
 // A small copy of every server's vehicle list (number, expiry, last signal), refreshed when older than five minutes.
 function gps_index(bool $fresh = false): array {
     $c = read_json('gps.json');
-    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 300 && ($c['v'] ?? 0) === 2) return $c;
+    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 300 && ($c['v'] ?? 0) === 3) return $c;
     $keys = array_filter(gps_keys());
     $multi = curl_multi_init(); $hs = [];
     foreach ($keys as $id => $key) {
@@ -675,7 +675,7 @@ function gps_index(bool $fresh = false): array {
     }
     do { curl_multi_exec($multi, $run); if ($run) curl_multi_select($multi, 1.0); } while ($run > 0);
     $old = is_array($c) ? $c : [];
-    $new = ['at' => time(), 'v' => 2, 'servers' => [], 'dev' => []];
+    $new = ['at' => time(), 'v' => 3, 'servers' => [], 'dev' => []];
     foreach (GPS_SERVERS as $id => $host) {
         if (!isset($hs[$id])) { $new['servers'][$id] = ['state' => 'nokey']; continue; }
         $body = curl_multi_getcontent($hs[$id]); $code = curl_getinfo($hs[$id], CURLINFO_HTTP_CODE);
@@ -695,7 +695,8 @@ function gps_index(bool $fresh = false): array {
             $exp = '';
             foreach (['expiration_date', 'sim_expiration_date'] as $f) { $v = substr((string)($dd[$f] ?? ''), 0, 10); if (preg_match('~^[12]\d{3}-\d\d-\d\d$~', $v)) { $exp = $v; break; } }
             $name = clean_line($dv['name'] ?? '', 80);
-            $new['dev'][] = [$id, plate_key($name), plate_key((string)($dd['plate_number'] ?? '')), $name, $exp, clean_line((string)($dv['time'] ?? ($dd['time'] ?? ($dv['timestamp'] ?? ''))), 30), strtolower((string)($dv['online'] ?? ''))];
+            $new['dev'][] = [$id, plate_key($name), plate_key((string)($dd['plate_number'] ?? '')), $name, $exp, clean_line((string)($dv['time'] ?? ($dd['time'] ?? ($dv['timestamp'] ?? ''))), 30), strtolower((string)($dv['online'] ?? '')),
+                gps_phones($dv), round((float)($dv['lat'] ?? 0), 5), round((float)($dv['lng'] ?? 0), 5), (int)round((float)($dv['speed'] ?? 0))];
             $n++;
         }
         $new['servers'][$id] = ['state' => 'ok', 'count' => $n];
@@ -703,6 +704,55 @@ function gps_index(bool $fresh = false): array {
     curl_multi_close($multi);
     write_json('gps.json', $new);
     return $new;
+}
+
+// The customer's mobile numbers saved on a vehicle on the GPS server (in the owner, notes, name or user fields).
+// The SIM number of the GPS device itself and the IMEI are not customer numbers and are left out.
+function gps_phones(array $dv): array {
+    $texts = [(string)($dv['name'] ?? '')];
+    $skip = ['imei', 'sim_number', 'msisdn', 'iccid', 'vin', 'lat', 'lng', 'latitude', 'longitude', 'time', 'timestamp', 'id', 'traccar_device_id'];
+    foreach ((array)($dv['device_data'] ?? []) as $k => $v) {
+        if (in_array(strtolower((string)$k), $skip, true)) continue;
+        if (is_string($v) || is_int($v)) $texts[] = (string)$v;
+        elseif (is_array($v)) foreach ($v as $k2 => $v2) {
+            if (is_string($v2) || is_int($v2)) { if (!in_array(strtolower((string)$k2), $skip, true)) $texts[] = (string)$v2; }
+            elseif (is_array($v2)) foreach ($v2 as $k3 => $v3) if ((is_string($v3) || is_int($v3)) && !in_array(strtolower((string)$k3), $skip, true)) $texts[] = (string)$v3;
+        }
+    }
+    $out = [];
+    foreach ($texts as $t) if (preg_match_all('~(?<!\d)(?:\+?91[\s-]?|0)?([6-9]\d{9})(?!\d)~', $t, $m)) foreach ($m[1] as $n) $out[$n] = 1;
+    return array_slice(array_keys($out), 0, 8);
+}
+function phone10(string $n): string { $d = preg_replace('~\D~', '', $n); return strlen($d) >= 10 ? substr($d, -10) : ''; }
+
+// The name of the place at a point on the map, for telling a verified caller where the vehicle is.
+function geo_reverse(float $lat, float $lng): string {
+    if (abs($lat) < 0.01 && abs($lng) < 0.01) return '';
+    $k = 'rev|' . round($lat, 3) . ',' . round($lng, 3);
+    $cache = read_json('geo.json');
+    if (isset($cache[$k]) && ($cache[$k]['at'] ?? 0) > time() - 90 * 86400) return (string)$cache[$k]['r'];
+    $get = function (string $url) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 6, CURLOPT_USERAGENT => 'BharatGPS-call-agent/1.0 (someswara.com/ivr)']);
+        $b = curl_exec($ch); curl_close($ch);
+        return is_string($b) ? json_decode($b, true) : null;
+    };
+    $label = '';
+    if (maps_key() !== '') {
+        $j = $get('https://maps.googleapis.com/maps/api/geocode/json?language=en&latlng=' . $lat . ',' . $lng . '&key=' . rawurlencode(maps_key()));
+        if (is_array($j) && ($j['status'] ?? '') === 'OK') $label = (string)($j['results'][0]['formatted_address'] ?? '');
+    }
+    if ($label === '') {
+        $j = $get('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=en&lat=' . $lat . '&lon=' . $lng);
+        if (is_array($j)) $label = (string)($j['display_name'] ?? '');
+    }
+    if ($label === '') return '';
+    $parts = array_values(array_filter(array_map('trim', explode(',', preg_replace('~,\s*India$~', '', $label))), fn($x) => $x !== '' && !preg_match('~^\d{6}$|^[A-Z0-9]{4}\+[A-Z0-9]{2,3}~', $x)));
+    $label = clean_line(implode(', ', array_slice($parts, 0, 3)), 120);
+    $cache[$k] = ['at' => time(), 'r' => $label];
+    if (count($cache) > 400) $cache = array_slice($cache, -300, null, true);
+    write_json('geo.json', $cache);
+    return $label;
 }
 
 // Find one vehicle number on the servers. status: found, none, many (several vehicles match), off (no key yet), down.
@@ -746,7 +796,8 @@ function gps_find(string $number): array {
     $plate = $q;
     foreach ([$hit[0][2], $hit[0][1]] as $k) if ($k !== '' && ($pp = plate_parts($k)) && preg_match('~[A-Z]{2}0?' . $pp[1] . $pp[2] . '0*' . $pp[3] . '(?!\d)~', $k, $pm)) { $plate = $pm[0]; break; }
     $ts = gps_time($last);
-    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near, 'online' => $online, 'plate' => $plate];
+    $r = ['status' => 'found', 'number' => $q, 'name' => $name, 'server' => $id, 'host' => GPS_SERVERS[$id], 'expiry' => $exp, 'last' => $last, 'near' => $near, 'online' => $online, 'plate' => $plate,
+        'phones' => (array)($hit[0][7] ?? []), 'lat' => (float)($hit[0][8] ?? 0), 'lng' => (float)($hit[0][9] ?? 0), 'speed' => (int)($hit[0][10] ?? 0)];
     if ($ts) { $r['last_ts'] = $ts; $r['off_hours'] = max(0, (int)floor((time() - $ts) / 3600)); $r['last'] = date('j M Y, g:i A', $ts); }
     if ($exp !== '') {
         $r['days'] = (int)(new DateTime('today'))->diff(new DateTime($exp))->format('%r%a');
@@ -775,7 +826,17 @@ function gps_time(string $t): int {
 
 // What the servers say about one found vehicle, with what she should do for each kind of call.
 // $why: 'renew' or 'trouble' when the caller's words made the reason clear; then only that part is given to her.
-function gps_facts(array $r, string $why = ''): string {
+// $ver: the caller is verified as the owner (their mobile number matches the one saved for this vehicle). Only then
+// may she say whether the GPS is online, when it was last online, or where the vehicle is. The expiry date is not secret.
+const VERIFY_ASK = "You are not allowed to tell the caller anything about this vehicle yet, not even whether it is in our records or not. Say in a few polite words that for security you need to verify, and ask them to tell the mobile number registered with us for this vehicle. Say nothing else in this reply. When they tell a ten-digit mobile number, follow the rule for the PHONE tag.";
+const VERIFY_ASK_STATUS = "you must verify the caller first. Until a result says they are verified, do not say whether the GPS is online or offline, when it was last online, or where the vehicle is. If they ask for any of these, say in a few polite words that for security you need to verify, and ask them to tell the mobile number registered with us for this vehicle. When they tell a ten-digit mobile number, follow the rule for the PHONE tag.";
+function gps_where(array $r): string {
+    $live = !empty($r['online']);
+    $place = geo_reverse((float)($r['lat'] ?? 0), (float)($r['lng'] ?? 0));
+    if ($place === '') return 'Location: the place name could not be read just now. If they ask where the vehicle is, say our team will check the location and call them.';
+    return "Location: the vehicle's " . ($live ? 'location right now is' : 'last known location, from when the GPS was last online, is') . " near $place" . ($live ? ((int)($r['speed'] ?? 0) > 3 ? ', and it is moving at about ' . (int)$r['speed'] . ' kilometres per hour' : ', and it is not moving') : '') . '. Tell them this place when they ask where the vehicle is.';
+}
+function gps_facts(array $r, string $why = '', bool $ver = false): string {
     // validity
     if (($r['expiry'] ?? '') === '') $valid = 'Validity: no expiry date is recorded. If they ask about validity or renewal, say the team will confirm the expiry date.';
     else {
@@ -801,30 +862,32 @@ function gps_facts(array $r, string $why = ''): string {
         if (($r['expiry'] ?? '') !== '' && $r['days'] < 0) $sig .= ' Also tell them the subscription has expired, which is often why a GPS goes offline, and that it needs renewal to work again.';
     }
     $live = !empty($r['online']) || ($h !== null && $h < 1);
-    // The caller says the vehicle itself is missing or stolen. Sympathy first, then only what helps to find it.
+    // The caller says the vehicle itself is missing or stolen, and is verified as the owner: tell them what helps to find it.
     if ($why === 'missing') {
-        return "The caller's vehicle is missing and vehicle {$r['plate']} is in our records. You have already said sorry on this call: do not say sorry again. Say only this, in one or two short sentences: you have noted their vehicle number and our team will call them straight away to help. Do not say whether the GPS is online or offline, do not say the vehicle is safe, and do not tell them to look at the app or the location. Do not talk about expiry dates, renewal or plans, and do not ask what else they need.";
+        $status = $live ? 'the GPS is online right now' : ($h === null ? 'the GPS is offline and its last online time is not known' : "the GPS is offline; it was last online $ago, on {$r['last']}");
+        return "The caller is verified and their vehicle {$r['plate']} is missing. You have already said sorry on this call: do not say sorry again. Status: $status.\n" . gps_where($r)
+            . "\nTell them, in two short sentences, the status and the place. Then say our team will call them straight away to help trace it. Do not talk about expiry dates, renewal, plans or prices, and do not ask what else they need.";
     }
+    $more = $ver ? "\n" . gps_where($r) : '';
     // No expiry date on the server (a test device, a technician's device, or unlimited validity).
     if (($r['expiry'] ?? '') === '') {
-        $status = $live ? 'the GPS is online right now' : ($h === null ? 'the GPS is offline and its last online time is not known' : "the GPS is offline, last online $ago, on {$r['last']}");
-        if ($why === 'renew') return "Status: $status. This vehicle has no expiry date or installation date recorded on our server.\n"
-            . "Tell the caller, in this order: first that the vehicle is on our server and whether its GPS is online or offline now; then that you do not have the expiry details for this vehicle, so you will ask our team to call them. Then ask whether they want to renew or need anything else for it. Do not guess an expiry date and do not offer plans unless they say they want to renew.";
-        if ($why === 'trouble') return $sig . "\nTell the caller only this. Do not talk about expiry dates, renewal or plans.";
-        return "Status: $status.\nTell the caller that the vehicle is on our server and whether its GPS is online or offline now, then ask how you can help with it. Do not bring up expiry dates, renewal or plans yourself. Only if they ask about validity or renewal: say you do not have the expiry details for this vehicle and that our team will call them.";
+        if ($why === 'renew') return "This vehicle has no expiry date recorded on our server.\nTell the caller that you do not have the expiry details for this vehicle, so our team will check and call them. Then ask whether they want to renew. Do not guess an expiry date, and do not say whether the GPS is online or offline.";
+        if ($ver) return $sig . $more . "\nTell the caller only what matches why they called. Do not talk about expiry dates, renewal or plans.";
+        return "This vehicle has no expiry date recorded on our server. If they ask about validity or renewal, say our team will confirm the expiry date and call them.\nFor anything else about this vehicle, " . VERIFY_ASK_STATUS;
     }
-    if ($why === 'renew') return $valid . "\nTell the caller only this. Do not talk about the app or the signal.";
-    if ($why === 'trouble') return $sig . "\nTell the caller only this. Do not offer renewal or plans unless it says the subscription has expired.";
-    return $valid . "\n" . $sig . "\nUse only the one part that matches why they called. Never say both parts in one reply.";
+    if ($why === 'renew') return $valid . "\nTell the caller only this. Do not talk about the app, the signal or the location.";
+    if ($why === 'trouble') return $sig . $more . "\nTell the caller only what matches why they called. Do not offer renewal or plans unless it says the subscription has expired.";
+    if ($ver) return $valid . "\n" . $sig . $more . "\nUse only the part that matches why they called. Never say all of it in one reply.";
+    return $valid . "\nYou may tell the validity. For the GPS status, whether it is online, or where the vehicle is, " . VERIFY_ASK_STATUS;
 }
 
 // The same result as bare facts with no instructions, kept as background once she has told the caller.
-function gps_result_fact(array $r): string {
+function gps_result_fact(array $r, bool $ver = false): string {
     $n = $r['number'] ?? '';
     if ($r['status'] === 'found' && empty($r['near'])) {
         $f = "vehicle $n is on our server";
         if (($r['expiry'] ?? '') !== '') $f .= ", expiry date {$r['expiry_text']}" . ($r['days'] < 0 ? ' (already expired)' : " ({$r['days']} days left)");
-        $f .= !empty($r['online']) ? ', GPS online now' : (($r['last_ts'] ?? 0) ? ", GPS last online {$r['last']}" : '');
+        if ($ver) $f .= ', the caller is verified as the owner' . (!empty($r['online']) ? ', GPS online now' : (($r['last_ts'] ?? 0) ? ", GPS last online {$r['last']}" : ''));
         return $f . '.';
     }
     if ($r['status'] === 'none') return "vehicle $n is not in our records (expired earlier and removed). You offered re-adding the same GPS for 1700 rupees or a new GPS for 3500 rupees.";
@@ -832,12 +895,12 @@ function gps_result_fact(array $r): string {
 }
 
 // The result in words, for her.
-function gps_result_text(array $r, string $why = ''): string {
+function gps_result_text(array $r, string $why = '', bool $ver = false): string {
     $n = $r['number'] ?? '';
     switch ($r['status']) {
         case 'found':
             if (!empty($r['near'])) return "$n itself is not on our server, but there is one very close number: {$r['plate']}. Ask the caller whether {$r['plate']} is their vehicle number, saying it letter by letter, and say nothing else in this reply. You do not know its expiry date or status yet, so do not say any. If their answer means yes, check {$r['plate']} the usual way: say you are checking and end the reply with [[VEHICLE: {$r['plate']}]]. If it means no, ask them to say the full number once more.";
-            return "Vehicle $n is found on our server.\n" . gps_facts($r, $why);
+            return "Vehicle $n is found on our server.\n" . gps_facts($r, $why, $ver);
         case 'many': return "More than one vehicle matches $n. Ask the caller to say the full vehicle number once more, slowly.";
         case 'down': return "The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment, note what they need, and say the team will call them.";
         default:
@@ -849,7 +912,7 @@ function gps_result_text(array $r, string $why = ''): string {
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 22;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 23;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
