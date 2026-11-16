@@ -140,6 +140,15 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         // Anything beyond the expiry date (online or offline, last signal, location) is told only to the owner. The
         // owner is known by the mobile number saved for the vehicle: the number they are calling from, or one they say.
         $found = $r['status'] === 'found' && empty($r['near']);
+        // Mobile check paused: a validity or renewal call gets the expiry date only; nothing else about the vehicle is given out.
+        if (!VERIFY_ON) {
+            if (!empty($_POST['script']) && $r['status'] === 'none') out(['status' => 'none', 'near' => false, 'text' => '', 'fact' => '', 'data' => ['state' => 'none']]);
+            if ($found && $why !== 'renew' && $why !== '') out(['status' => 'found, status not shared', 'near' => false, 'plate' => '', 'text' => "The check is done. " . NO_STATUS . ($why === 'missing' ? ' straight away.' : '.'), 'fact' => '', 'data' => ['state' => 'noted']]);
+            if (!$found && $r['status'] === 'none' && in_array($why, ['trouble', 'missing'], true)) out(['status' => 'none, not shared', 'near' => false, 'plate' => '', 'text' => "The check is done. " . NO_STATUS . ($why === 'missing' ? ' straight away.' : '.'), 'fact' => '', 'data' => ['state' => 'noted']]);
+            $data = $found ? ['state' => 'ok', 'plate' => (string)$r['plate'], 'online' => false, 'off_hours' => null, 'last_ts' => 0, 'expiry' => (string)($r['expiry'] ?? ''), 'days' => ($r['expiry'] ?? '') !== '' ? (int)$r['days'] : null]
+                : (!empty($r['near']) ? ['state' => 'near', 'plate' => (string)$r['plate']] : ['state' => $r['status'] === 'none' ? 'none' : 'down']);
+            out(['status' => $r['status'], 'near' => !empty($r['near']), 'plate' => !empty($r['near']) ? (string)$r['plate'] : '', 'text' => gps_result_text($r, $why, false), 'fact' => gps_result_fact($r, false), 'data' => $data]);
+        }
         $direct = false;
         if ($found && !$r['phones']) { $r['phones'] = gps_more_phones($r); $direct = (bool)$r['phones']; }   // not in the list: read the vehicle's own page
         $key = $found ? $r['plate'] : (string)($r['number'] ?? '');

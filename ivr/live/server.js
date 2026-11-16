@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 32;
+const VERSION = 33;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -519,6 +519,7 @@ async function nearAnswer(S) {
 // Two requests are scripted: "my GPS is not working" and "I want to renew". Steps: vehicle number, say it back to
 // confirm, check the servers, match the registered mobile number, then the answer for that request.
 const SCRIPT_ON = true;
+const TROUBLE_ON = false;   // paused by the owner on 16 Nov 2026: complaints are only noted, the team calls back
 const START_TROUBLE = /not working|పని\s?చేయ(డం|ట)|work\s?అవ్వ|work\s?కావ|offline|ఆఫ్\s?లైన్|రావడం లేదు|రావట్లేదు|చూపించ(డం|ట్లే)|కనిపించ(డం|ట్లే)|complaint|కంప్లైంట్/i;
 const START_RENEW = /renew|రెన్యూ|రిన్యూ|రెన్యువల్|recharge|రీఛార్జ్|రీచార్జ్|validity|వాలిడిటీ|licen[sc]e|లైసెన్స్|expir|subscri|సబ్‌?స్క్రి/i;
 const TE_MONTHS = ['జనవరి', 'ఫిబ్రవరి', 'మార్చి', 'ఏప్రిల్', 'మే', 'జూన్', 'జూలై', 'ఆగస్టు', 'సెప్టెంబర్', 'అక్టోబర్', 'నవంబర్', 'డిసెంబర్'];
@@ -592,6 +593,8 @@ const LINE = {
   notInRecords: 'ఈ vehicle number మా records లో లేదు, అంటే GPS ఇంతకుముందే expire అయ్యి server నుండి remove అయింది. అదే GPS ని re-install చేసి add చేయడానికి ఒక వెయ్యి ఏడు వందల రూపాయలు అవుతుంది. ఆ GPS పని చేయకపోతే, కొత్త GPS మూడు వేల ఐదు వందల రూపాయలు. ఏది కావాలో చెప్తారా?',
   online: 'మీ vehicle GPS ఇప్పుడు online లో ఉంది సర్. App లో login అయ్యి మీ vehicle track చేసుకోవచ్చు. Bharat GPS కి call చేసినందుకు thank you.',
   afterService: 'సరే. ఒకసారి vehicle start చేసి కొంచెం దూరం నడిపి చూడండి. మీ complaint note చేసుకున్నాను, మా team మీకు call చేసి confirm చేస్తారు. Thank you.',
+  complaintAsk: 'Sorry for the trouble సర్. మీ full vehicle number చెప్తారా?',
+  complaintNoted: 'మీ complaint note చేసుకున్నాను. మా team మీకు call చేస్తారు. Thank you.',
   bookWait: 'ఒక్క నిమిషం, booking create చేస్తున్నాను.',
   bookNoId: 'మీ booking note చేసుకున్నాను. Booking ID మా team call చేసి చెప్తారు.',
   noExpiry: 'ఈ vehicle expiry details నా దగ్గర లేవు. మా team check చేసి మీకు call చేస్తారు.',
@@ -627,12 +630,26 @@ async function scriptTurn(S, text, hearMs) {
     log('call', S.cfg.call_id, 'script:', S.flow.kind);
     S.flow.step = 'plate';
     const p = plateIn(text);
+    // Troubleshooting on the call is paused: a complaint is only noted, with the vehicle number, and the team calls back.
+    if (S.flow.kind === 'trouble' && !TROUBLE_ON) {
+      if (p) { leave(); return sayLine(S, LINE.complaintNoted, hearMs, true); }
+      S.flow.step = 'complaint';
+      return sayLine(S, LINE.complaintAsk, hearMs, true);
+    }
     if (!p) return sayLine(S, LINE.askPlate, hearMs, true);
     return scriptLookup(S, p, hearMs);
   }
   const F = S.flow;
   if (MISSING_WORDS.test(text)) return leave();                                  // it became an emergency: the model handles that
   if (F.result) { const r = F.result; F.result = null; return scriptResult(S, r, hearMs); }   // a result she could not say because the caller spoke over it
+
+  if (F.step === 'complaint') {                                                   // only taking the vehicle number for the complaint
+    F.said.push(text);
+    const flat = digitWords(F.said.slice(-3).join(' ')).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!plateIn(F.said.slice(-3).join(' ')) && /^[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{0,3}$/.test(flat) && ++F.parts <= 2) return sayLine(S, 'చెప్పండి.', hearMs, true);   // still saying it
+    leave();
+    return sayLine(S, LINE.complaintNoted, hearMs, true);
+  }
 
   if (F.step === 'plate') {                                                       // the full vehicle number, said in one go or in pieces
     F.said.push(text);
@@ -695,6 +712,7 @@ async function scriptResult(S, found, hearMs) {
     if (a.next) F.step = a.next; else end();
     return sayLine(S, a.text, hearMs, a.keep, a.hang);
   }
+  if (d.state === 'noted') { end(); return sayLine(S, LINE.complaintNoted, hearMs, true); }
   if (d.state === 'verify') { F.step = 'mobile'; F.tries = 0; F.said = []; return sayLine(S, LINE.askMobile, hearMs, true); }
   if (d.state === 'none') {                                                       // not on any server: most often the number was misheard
     if (++F.misses < 2) { F.step = 'plate'; F.tries = 0; F.said = []; return sayLine(S, LINE.plateNone, hearMs, true); }
