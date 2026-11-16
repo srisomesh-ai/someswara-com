@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 23;
+const VERSION = 24;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -473,9 +473,35 @@ async function speechEnd(S) {
   S.replying = reply(S, hearMs, ack).catch((e) => log('reply crashed:', e.message));
 }
 
+// She asked "is AP39BP0042 your number?" about a close match. The caller's answer is read here, not by her: left to her,
+// she kept asking the same question again and again even after a clear yes.
+const YES_WORDS = /అవును|ఔను|అవున|(^|\s)హా+(?=\s|$|[.,!?])|\byes\b|\byeah\b|\bya\b|correct|కరెక్ట్|అదే|అంతే|\bright\b|\bok\b|\bokay\b|ఓకే|సరే|हाँ|हां|सही/i;
+const NO_WORDS = /కాదు|లేదు|వేరే|\bno\b|not\b|wrong|తప్పు|नहीं|गलत/i;
+async function nearAnswer(S) {
+  const last = [...S.turns].reverse().find((t) => t.who === 'caller');
+  const said = last ? last.text : '', flat = said.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const saysPlate = flat.includes(S.nearPlate) || flat.includes(S.nearPlate.replace(/^([A-Z]{2}\d{1,2}[A-Z]{0,3})0+/, '$1'));
+  const yes = saysPlate || (YES_WORDS.test(said) && !NO_WORDS.test(said));
+  S.nearAsks++;
+  if (!yes && !NO_WORDS.test(said) && S.nearAsks < 2) return;          // unclear ("hello"): she may ask once more
+  S.vehicleNear = false;
+  if (!yes && NO_WORDS.test(said)) {                                     // not their number
+    S.vehicle = 'The caller says ' + S.nearPlate + ' is not their vehicle number. Ask them to say the full vehicle number once more, slowly, and check that number.';
+    S.vehicleFact = ''; S.vehicleTold = false; S.nearPlate = '';
+    return;
+  }
+  const number = S.nearPlate; S.nearPlate = '';
+  let found;
+  try { found = await ivr('live_vehicle', { token: S.token, number, why: whyCalling(S) }, 22000); log('call', S.cfg.call_id, 'vehicle check', number, found.status, '(close match confirmed)'); }
+  catch (e) { log('vehicle check failed:', e.message); found = { text: 'The server could not be checked just now. Do not say the vehicle is missing. Say you could not check at the moment and that the team will call them.' }; }
+  S.vehicle = 'The caller confirmed the number ' + number + ' and it has been checked. Do not ask about the number again. ' + (found.text || '');
+  S.vehicleFact = found.fact || ''; S.vehicleTold = false;
+}
+
 async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   const g = S.gen, t1 = Date.now(), lang = S.lang;
   const ctrl = new AbortController(); S.abort = ctrl;
+  if (S.vehicleNear && S.nearPlate && !afterCheck && !noRepeat) { await nearAnswer(S); if (g !== S.gen) return; }
   // Her instructions stay word for word the same through the call, and the things that change from reply to reply
   // go at the very end. Sarvam charges less for text it has already read, so this keeps the cost of each reply down.
   const notes = [];
@@ -607,6 +633,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
       S.vehicle = found.text || '';
       S.vehicleFact = found.fact || '';
       S.vehicleNear = !!found.near;                         // she still has to ask whether the close number is theirs
+      S.nearPlate = found.near ? String(found.plate || '') : ''; S.nearAsks = 0;
     }
     S.vehicleTold = false;
   }
@@ -637,7 +664,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0 };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false };
 }
 
 function greet(S) {

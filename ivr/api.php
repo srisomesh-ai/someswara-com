@@ -151,7 +151,7 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
             out(['status' => 'verify', 'near' => false, 'text' => 'The check is done. ' . VERIFY_ASK, 'fact' => '']);
         }
         if (!$ver && $found) { $all[$tok]['pending'] = ['number' => (string)$r['number'], 'why' => $why, 'tries' => 0]; write_json('live.json', $all); }
-        out(['status' => $r['status'] . ($ver ? ' verified' : ''), 'near' => !empty($r['near']), 'text' => gps_result_text($r, $why, $ver), 'fact' => gps_result_fact($r, $ver)]);
+        out(['status' => $r['status'] . ($ver ? ' verified' : ''), 'near' => !empty($r['near']), 'plate' => !empty($r['near']) ? (string)$r['plate'] : '', 'text' => gps_result_text($r, $why, $ver), 'fact' => gps_result_fact($r, $ver)]);
     }
     if ($action === 'live_verify') {   // the caller said the mobile number registered for the vehicle
         $p = (array)($all[$tok]['pending'] ?? []);
