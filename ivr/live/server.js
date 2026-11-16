@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 30;
+const VERSION = 31;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -593,6 +593,7 @@ const LINE = {
   notInRecords: 'ఈ vehicle number మా records లో లేదు, అంటే GPS ఇంతకుముందే expire అయ్యి server నుండి remove అయింది. అదే GPS ని re-install చేసి add చేయడానికి ఒక వెయ్యి ఏడు వందల రూపాయలు అవుతుంది. ఆ GPS పని చేయకపోతే, కొత్త GPS మూడు వేల ఐదు వందల రూపాయలు. ఏది కావాలో చెప్తారా?',
   online: 'మీ vehicle GPS ఇప్పుడు online లో ఉంది సర్. App లో login అయ్యి మీ vehicle track చేసుకోవచ్చు. Bharat GPS కి call చేసినందుకు thank you.',
   afterService: 'సరే. ఒకసారి vehicle start చేసి కొంచెం దూరం నడిపి చూడండి. మీ complaint note చేసుకున్నాను, మా team మీకు call చేసి confirm చేస్తారు. Thank you.',
+  bookWait: 'ఒక్క నిమిషం, booking create చేస్తున్నాను.',
   bookNoId: 'మీ booking note చేసుకున్నాను. Booking ID మా team call చేసి చెప్తారు.',
   noExpiry: 'ఈ vehicle expiry details నా దగ్గర లేవు. మా team check చేసి మీకు call చేస్తారు.',
 };
@@ -744,7 +745,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
     const trimmed = sentence.replace(SIR_ALL, (m) => (sirLeft-- > 0 ? m : '')).replace(/^[\s,]+/, '').replace(/\s+([.,!?])/g, '$1').replace(/\s{2,}/g, ' ').trim();
     if (trimmed.replace(/[\s,.!?।]/g, '').length >= 2) sentence = trimmed;
     // A booking ID may only be the one our task system gave. Any other number she puts next to "booking ID" is replaced.
-    if (BOOK_ID_SAID.test(sentence) && BOOK_DIGIT.test(sentence)) sentence = S.bookSay ? 'మీ booking ID ' + S.bookSay + '.' : LINE.bookNoId;
+    if (BOOK_ID_SAID.test(sentence) && (BOOK_DIGIT.test(sentence) || !S.book)) sentence = S.bookSay ? 'మీ booking ID ' + S.bookSay + '.' : (S.book ? LINE.bookNoId : LINE.bookWait);
     if (!queued && !keep) {
       if (ack) {                             // only when the quick "ok sir" clip was played: do not say it twice
         const whole = sentence;

@@ -322,6 +322,10 @@ function say_task_id(string $id): string {
 
 // What happened after the call, in one line, for the Call history page.
 function call_after(array $c): string {
+    $b = ($c['book_note'] ?? '') !== '' ? 'Booking during the call: ' . $c['book_note'] . ' · ' : '';
+    return $b . call_after_rest($c);
+}
+function call_after_rest(array $c): string {
     if (empty($c['phone'])) return 'Test inside the dashboard. Tasks and emails are made only after a real phone call.';
     if (isset($c['answered']) && !$c['answered']) return 'Call not answered by her (not a test number).';
     $m = (int)($c['mailed'] ?? 0);
@@ -991,7 +995,7 @@ function gps_result_text(array $r, string $why = '', bool $ver = false): string 
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 30;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 31;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 

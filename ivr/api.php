@@ -161,19 +161,24 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         session_write_close();
         $c = call_find((string)$all[$tok]['call_id']);
         $soft = 'Say that the booking is noted and that our team will call them with the booking ID. Do not say any booking ID yourself.';
-        if (!$c || empty($c['phone'])) out(['status' => 'test', 'text' => "This is a test inside the dashboard, so no real booking is made and there is no booking ID. $soft"]);
+        $why = function (string $note) use (&$c) { if ($c && ($c2 = call_find((string)$c['id']))) { $c2['book_note'] = $note; call_save($c2); } };   // shown on the Call history page
+        if (!$c || empty($c['phone'])) { $why('No task: this was a test inside the dashboard, not a phone call.'); out(['status' => 'test', 'text' => "This is a test inside the dashboard, so no real booking is made and there is no booking ID. $soft"]); }
         $from = phone10((string)($c['from'] ?? ''));
-        if ($from === '') out(['status' => 'no number', 'text' => "The caller's number is hidden, so the booking could not be numbered. Ask for a mobile number our team can call. $soft"]);
+        if ($from === '') { $why('No task: the caller\'s number was hidden.'); out(['status' => 'no number', 'text' => "The caller's number is hidden, so the booking could not be numbered. Ask for a mobile number our team can call. $soft"]); }
         $name = clean_line($_POST['name'] ?? '', 150); $place = clean_line($_POST['location'] ?? '', 200);
         $product = clean_line($_POST['product'] ?? '', 120); $when = clean_line($_POST['when'] ?? '', 60);
         $x = ['type' => 'new', 'name' => $name, 'location' => $place, 'vehicle' => '', 'product' => $product];
         $r = http_post(TASK_URL, [], ['key' => task_key(), 'type' => 'new', 'phone' => $from, 'call_id' => (string)$c['id'], 'name' => $name, 'location' => $place, 'product' => $product,
             'summary' => 'Booking taken by the AI call agent during the call.' . ($when !== '' ? " Customer wants it: $when." : ''), 'suggest' => tech_suggest($place), 'todo' => task_todo($x)], 20);
-        if ($r['code'] !== 200 || empty($r['data']['task_id'])) out(['status' => 'failed ' . $r['code'], 'text' => "The booking could not be given a number just now. $soft"]);
+        if ($r['code'] !== 200 || empty($r['data']['task_id'])) {
+            $err = (string)($r['data']['error'] ?? ($r['err'] ?: 'no answer'));
+            $why("No task: TaskManager answered {$r['code']}: $err");
+            out(['status' => "failed {$r['code']}: $err", 'text' => "The booking could not be given a number just now. $soft"]);
+        }
         $id = (string)$r['data']['task_id'];
         $text = 'The booking is created. The booking ID is ' . say_task_id($id) . '. Tell the customer the booking ID exactly in those words, once, slowly. Then say once that our team will call them to confirm the time. Do not promise that a technician will come today or at any time, and do not say whether their place is in our service area unless a place check said so.';
         $all = read_json('live.json'); $all[$tok]['booked'] = $text; write_json('live.json', $all);
-        if ($c2 = call_find((string)$c['id'])) { $c2['task_id'] = $id; call_save($c2); }
+        if ($c2 = call_find((string)$c['id'])) { $c2['task_id'] = $id; $c2['book_note'] = "Task $id created and its number told to the caller."; call_save($c2); }
         out(['status' => 'booked ' . $id, 'text' => $text, 'id' => $id, 'say' => say_task_id($id)]);
     }
     if ($action === 'live_last4') {   // fixed-script flow: the caller said the last four digits of the vehicle number
