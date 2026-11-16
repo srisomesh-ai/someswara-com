@@ -192,10 +192,19 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         write_json('live.json', $all);
         session_write_close();
         $found = gps_last4($d4);
+        // A plain note for the Call history page, so the owner can see why a caller was or was not verified.
+        $withMobile = count(array_filter($found['list'], fn($e) => !empty($e[7])));
+        $bad = [];
+        foreach ((array)(read_json('gps.json')['servers'] ?? []) as $sid => $sv) if (is_array($sv) && !in_array($sv['state'] ?? '', ['ok', 'nokey'], true)) $bad[] = "server $sid could not be read just now (" . ($sv['state'] ?? '?') . '), its older list was used';
+        $vnote = "Last four digits $d4: " . count($found['list']) . ' vehicle' . (count($found['list']) === 1 ? '' : 's') . ' found' . ($found['list'] ? ", a customer mobile is saved on $withMobile of them" : '') . ($bad ? '; ' . implode('; ', $bad) : '') . '.';
+        $note = function (string $more) use (&$all, $tok, $vnote) { if ($cc = call_find((string)$all[$tok]['call_id'])) { $cc['verify_note'] = trim($vnote . ' ' . $more); call_save($cc); } };
+        if ($found['state'] !== 'found') $note('');
         if ($found['state'] !== 'found') out(['status' => 'last4 ' . $found['state'], 'data' => ['state' => $found['state']]]);
         // Calling from the mobile number saved for one of these vehicles: that is their vehicle, and they are verified.
         $c = call_find((string)$all[$tok]['call_id']);
         $r = gps_pick($found['list'], phone10((string)(($c ?: [])['from'] ?? '')));
+        if (!$r) $note('The caller was not phoning from a saved mobile, so she asked for the registered mobile.');
+        else $note('Verified: the caller was phoning from the mobile saved for ' . $r['plate'] . '.');
         if (!$r) out(['status' => 'last4 found ' . count($found['list']) . ' (' . count(array_filter($found['list'], fn($e) => !empty($e[7]))) . ' with a customer mobile saved), verify', 'data' => ['state' => 'verify']]);
         $all = read_json('live.json');
         $all[$tok]['verified'][] = $r['plate']; unset($all[$tok]['pending']);
@@ -214,6 +223,10 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         $said = phone10((string)($_POST['phone'] ?? ''));
         if (isset($p['last4'])) {   // asked by the last four digits: the mobile number picks the vehicle among those that end with them
             $r = $tries <= 3 ? gps_pick(gps_last4((string)$p['last4'])['list'], $said) : null;
+            if ($cc = call_find((string)$all[$tok]['call_id'])) {
+                $cc['verify_note'] = trim(($cc['verify_note'] ?? '') . ' Mobile said' . ($said !== '' ? ' (ending ' . substr($said, -4) . ')' : ' (not ten digits)') . ($r ? ': matched ' . $r['plate'] . ', verified.' : ': no match.'));
+                call_save($cc);
+            }
             if ($r) {
                 $all = read_json('live.json');
                 $all[$tok]['verified'][] = $r['plate']; unset($all[$tok]['pending']);

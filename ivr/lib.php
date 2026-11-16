@@ -323,6 +323,7 @@ function say_task_id(string $id): string {
 // What happened after the call, in one line, for the Call history page.
 function call_after(array $c): string {
     $b = ($c['book_note'] ?? '') !== '' ? 'Booking during the call: ' . $c['book_note'] . ' · ' : '';
+    if (($c['verify_note'] ?? '') !== '') $b = 'Vehicle check: ' . $c['verify_note'] . ' · ' . $b;
     return $b . call_after_rest($c);
 }
 function call_after_rest(array $c): string {
