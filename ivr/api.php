@@ -170,7 +170,7 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         // Calling from the mobile number saved for one of these vehicles: that is their vehicle, and they are verified.
         $c = call_find((string)$all[$tok]['call_id']);
         $r = gps_pick($found['list'], phone10((string)(($c ?: [])['from'] ?? '')));
-        if (!$r) out(['status' => 'last4 found ' . count($found['list']) . ', verify', 'data' => ['state' => 'verify']]);
+        if (!$r) out(['status' => 'last4 found ' . count($found['list']) . ' (' . count(array_filter($found['list'], fn($e) => !empty($e[7]))) . ' with a customer mobile saved), verify', 'data' => ['state' => 'verify']]);
         $all = read_json('live.json');
         $all[$tok]['verified'][] = $r['plate']; unset($all[$tok]['pending']);
         write_json('live.json', $all);

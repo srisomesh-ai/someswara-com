@@ -665,7 +665,7 @@ function plate_key(string $t): string { return preg_replace('~[^A-Z0-9]~', '', s
 // A small copy of every server's vehicle list (number, expiry, last signal), refreshed when older than five minutes.
 function gps_index(bool $fresh = false): array {
     $c = read_json('gps.json');
-    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 300 && ($c['v'] ?? 0) === 3) return $c;
+    if (!$fresh && is_array($c) && ($c['at'] ?? 0) > time() - 300 && ($c['v'] ?? 0) === 4) return $c;
     $keys = array_filter(gps_keys());
     $multi = curl_multi_init(); $hs = [];
     foreach ($keys as $id => $key) {
@@ -675,7 +675,7 @@ function gps_index(bool $fresh = false): array {
     }
     do { curl_multi_exec($multi, $run); if ($run) curl_multi_select($multi, 1.0); } while ($run > 0);
     $old = is_array($c) ? $c : [];
-    $new = ['at' => time(), 'v' => 3, 'servers' => [], 'dev' => []];
+    $new = ['at' => time(), 'v' => 4, 'servers' => [], 'dev' => []];
     foreach (GPS_SERVERS as $id => $host) {
         if (!isset($hs[$id])) { $new['servers'][$id] = ['state' => 'nokey']; continue; }
         $body = curl_multi_getcontent($hs[$id]); $code = curl_getinfo($hs[$id], CURLINFO_HTTP_CODE);
@@ -709,18 +709,26 @@ function gps_index(bool $fresh = false): array {
 // The customer's mobile numbers saved on a vehicle on the GPS server (in the owner, notes, name or user fields).
 // The SIM number of the GPS device itself and the IMEI are not customer numbers and are left out.
 function gps_phones(array $dv): array {
-    $texts = [(string)($dv['name'] ?? '')];
-    $skip = ['imei', 'sim_number', 'msisdn', 'iccid', 'vin', 'lat', 'lng', 'latitude', 'longitude', 'time', 'timestamp', 'id', 'traccar_device_id'];
-    foreach ((array)($dv['device_data'] ?? []) as $k => $v) {
-        if (in_array(strtolower((string)$k), $skip, true)) continue;
-        if (is_string($v) || is_int($v)) $texts[] = (string)$v;
-        elseif (is_array($v)) foreach ($v as $k2 => $v2) {
-            if (is_string($v2) || is_int($v2)) { if (!in_array(strtolower((string)$k2), $skip, true)) $texts[] = (string)$v2; }
-            elseif (is_array($v2)) foreach ($v2 as $k3 => $v3) if ((is_string($v3) || is_int($v3)) && !in_array(strtolower((string)$k3), $skip, true)) $texts[] = (string)$v3;
+    // Look in every text or number field of the vehicle's record, wherever the server keeps it, except the fields that
+    // hold the device's own SIM number, its IMEI, positions and times.
+    $skip = ['imei', 'sim_number', 'msisdn', 'iccid', 'vin', 'lat', 'lng', 'latitude', 'longitude', 'time', 'timestamp', 'id', 'traccar_device_id',
+        'tail', 'sensors', 'services', 'latest_positions', 'icon', 'icon_colors', 'device_id', 'user_id', 'course', 'altitude', 'speed', 'moved_timestamp', 'ack_timestamp', 'server_time', 'device_time'];
+    $texts = [];
+    $walk = function ($v, int $depth) use (&$walk, &$texts, $skip) {
+        foreach ((array)$v as $k => $x) {
+            if (is_string($k) && in_array(strtolower($k), $skip, true)) continue;
+            if (is_string($x) || is_int($x)) $texts[] = (string)$x;
+            elseif (is_array($x) && $depth < 4) $walk($x, $depth + 1);
         }
-    }
+    };
+    $walk($dv, 0);
     $out = [];
-    foreach ($texts as $t) if (preg_match_all('~(?<!\d)(?:\+?91[\s-]?|0)?([6-9]\d{9})(?!\d)~', $t, $m)) foreach ($m[1] as $n) $out[$n] = 1;
+    $re = '~(?<!\d)(?:\+?91[\s-]?|0)?([6-9]\d{9})(?!\d)~';
+    foreach ($texts as $t) {
+        if (strlen($t) > 400) continue;
+        // as written, and again with spaces and hyphens inside the number removed ("99632 22009")
+        foreach ([$t, preg_replace('~(?<=\d)[\s-]+(?=\d)~', '', $t)] as $v) if (preg_match_all($re, $v, $m)) foreach ($m[1] as $n) $out[$n] = 1;
+    }
     return array_slice(array_keys($out), 0, 8);
 }
 function phone10(string $n): string { $d = preg_replace('~\D~', '', $n); return strlen($d) >= 10 ? substr($d, -10) : ''; }
