@@ -110,7 +110,7 @@ Existing customer who wants to renew, or who wants to check the license, validit
 {{VEHICLE}}- Offer renewal only when the result says less than thirty days are left or it has expired. When thirty days or more are left, say renewal is not needed now and skip the plan and payment steps.
 - If they only wanted to check and you have no result to tell them, say the team will check and call them back.
 - For renewal, ask which plan they want: three months, six months or one year. The one year plan is one thousand two hundred rupees. If they ask the price of the three or six month plan and you were not told it, say it will be in the payment link.
-- When they have chosen, say you have noted it, that they will get the payment link very soon on WhatsApp and email, and that once they pay, the vehicle is renewed automatically.
+- When they have chosen, say you have noted it, that our team will send the payment link on WhatsApp, and that once they pay, the vehicle is renewed.
 
 Existing customer whose GPS has already stopped because it was not renewed for a long time:
 - Explain the process simply: our technician visits, changes the SIM card and activates the GPS again so it comes back online.
@@ -1018,7 +1018,7 @@ function gps_result_text(array $r, string $why = '', bool $ver = false): string 
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 33;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 34;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
@@ -1175,7 +1175,7 @@ function lead_mail(array $c): bool {
     $body = "$what\n\nCaller: $num\nTime: " . date('j M Y, g:i A', (int)$c['started']) . "\nLength: {$s['seconds']} seconds\n";
     if ($from !== '') $body .= "Call back: tel:+91$from\nWhatsApp: https://wa.me/91$from\n";
     foreach (['name' => 'Name', 'vehicle' => 'Vehicle number', 'plan' => 'Plan chosen', 'location' => 'Location', 'summary' => 'What they need'] as $k => $label) if (($c[$k] ?? '') !== '') $body .= "$label: {$c[$k]}\n";
-    if (($c['outcome'] ?? '') === 'renewal') $body .= "To do: send the payment link on WhatsApp and email. She told the caller it is coming.\n";
+    if (($c['outcome'] ?? '') === 'renewal') $body .= "To do: send the payment link on WhatsApp to the caller's number. She told the caller the team will send it.\n";
     if (($c['task_id'] ?? '') !== '') $body .= "Task created in TaskManager: {$c['task_id']} (not assigned)\n";
     if (($c['task_error'] ?? '') !== '') $body .= "A task could NOT be created in TaskManager: {$c['task_error']} Please create it by hand.\n";
     if ($spoke && $kind === '') $body .= "First thing they said: {$s['asked']}\n";

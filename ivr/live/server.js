@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 33;
+const VERSION = 34;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -486,6 +486,7 @@ async function speechEnd(S) {
 const SIR_CORE = "(?<![\\u0C00-\\u0C7FA-Za-z])(?:సర్|సార్|మేడమ్|మేడం|sir|madam)(?![\\u0C00-\\u0C7FA-Za-z])";
 const SIR_WORD = new RegExp(SIR_CORE, 'i');
 const SIR_ALL = new RegExp('[\\s,]*' + SIR_CORE, 'gi');
+const BOOK_CLOSE = /team[^.?!]{0,40}(call|కాల్)|booking|బుకింగ్|note\s*చేసుకు|నోట్\s*చేసుకు|confirm\s*చేస్త/i;
 const BOOK_ID_SAID = /booking\s*(id|i\.?d\.?|ఐడి|ఐడీ|number|నంబర్|నెంబర్)|బుకింగ్\s*(ఐడి|ఐడీ|నంబర్|నెంబర్)/i;
 const BOOK_DIGIT = /\d|\b(zero|one|two|three|four|five|six|seven|eight|nine)\b|సున్నా|ఒకటి|రెండు|మూడు|నాలుగు|ఐదు|ఆరు|ఏడు|ఎనిమిది|తొమ్మిది/i;
 // She asked "is AP39BP0042 your number?" about a close match. The caller's answer is read here, not by her: left to her,
@@ -611,7 +612,7 @@ function answerLine(kind, d) {
   }
   if (d.days === null) return { text: LINE.noExpiry, keep: true };
   const ymd = String(d.expiry).match(/(\d{4})-(\d{2})-(\d{2})/) || [0, 2000, 1, 1], date = TE_MONTHS[+ymd[2] - 1] + ' ' + +ymd[3] + ', ' + ymd[1];
-  const pay = ' Payment link మీ email కి పంపిస్తున్నాము. Payment చేసిన వెంటనే renewal automatic గా అవుతుంది. Thank you.';
+  const pay = ' మా team payment link ని WhatsApp లో పంపిస్తారు. Payment చేసిన వెంటనే renewal అవుతుంది. Thank you.';
   if (d.days < 0) return { text: 'మీ vehicle validity ' + date + ' న expire అయింది.' + pay };
   if (d.days < 30) return { text: 'మీ vehicle validity ' + date + ' వరకు ఉంది, ' + (d.days === 0 ? 'ఈ రోజే expire అవుతుంది.' : d.days === 1 ? 'రేపే expire అవుతుంది.' : 'ఇంకా ' + d.days + ' రోజులే ఉన్నాయి.') + pay };
   return { text: 'మీ vehicle validity ' + date + ' వరకు ఉంది, ఇంకా ' + d.days + ' రోజులు ఉన్నాయి. ఇప్పుడు renewal అవసరం లేదు. Expiry కి దగ్గరలో మళ్ళీ call చేయండి. Thank you.' };
@@ -899,8 +900,21 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
     S.vehicle = found.text || ''; S.vehicleFact = found.fact || ''; S.vehicleNear = false; S.vehicleTold = false;
   }
   // She has the name and place for a booking: the task is made now, so that she can tell the caller its number.
-  const book = bookTag(raw);
+  let book = bookTag(raw);
   let booked = false;
+  // She is told to mark a booking with a tag, but often just says "our team will call" without it, and then no
+  // booking ID exists. So when her reply sounds like the close of a booking, the call so far is read once more and,
+  // if the customer has agreed to book, the booking is made here.
+  if (!book && !S.book && !afterCheck && !S.flow && S.kind !== 'old' && S.bookTries < 2 && BOOK_CLOSE.test(cleanReply(raw))) {
+    S.bookTries++;
+    const talk = S.turns.slice(-24).map((t) => (t.who === 'agent' ? 'Agent: ' : 'Customer: ') + t.text).join('\n');
+    let out = '';
+    try { out = await chatOnce(S.cfg, [{ role: 'system', content: 'This is a phone call to a GPS tracker company. Decide whether the customer has agreed to book or buy a GPS tracker on this call. If they have, write one line in exactly this form: name | location | product | when. Leave a part empty if it was not said; "when" is today, tomorrow or what they asked. If the customer has NOT agreed to a booking (still asking, undecided, refused, or the call is about an existing vehicle), write only NONE. Write nothing else.' }, { role: 'user', content: talk }], AbortSignal.timeout(9000)); }
+    catch (e) { log('call', S.cfg.call_id, 'booking read failed:', e.message); }
+    const line = plain(out).split('\n').map((x) => x.trim()).filter(Boolean).pop() || '';
+    if (line.includes('|') && !/^NONE\b/i.test(line)) book = bookTag('[[BOOK: ' + line.replace(/[\[\]]/g, '') + ']]');
+    log('call', S.cfg.call_id, 'booking read from the call:', book ? 'yes' : 'no');
+  }
   if (book && !afterCheck && !S.book) {
     let made;
     try { made = await ivr('live_book', Object.assign({ token: S.token }, book), 25000); log('call', S.cfg.call_id, 'booking', made.status); }
@@ -917,7 +931,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
 function newState(ws, token, cfg, rate) {
   return { ws, token, cfg, rate, lang: cfg.lang || 'te', sttLang: '', gen: 0, abort: null, turns: [{ who: 'agent', text: cfg.greeting }], carry: '', out: null,
     pcm: [], pcmBytes: 0, parts: [], flushed: false, afterFlush: false, capturing: false, sttLive: false, stt: null, closed: false, replying: Promise.resolve(),
-    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false, flow: null, flowDone: false, book: '', bookTold: false, bookSay: '' };
+    pitch: [], gender: '', ackN: 0, langWant: '', vehicle: '', checks: 0, kind: cfg.trainer ? 'all' : '', promptCache: {}, vehicleTold: false, vehicleNear: false, vehicleFact: '', place: '', placeFact: '', placeTold: false, placeChecks: 0, nearPlate: '', nearAsks: 0, askedMore: false, flow: null, flowDone: false, book: '', bookTold: false, bookSay: '', bookTries: 0 };
 }
 
 function greet(S) {
