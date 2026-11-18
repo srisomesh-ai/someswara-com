@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>BharatGPS API Test</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f4f6f8; color: #222; }
+  header { background: #c62828; color: #fff; padding: 12px 16px; font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 12px; }
+  .card { background: #fff; border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  label { font-size: 13px; font-weight: 600; display: block; margin: 6px 0 3px; }
+  input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
+  button { margin-top: 10px; background: #c62828; color: #fff; border: 0; padding: 10px 16px; border-radius: 6px; font-size: 15px; cursor: pointer; }
+  button.grey { background: #555; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tabs button { margin: 0; background: #ddd; color: #333; }
+  .tabs button.active { background: #c62828; color: #fff; }
+  .quick { margin-top: 8px; }
+  .quick button { background: #eee; color: #333; padding: 6px 10px; font-size: 13px; margin: 4px 4px 0 0; }
+  .status { font-size: 13px; margin-top: 8px; }
+  .ok { color: #2e7d32; } .err { color: #c62828; }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
+  .stats b { display: block; font-size: 17px; }
+  #map { height: 420px; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { border-bottom: 1px solid #eee; padding: 7px 6px; text-align: left; white-space: nowrap; }
+  th { background: #fafafa; position: sticky; top: 0; }
+  .tablebox { overflow: auto; max-height: 60vh; }
+  .on { color: #2e7d32; font-weight: 600; } .off { color: #c62828; font-weight: 600; } .ack { color: #ef6c00; font-weight: 600; }
+  tr.flash td { background: #fff59d; }
+  tr.click { cursor: pointer; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #aaa; display: inline-block; margin-right: 6px; }
+  .dot.live { background: #69f0ae; box-shadow: 0 0 6px #69f0ae; }
+  .hidden { display: none; }
+  pre { background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 6px; overflow: auto; max-height: 300px; font-size: 12px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header><span>BharatGPS.in — API Test</span><span><span id="dot" class="dot"></span><span id="liveTxt">Stopped</span></span></header>
+<div class="wrap">
+
+  <div class="card">
+    <label>User API Hash (saved only in this browser)</label>
+    <input id="hash" placeholder="Paste user_api_hash here">
+  </div>
+
+  <div class="tabs">
+    <button id="tabLive" class="active" onclick="showTab('live')">Live</button>
+    <button id="tabHist" onclick="showTab('hist')">History</button>
+  </div>
+
+  <!-- LIVE -->
+  <div id="paneLive">
+    <div class="card">
+      <label>Refresh every</label>
+      <select id="interval" style="max-width:200px">
+        <option value="3">3 sec</option><option value="5" selected>5 sec</option>
+        <option value="10">10 sec</option><option value="30">30 sec</option>
+      </select>
+      <button id="startBtn" onclick="toggleLive()">Start Live</button>
+      <div id="liveStatus" class="status"></div>
+    </div>
+    <div class="card">
+      <div class="stats">
+        <span>Total<b id="sTotal">0</b></span>
+        <span class="on">Online<b id="sOn">0</b></span>
+        <span class="ack">Ack/Idle<b id="sAck">0</b></span>
+        <span class="off">Offline<b id="sOff">0</b></span>
+        <span>Last update<b id="sTime" style="font-size:14px">—</b></span>
+      </div>
+      <input id="search" placeholder="Search name / plate / IMEI / mobile..." oninput="renderLive()">
+      <div class="tablebox" style="margin-top:8px"><table id="liveTbl"></table></div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="paneHist" class="hidden">
+    <div class="card">
+      <div class="grid">
+        <div><label>Vehicle</label><select id="hDevice"><option value="">Tap "Load vehicles" first</option></select></div>
+        <div><label>From</label><input id="hFrom" type="datetime-local"></div>
+        <div><label>To</label><input id="hTo" type="datetime-local"></div>
+      </div>
+      <div class="quick">
+        <button onclick="quick('today')">Today</button>
+        <button onclick="quick('yesterday')">Yesterday</button>
+        <button onclick="quick('24h')">Last 24 hrs</button>
+        <button onclick="quick('7d')">Last 7 days</button>
+      </div>
+      <button class="grey" onclick="loadVehicles()">Load vehicles</button>
+      <button onclick="loadHistory()">Get History</button>
+      <div id="histStatus" class="status"></div>
+    </div>
+    <div id="histResult" class="hidden">
+      <div class="card">
+        <div class="stats" id="hStats"></div>
+        <div id="map"></div>
+      </div>
+      <div class="card">
+        <b>Trips &amp; stops</b> <span style="font-size:12px;color:#777">(tap a row to see it on the map)</span>
+        <div class="tablebox" style="margin-top:8px"><table id="histTbl"></table></div>
+      </div>
+      <div class="card">
+        <b>Raw response</b>
+        <pre id="hRaw"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROXY = 'proxy.php';
+const hashEl = document.getElementById('hash');
+try { hashEl.value = localStorage.getItem('bgps_hash') || ''; } catch (e) {}
+hashEl.addEventListener('change', () => { try { localStorage.setItem('bgps_hash', hashEl.value.trim()); } catch (e) {} });
+
+function esc(v) { return String(v ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+function setSt(id, m, c) { const s = document.getElementById(id); s.className = 'status ' + (c || ''); s.textContent = m; }
+
+async function api(ep, extra = {}) {
+  const h = hashEl.value.trim();
+  if (!h) throw new Error('Paste the API hash first');
+  try { localStorage.setItem('bgps_hash', h); } catch (e) {}
+  const p = new URLSearchParams({ ep, user_api_hash: h, lang: 'en', ...extra });
+  const res = await fetch(`${PROXY}?${p}`);
+  const text = await res.text();
+  let data; try { data = JSON.parse(text); } catch { throw new Error('Bad response: ' + text.slice(0, 120)); }
+  if (!res.ok || data.status === 0) throw new Error(data.message || ('HTTP ' + res.status));
+  return data;
+}
+
+function flatten(data) {
+  const list = [];
+  (Array.isArray(data) ? data : []).forEach(g => (g.items || []).forEach(it => list.push({ ...it, _group: g.title || '' })));
+  return list;
+}
+
+function showTab(t) {
+  document.getElementById('paneLive').classList.toggle('hidden', t !== 'live');
+  document.getElementById('paneHist').classList.toggle('hidden', t !== 'hist');
+  document.getElementById('tabLive').classList.toggle('active', t === 'live');
+  document.getElementById('tabHist').classList.toggle('active', t === 'hist');
+  if (t === 'hist' && map) setTimeout(() => map.invalidateSize(), 100);
+}
+
+/* ---------------- LIVE ---------------- */
+const devices = new Map();
+let lastTime = null, timer = null, running = false, busy = false;
+const flashIds = new Set();
+
+async function toggleLive() {
+  if (running) return stopLive();
+  running = true;
+  document.getElementById('startBtn').textContent = 'Stop Live';
+  document.getElementById('startBtn').className = 'grey';
+  devices.clear();
+  try {
+    setSt('liveStatus', 'Loading all vehicles...');
+    flatten(await api('get_devices')).forEach(d => devices.set(d.id, d));
+    lastTime = Math.floor(Date.now() / 1000) - 60;
+    renderLive();
+    fillDeviceSelect();
+    if (!devices.size) setSt('liveStatus', 'This API hash has 0 vehicles on bharatgps.in', 'err');
+    else setSt('liveStatus', `Loaded ${devices.size} vehicle(s). Live updates running...`, 'ok');
+    schedule();
+  } catch (e) { setSt('liveStatus', 'Error: ' + e.message, 'err'); stopLive(); }
+}
+
+function schedule() {
+  clearInterval(timer);
+  timer = setInterval(poll, +document.getElementById('interval').value * 1000);
+  document.getElementById('dot').className = 'dot live';
+  document.getElementById('liveTxt').textContent = 'Live';
+}
+document.getElementById('interval').addEventListener('change', () => { if (running) schedule(); });
+
+async function poll() {
+  if (busy) return; busy = true;
+  try {
+    const data = await api('get_devices_latest', { time: lastTime });
+    if (data.time) lastTime = data.time;
+    (data.items || []).forEach(it => {
+      const old = devices.get(it.id) || {};
+      devices.set(it.id, { ...old, ...it, device_data: { ...(old.device_data || {}), ...(it.device_data || {}) } });
+      flashIds.add(it.id);
+    });
+    renderLive();
+    setSt('liveStatus', `Live — ${(data.items || []).length} vehicle(s) changed in last check`, 'ok');
+  } catch (e) { setSt('liveStatus', 'Poll error: ' + e.message, 'err'); }
+  finally { busy = false; }
+}
+
+function stopLive() {
+  running = false; clearInterval(timer);
+  document.getElementById('startBtn').textContent = 'Start Live';
+  document.getElementById('startBtn').className = '';
+  document.getElementById('dot').className = 'dot';
+  document.getElementById('liveTxt').textContent = 'Stopped';
+}
+
+function renderLive() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const all = [...devices.values()];
+  let on = 0, off = 0, ack = 0;
+  all.forEach(d => { const s = String(d.online).toLowerCase(); s === 'online' ? on++ : s === 'offline' ? off++ : ack++; });
+  sTotal.textContent = all.length; sOn.textContent = on; sOff.textContent = off; sAck.textContent = ack;
+  sTime.textContent = new Date().toLocaleTimeString();
+
+  let html = '<tr><th>Name</th><th>Plate</th><th>Status</th><th>Speed</th><th>Last time</th><th>Location</th><th>Mobile</th><th>IMEI</th><th>Expiry</th><th>History</th></tr>';
+  all.filter(d => {
+    const dd = d.device_data || {};
+    return [d.name, dd.plate_number, dd.imei, dd.registration_number].some(v => String(v || '').toLowerCase().includes(q));
+  }).forEach(d => {
+    const dd = d.device_data || {};
+    const s = String(d.online || '').toLowerCase();
+    const cls = s === 'online' ? 'on' : s === 'offline' ? 'off' : 'ack';
+    const loc = (d.lat && d.lng) ? `<a target="_blank" href="https://maps.google.com/?q=${d.lat},${d.lng}">${(+d.lat).toFixed(5)}, ${(+d.lng).toFixed(5)}</a>` : '—';
+    html += `<tr class="${flashIds.has(d.id) ? 'flash' : ''}">
+      <td>${esc(d.name)}</td><td>${esc(dd.plate_number)}</td><td class="${cls}">${esc(d.online)}</td>
+      <td>${d.speed ?? ''} km/h</td><td>${esc(d.time)}</td><td>${loc}</td>
+      <td>${esc(dd.registration_number)}</td><td>${esc(dd.imei)}</td><td>${esc(dd.expiration_date) || '—'}</td>
+      <td><a href="#" onclick="openHistory(${d.id});return false">View</a></td></tr>`;
+  });
+  liveTbl.innerHTML = html;
+  setTimeout(() => { document.querySelectorAll('tr.flash').forEach(r => r.classList.remove('flash')); flashIds.clear(); }, 1500);
+}
+
+/* ---------------- HISTORY ---------------- */
+let map = null, layer = null, segLayer = null, histItems = [];
+
+function fillDeviceSelect(selectId) {
+  const sel = document.getElementById('hDevice');
+  const all = [...devices.values()];
+  if (!all.length) return;
+  sel.innerHTML = all.map(d => {
+    const plate = (d.device_data || {}).plate_number || '';
+    return `<option value="${d.id}">${esc(d.name)}${plate ? ' — ' + esc(plate) : ''} (ID ${d.id})</option>`;
+  }).join('');
+  if (selectId) sel.value = selectId;
+}
+
+async function loadVehicles() {
+  try {
+    setSt('histStatus', 'Loading vehicles...');
+    devices.clear();
+    flatten(await api('get_devices')).forEach(d => devices.set(d.id, d));
+    fillDeviceSelect();
+    setSt('histStatus', devices.size ? `${devices.size} vehicle(s) loaded` : 'This API hash has 0 vehicles', devices.size ? 'ok' : 'err');
+  } catch (e) { setSt('histStatus', 'Error: ' + e.message, 'err'); }
+}
+
+function openHistory(id) { showTab('hist'); fillDeviceSelect(id); quick('today'); loadHistory(); }
+
+const pad = n => String(n).padStart(2, '0');
+const toLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function quick(k) {
+  const now = new Date(), from = new Date(now), to = new Date(now);
+  if (k === 'today') from.setHours(0, 0, 0, 0);
+  if (k === 'yesterday') { from.setDate(from.getDate() - 1); from.setHours(0, 0, 0, 0); to.setDate(to.getDate() - 1); to.setHours(23, 59, 0, 0); }
+  if (k === '24h') from.setHours(from.getHours() - 24);
+  if (k === '7d') from.setDate(from.getDate() - 7);
+  hFrom.value = toLocal(from); hTo.value = toLocal(to);
+}
+quick('today');
+
+const STATUS = { 1: 'Driving', 2: 'Stopped', 3: 'Start', 4: 'End', 5: 'Event' };
+
+function pointsOf(seg) {
+  return (seg.items || []).map(p => [+(p.lat ?? p.latitude), +(p.lng ?? p.longitude)]).filter(p => p[0] && p[1]);
+}
+
+async function loadHistory() {
+  const id = hDevice.value;
+  if (!id) return setSt('histStatus', 'Tap "Load vehicles" and choose a vehicle', 'err');
+  const [fd, ft] = hFrom.value.split('T'), [td, tt] = hTo.value.split('T');
+  setSt('histStatus', 'Loading history...');
+  try {
+    const t0 = performance.now();
+    const data = await api('get_history', { device_id: id, from_date: fd, from_time: ft, to_date: td, to_time: tt });
+    const ms = Math.round(performance.now() - t0);
+    hRaw.textContent = JSON.stringify(data, null, 2).slice(0, 200000);
+    histItems = data.items || [];
+    histResult.classList.remove('hidden');
+
+    const all = histItems.flatMap(pointsOf);
+    hStats.innerHTML = `
+      <span>Distance<b>${esc(data.distance_sum ?? '—')}</b></span>
+      <span>Top speed<b>${esc(data.top_speed ?? '—')}</b></span>
+      <span>Moving<b>${esc(data.move_duration ?? '—')}</b></span>
+      <span>Stopped<b>${esc(data.stop_duration ?? '—')}</b></span>
+      <span>GPS points<b>${all.length}</b></span>`;
+    drawMap(all);
+    renderHistTable();
+    setSt('histStatus', all.length ? `OK — loaded in ${ms} ms` : `OK in ${ms} ms, but no GPS points in this time range`, all.length ? 'ok' : 'err');
+  } catch (e) { setSt('histStatus', 'Error: ' + e.message, 'err'); }
+}
+
+function drawMap(points) {
+  if (!map) {
+    map = L.map('map').setView([16.5, 80.6], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  }
+  setTimeout(() => map.invalidateSize(), 50);
+  if (layer) map.removeLayer(layer);
+  if (segLayer) { map.removeLayer(segLayer); segLayer = null; }
+  layer = L.featureGroup().addTo(map);
+  if (!points.length) return;
+  L.polyline(points, { color: '#1565c0', weight: 4 }).addTo(layer);
+  L.circleMarker(points[0], { radius: 8, color: '#2e7d32', fillOpacity: 1 }).bindPopup('Start').addTo(layer);
+  L.circleMarker(points[points.length - 1], { radius: 8, color: '#c62828', fillOpacity: 1 }).bindPopup('End').addTo(layer);
+  histItems.forEach(s => {
+    if (s.status === 2) {
+      const p = pointsOf(s)[0];
+      if (p) L.circleMarker(p, { radius: 6, color: '#ef6c00', fillOpacity: .9 }).bindPopup(`Stopped ${esc(s.time)}<br>${esc(s.show)}`).addTo(layer);
+    }
+  });
+  map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+}
+
+function renderHistTable() {
+  let html = '<tr><th>#</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Distance</th><th>Top speed</th><th>Points</th></tr>';
+  histItems.forEach((s, i) => {
+    const pts = s.items || [];
+    const first = pts[0] || {}, last = pts[pts.length - 1] || {};
+    html += `<tr class="click" onclick="focusSeg(${i})">
+      <td>${i + 1}</td><td>${STATUS[s.status] || esc(s.status)}</td>
+      <td>${esc(s.show || first.time)}</td><td>${esc(s.left || last.time)}</td>
+      <td>${esc(s.time)}</td><td>${s.distance ?? ''} km</td><td>${s.top_speed ?? ''}</td><td>${pts.length}</td></tr>`;
+  });
+  histTbl.innerHTML = html;
+}
+
+function focusSeg(i) {
+  const pts = pointsOf(histItems[i]);
+  if (!pts.length) return;
+  if (segLayer) map.removeLayer(segLayer);
+  segLayer = pts.length > 1 ? L.polyline(pts, { color: '#ffeb3b', weight: 7 }) : L.circleMarker(pts[0], { radius: 10, color: '#ffeb3b' });
+  segLayer.addTo(map);
+  map.fitBounds(L.latLngBounds(pts), { padding: [30, 30], maxZoom: 17 });
+  document.getElementById('map').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
