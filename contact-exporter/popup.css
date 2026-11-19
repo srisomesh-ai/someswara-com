@@ -1,0 +1,120 @@
+:root {
+  --bg: #ffffff;
+  --surface: #f4f6f5;
+  --border: #dfe3e1;
+  --text: #17201c;
+  --muted: #5f6b66;
+  --accent: #128c5e;
+  --accent-hover: #0e7550;
+  --accent-text: #ffffff;
+  --error: #b42318;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161b19;
+    --surface: #212826;
+    --border: #323b38;
+    --text: #e8eeeb;
+    --muted: #9aa6a1;
+    --accent: #2fb57f;
+    --accent-hover: #3cc98f;
+    --accent-text: #0b1410;
+    --error: #ff8a80;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  width: 380px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+[hidden] { display: none !important; }
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+header h1 { font-size: 15px; margin: 0; flex: 1; font-weight: 600; }
+
+.icon-btn {
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 18px; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+}
+.icon-btn:hover { background: var(--surface); color: var(--text); }
+
+.panel { padding: 28px 18px; text-align: center; }
+.lead { margin: 0 0 14px; color: var(--muted); }
+.error { color: var(--error); margin: 0 0 14px; }
+
+main { padding: 12px 14px; display: grid; gap: 10px; }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.stat {
+  display: grid; gap: 2px; padding: 8px 4px; text-align: center;
+  background: var(--surface); border: 1px solid transparent; border-radius: 10px;
+  color: var(--text); cursor: pointer; font: inherit;
+}
+.stat b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); }
+.stat:hover { border-color: var(--border); }
+.stat.active { border-color: var(--accent); }
+
+.field { display: grid; gap: 4px; }
+.field span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+select, input[type="search"] {
+  width: 100%; padding: 8px 10px; font: inherit; color: var(--text);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+}
+select:focus, input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.list-head { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 12px; }
+.check { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+#list {
+  list-style: none; margin: 0; padding: 0;
+  height: 200px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 8px;
+}
+#list li {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+}
+#list li:last-child { border-bottom: 0; }
+#list .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#list .phone { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+#list .tag {
+  font-size: 10px; padding: 0 5px; margin-left: 4px; border-radius: 4px;
+  background: var(--surface); color: var(--muted); vertical-align: 1px;
+}
+#list .empty { justify-content: center; color: var(--muted); border: 0; padding: 20px; }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+button {
+  padding: 9px 8px; font: inherit; font-weight: 500; cursor: pointer;
+  border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text);
+}
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+button:disabled { opacity: .5; cursor: default; }
+
+.toast { margin: 0; min-height: 18px; text-align: center; color: var(--accent); font-size: 12px; }
+
+.spinner {
+  width: 28px; height: 28px; margin: 0 auto 12px;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+footer { padding: 8px 14px 12px; color: var(--muted); font-size: 11px; text-align: center; }

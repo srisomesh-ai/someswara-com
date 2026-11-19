@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Chat Contact Exporter</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="" width="24" height="24">
+    <h1>Chat Contact Exporter</h1>
+    <button id="rescan" class="icon-btn" title="Scan again" hidden>&#x21bb;</button>
+  </header>
+
+  <section id="view-open" class="panel" hidden>
+    <p class="lead">Open WhatsApp Web and log in, then click the extension again.</p>
+    <button id="open-wa" class="primary">Open WhatsApp Web</button>
+  </section>
+
+  <section id="view-busy" class="panel" hidden>
+    <div class="spinner"></div>
+    <p id="busy-text">Reading contacts…</p>
+  </section>
+
+  <section id="view-error" class="panel" hidden>
+    <p id="error-text" class="error"></p>
+    <button id="retry" class="primary">Try again</button>
+  </section>
+
+  <main id="view-main" hidden>
+    <div class="stats">
+      <button class="stat" data-source="all"><b id="n-all">0</b><span>Contacts</span></button>
+      <button class="stat" data-source="saved"><b id="n-saved">0</b><span>Saved</span></button>
+      <button class="stat" data-source="unsaved"><b id="n-unsaved">0</b><span>Unsaved</span></button>
+      <button class="stat" data-source="groups"><b id="n-groups">0</b><span>Groups</span></button>
+    </div>
+
+    <label class="field">
+      <span>Export from</span>
+      <select id="source"></select>
+    </label>
+
+    <input id="search" type="search" placeholder="Search name or number" autocomplete="off">
+
+    <div class="list-head">
+      <span id="count">0 contacts</span>
+      <label class="check"><input id="only-phone" type="checkbox" checked> Only with phone number</label>
+    </div>
+    <ul id="list"></ul>
+
+    <label class="field">
+      <span>Phone format</span>
+      <select id="format">
+        <option value="plus">+919876543210</option>
+        <option value="digits">919876543210</option>
+        <option value="spaced">+91 98765 43210</option>
+      </select>
+    </label>
+
+    <div class="actions">
+      <button id="export-csv" class="primary">Download CSV</button>
+      <button id="export-vcf">vCard (.vcf)</button>
+      <button id="copy">Copy numbers</button>
+    </div>
+    <p id="toast" class="toast" role="status"></p>
+  </main>
+
+  <footer>Data is read from your own browser and never sent anywhere.</footer>
+  <script src="popup.js"></script>
+</body>
+</html>
