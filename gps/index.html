@@ -47,6 +47,17 @@
 <div class="wrap">
 
   <div class="card">
+    <label>Server</label>
+    <select id="server">
+      <option value="https://bharatgps.com">bharatgps.com (S1)</option>
+      <option value="https://bharatgps.in" selected>bharatgps.in (S2)</option>
+      <option value="https://bharatgps.school">bharatgps.school (S3)</option>
+      <option value="custom">Custom URL…</option>
+    </select>
+    <div id="customBox" class="hidden">
+      <label>Custom URL</label>
+      <input id="customUrl" placeholder="https://">
+    </div>
     <label>User API Hash (saved only in this browser)</label>
     <input id="hash" placeholder="Paste user_api_hash here">
   </div>
@@ -120,6 +131,24 @@ const PROXY = 'proxy.php';
 const hashEl = document.getElementById('hash');
 try { hashEl.value = localStorage.getItem('bgps_hash') || ''; } catch (e) {}
 hashEl.addEventListener('change', () => { try { localStorage.setItem('bgps_hash', hashEl.value.trim()); } catch (e) {} });
+const serverEl = document.getElementById('server'), customEl = document.getElementById('customUrl');
+try {
+  const sv = localStorage.getItem('bgps_server'), cu = localStorage.getItem('bgps_custom');
+  if (sv && [...serverEl.options].some(o => o.value === sv)) serverEl.value = sv;
+  if (cu) customEl.value = cu;
+} catch (e) {}
+function syncServer() {
+  document.getElementById('customBox').classList.toggle('hidden', serverEl.value !== 'custom');
+  try { localStorage.setItem('bgps_server', serverEl.value); localStorage.setItem('bgps_custom', customEl.value.trim()); } catch (e) {}
+}
+serverEl.addEventListener('change', () => { syncServer(); if (running) stopLive(); devices.clear(); });
+customEl.addEventListener('change', syncServer);
+syncServer();
+function serverUrl() {
+  const v = serverEl.value === 'custom' ? customEl.value.trim() : serverEl.value;
+  return v.replace(/\/+$/, '').replace(/\/api$/i, '');
+}
+function serverName() { try { return new URL(serverUrl()).host; } catch (e) { return serverUrl(); } }
 
 function esc(v) { return String(v ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
 function setSt(id, m, c) { const s = document.getElementById(id); s.className = 'status ' + (c || ''); s.textContent = m; }
@@ -128,7 +157,9 @@ async function api(ep, extra = {}) {
   const h = hashEl.value.trim();
   if (!h) throw new Error('Paste the API hash first');
   try { localStorage.setItem('bgps_hash', h); } catch (e) {}
-  const p = new URLSearchParams({ ep, user_api_hash: h, lang: 'en', ...extra });
+  const srv = serverUrl();
+  if (!/^https:\/\/[^\s\/]+/i.test(srv)) throw new Error('Enter a valid server URL starting with https://');
+  const p = new URLSearchParams({ ep, server: srv, user_api_hash: h, lang: 'en', ...extra });
   const res = await fetch(`${PROXY}?${p}`);
   const text = await res.text();
   let data; try { data = JSON.parse(text); } catch { throw new Error('Bad response: ' + text.slice(0, 120)); }
@@ -167,7 +198,7 @@ async function toggleLive() {
     lastTime = Math.floor(Date.now() / 1000) - 60;
     renderLive();
     fillDeviceSelect();
-    if (!devices.size) setSt('liveStatus', 'This API hash has 0 vehicles on bharatgps.in', 'err');
+    if (!devices.size) setSt('liveStatus', 'This API hash has 0 vehicles on ' + serverName(), 'err');
     else setSt('liveStatus', `Loaded ${devices.size} vehicle(s). Live updates running...`, 'ok');
     schedule();
   } catch (e) { setSt('liveStatus', 'Error: ' + e.message, 'err'); stopLive(); }
@@ -252,7 +283,7 @@ async function loadVehicles() {
     devices.clear();
     flatten(await api('get_devices')).forEach(d => devices.set(d.id, d));
     fillDeviceSelect();
-    setSt('histStatus', devices.size ? `${devices.size} vehicle(s) loaded` : 'This API hash has 0 vehicles', devices.size ? 'ok' : 'err');
+    setSt('histStatus', devices.size ? `${devices.size} vehicle(s) loaded` : 'This API hash has 0 vehicles on ' + serverName(), devices.size ? 'ok' : 'err');
   } catch (e) { setSt('histStatus', 'Error: ' + e.message, 'err'); }
 }
 
