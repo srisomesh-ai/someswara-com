@@ -52,3 +52,12 @@ Real calls reach the same live server at `PHONE_URL` (`lib.php`). The dashboard'
 the full address with its secret key; it goes into an Exotel Voicebot applet (default 8000 Hz).
 `phone_config` in `api.php` checks the key and the caller's number: in "test numbers only" other callers
 hear a call-back message and the call ends. Phone calls are saved in the call log with the caller's number.
+
+## Outgoing calls (renewal reminders)
+
+- Page: Outgoing calls. The owner pastes the Vobiz Auth ID and Auth Token (kept in `settings.json`, never in the code), sets the days, calling hours and tries, and presses Start.
+- The call list is made from the GPS servers: every vehicle whose expiry date falls within the chosen days and that has a customer mobile saved. It is kept in `out.json`.
+- The call server nudges `api.php?action=out_tick` every 30 seconds. Each nudge places at most one call through the Vobiz calling API (`POST /api/v1/Account/{auth_id}/Call/`), only while it is switched on and inside the calling hours (never before 9 am or after 9 pm).
+- When the customer picks up, Vobiz fetches the usual Answer URL with `&out=<vehicle>`; `phone_config` then gives the reminder as the opening line. The call server reads the answer (yes, later or no, wrong person) and says a fixed line, reports it with `out_result`, and ends the call.
+- A yes is emailed to the sales address with "send the payment link". No task is created for these calls.
+

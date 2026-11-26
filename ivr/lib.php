@@ -321,9 +321,147 @@ function say_task_id(string $id): string {
     return implode(', ', $parts);
 }
 
+// ---------- outgoing calls: renewal reminders ----------
+// She phones the owner's own customers whose GPS subscription is about to expire. The call is placed through the
+// Vobiz calling API; when the customer picks up, Vobiz asks the call server's Answer URL what to do, exactly as for
+// an incoming call, and the call server asks phone_config (with the list entry's id) what to say.
+const OUT_FROM = '+917965860846';                         // the Vobiz number she calls from
+const OUT_API = 'https://api.vobiz.ai/api/v1/Account/';
+const TE_MONTHS = ['జనవరి', 'ఫిబ్రవరి', 'మార్చి', 'ఏప్రిల్', 'మే', 'జూన్', 'జూలై', 'ఆగస్టు', 'సెప్టెంబర్', 'అక్టోబర్', 'నవంబర్', 'డిసెంబర్'];
+
+function out_data(): array {
+    $d = read_json('out.json');
+    $d += ['on' => false, 'days' => 30, 'from_h' => 10, 'to_h' => 18, 'tries' => 2, 'list' => [], 'built' => 0, 'last_dial' => 0, 'note' => ''];
+    $d['list'] = array_filter((array)$d['list'], 'is_array');
+    return $d;
+}
+function vobiz_auth(): array { $s = settings(); return [trim((string)($s['vobiz_id'] ?? '')), trim((string)($s['vobiz_token'] ?? ''))]; }
+// ok, bad (Vobiz refused the ID or token), unknown (could not be checked just now), none (nothing saved)
+function vobiz_check(): string {
+    [$id, $tok] = vobiz_auth();
+    if ($id === '' || $tok === '') return 'none';
+    $ch = curl_init(OUT_API . rawurlencode($id) . '/');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 6, CURLOPT_TIMEOUT => 12, CURLOPT_HTTPHEADER => ["X-Auth-ID: $id", "X-Auth-Token: $tok", 'Accept: application/json']]);
+    curl_exec($ch); $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    return $code >= 200 && $code < 300 ? 'ok' : ($code === 401 || $code === 403 ? 'bad' : 'unknown');
+}
+// Ask Vobiz to ring a mobile number. When it is answered, Vobiz fetches the Answer URL, which carries the entry's id.
+function vobiz_dial(string $mobile10, string $outId): array {
+    [$id, $tok] = vobiz_auth();
+    $key = (string)(settings()['phone_key'] ?? '');
+    if ($id === '' || $tok === '') return ['ok' => false, 'why' => 'The Vobiz Auth ID and Auth Token are not saved yet.', 'auth' => true];
+    if ($key === '') return ['ok' => false, 'why' => 'Set up the phone line first (Phone line page).', 'auth' => true];
+    if (!preg_match('~^[6-9]\d{9}$~', $mobile10)) return ['ok' => false, 'why' => 'That is not a ten-digit mobile number.'];
+    $r = http_post(OUT_API . rawurlencode($id) . '/Call/', ["X-Auth-ID: $id", "X-Auth-Token: $tok", 'Content-Type: application/json', 'Accept: application/json'],
+        json_encode(['from' => OUT_FROM, 'to' => '+91' . $mobile10, 'answer_url' => VOBIZ_URL . '?key=' . $key . '&out=' . rawurlencode($outId), 'answer_method' => 'POST']), 20);
+    if ($r['code'] >= 200 && $r['code'] < 300) return ['ok' => true];
+    $msg = (string)($r['data']['error'] ?? ($r['data']['message'] ?? ($r['err'] ?: 'no answer')));
+    if (is_array($r['data']['error'] ?? null)) $msg = json_encode($r['data']['error']);
+    return ['ok' => false, 'why' => "Vobiz answered {$r['code']}: " . clean_line($msg, 200), 'auth' => $r['code'] === 401 || $r['code'] === 403];
+}
+// A vehicle number the way she says it aloud: A P, three nine, W E, four two one nine.
+function say_plate(string $plate): string {
+    $w = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+    preg_match_all('~[A-Z]+|\d+~', strtoupper($plate), $m);
+    return implode(', ', array_map(fn($p) => ctype_digit($p) ? implode(' ', array_map(fn($x) => $w[(int)$x], str_split($p))) : implode(' ', str_split($p)), $m[0]));
+}
+// Her opening words on a renewal reminder call.
+function out_line(array $e): string {
+    $ts = strtotime((string)$e['expiry']);
+    $days = (int)floor(($ts - strtotime('today')) / 86400);
+    $when = $days <= 0 ? 'ఈ రోజు' : ($days === 1 ? 'రేపు' : TE_MONTHS[(int)date('n', $ts) - 1] . ' ' . (int)date('j', $ts) . ' న');
+    return 'Hello సర్, Bharat GPS Tracker నుండి call చేస్తున్నాను. మీ vehicle ' . say_plate((string)$e['plate']) . ' GPS validity ' . $when . ' expire అవుతుంది. Renewal చేయమంటారా?';
+}
+// Remake the call list from the GPS servers: every vehicle that expires within the chosen days. What already
+// happened with a vehicle (called, said yes, no answer) is kept; a vehicle that was renewed drops off the list.
+function out_build(array $d): array {
+    $idx = gps_index();
+    $today = strtotime('today'); $new = [];
+    foreach ((array)($idx['dev'] ?? []) as $e) {
+        $exp = (string)($e[4] ?? ''); if ($exp === '') continue;
+        $days = (int)floor((strtotime($exp) - $today) / 86400);
+        if ($days < 0 || $days > (int)$d['days']) continue;
+        $plate = (string)(($e[2] ?? '') !== '' ? $e[2] : ($e[1] ?? '')); if ($plate === '') continue;
+        $old = $d['list'][$plate] ?? null;
+        $mobile = (string)(((array)($e[7] ?? []))[0] ?? '');
+        $row = ['plate' => $plate, 'name' => (string)($e[3] ?? ''), 'expiry' => $exp, 'mobile' => $mobile, 'server' => (int)$e[0], 'dev_id' => (int)($e[11] ?? 0),
+            'status' => $mobile !== '' ? 'wait' : 'nomobile', 'tries' => 0, 'last' => 0, 'looked' => 0, 'note' => ''];
+        if (is_array($old) && ($old['expiry'] ?? '') === $exp) {
+            foreach (['tries', 'last', 'looked', 'note', 'call_id'] as $k) if (isset($old[$k])) $row[$k] = $old[$k];
+            if ($mobile === '' && ($old['mobile'] ?? '') !== '') $row['mobile'] = $old['mobile'];
+            $row['status'] = ($old['status'] ?? '') === 'nomobile' && $row['mobile'] !== '' ? 'wait' : ($old['status'] ?? $row['status']);
+            if ($row['mobile'] === '') $row['status'] = 'nomobile';
+        }
+        $new[$plate] = $row;
+    }
+    uasort($new, fn($a, $b) => strcmp($a['expiry'], $b['expiry']));
+    $d['list'] = array_slice($new, 0, 600, true);
+    $d['built'] = time();
+    return $d;
+}
+// One step of the dialler, called every half minute by the call server. At most one new call per step, and only
+// while the owner has it switched on and the clock is inside the calling hours.
+function out_tick(): string {
+    $d = out_data();
+    if (empty($d['on'])) return 'off';
+    $h = (int)date('G');
+    if ($h < (int)$d['from_h'] || $h >= (int)$d['to_h']) return 'outside the calling hours';
+    $now = time();
+    if ($now - (int)$d['last_dial'] < 75) return 'waiting between calls';
+    $d['last_dial'] = $now; write_json('out.json', $d);          // claim this step before the slow work
+    if ($now - (int)$d['built'] > 6 * 3600) $d = out_build($d);
+    $today = date('Ymd'); $max = max(1, (int)$d['tries']); $busy = false;
+    foreach ($d['list'] as $k => $e) {
+        if ($e['status'] === 'calling' && $now - (int)$e['last'] > 150) { $d['list'][$k]['status'] = 'noanswer'; }        // rang, nobody picked up
+        elseif ($e['status'] === 'talking' && $now - (int)$e['last'] > 900) { $d['list'][$k]['status'] = 'unclear'; }     // picked up, the call ended with no answer to the question
+        elseif (in_array($e['status'], ['calling', 'talking'], true)) $busy = true;
+    }
+    $said = 'nobody left to call today';
+    if ($busy) $said = 'a call is in progress';
+    else foreach ($d['list'] as $k => $e) {
+        if (!in_array($e['status'], ['wait', 'noanswer', 'unclear', 'nomobile'], true)) continue;
+        if ((int)$e['tries'] >= $max || ((int)$e['last'] > 0 && date('Ymd', (int)$e['last']) === $today)) continue;
+        if ($e['mobile'] === '') {                                // not in the vehicle list: look once on the vehicle's own page
+            if (!empty($e['looked'])) continue;
+            $d['list'][$k]['looked'] = 1;
+            $found = gps_more_phones(['server' => $e['server'], 'dev_id' => $e['dev_id']]);
+            if (!$found) continue;
+            $d['list'][$k]['mobile'] = $e['mobile'] = (string)$found[0]; $d['list'][$k]['status'] = 'wait';
+        }
+        $r = vobiz_dial($e['mobile'], $k);
+        if ($r['ok']) { $d['list'][$k]['status'] = 'calling'; $d['list'][$k]['tries'] = (int)$e['tries'] + 1; $d['list'][$k]['last'] = $now; $d['list'][$k]['note'] = ''; $d['note'] = ''; $said = 'called ' . $k; }
+        else {   // not placed: say why on the page; this customer is tried again tomorrow, the next one on the next step
+            $d['list'][$k]['note'] = $r['why']; $d['note'] = $r['why']; $said = 'could not call: ' . $r['why'];
+            if (!empty($r['auth'])) $d['on'] = false; else $d['list'][$k]['last'] = $now;
+        }
+        break;
+    }
+    $d['last_dial'] = $now;
+    write_json('out.json', $d);
+    return $said;
+}
+// What the Outgoing calls page shows.
+function out_view(): array {
+    $d = out_data(); [$id, $tok] = vobiz_auth();
+    $mask = fn(string $v) => $v === '' ? '' : str_repeat('•', max(4, min(20, strlen($v) - 4))) . substr($v, -4);
+    $count = ['wait' => 0, 'calling' => 0, 'yes' => 0, 'later' => 0, 'noanswer' => 0, 'nomobile' => 0, 'other' => 0];
+    $rows = [];
+    foreach ($d['list'] as $e) {
+        $st = $e['status'] === 'talking' ? 'calling' : $e['status'];
+        $count[isset($count[$st]) ? $st : 'other']++;
+        $rows[] = ['plate' => $e['plate'], 'name' => $e['name'], 'ending' => $e['mobile'] !== '' ? substr($e['mobile'], -4) : '', 'expiry' => date('j M', strtotime($e['expiry'])),
+            'status' => $e['status'], 'tries' => (int)$e['tries'], 'left' => (int)$e['tries'] < (int)$d['tries'], 'note' => (string)($e['note'] ?? '')];
+    }
+    $h = (int)date('G');
+    return ['id' => $mask($id), 'token' => $mask($tok), 'from' => OUT_FROM, 'on' => !empty($d['on']), 'days' => (int)$d['days'], 'from_h' => (int)$d['from_h'], 'to_h' => (int)$d['to_h'],
+        'tries' => (int)$d['tries'], 'rows' => $rows, 'count' => $count, 'total' => count($rows), 'note' => (string)$d['note'], 'in_hours' => $h >= (int)$d['from_h'] && $h < (int)$d['to_h'],
+        'gps' => gps_on(), 'built' => (int)$d['built']];
+}
+
 // What happened after the call, in one line, for the Call history page.
 function call_after(array $c): string {
     $b = ($c['book_note'] ?? '') !== '' ? 'Booking during the call: ' . $c['book_note'] . ' · ' : '';
+    if (($c['out'] ?? '') !== '') $b = 'Outgoing call she made' . ($c['out'] === 'test' ? ' (test)' : " about {$c['out']}") . ': ' . (['yes' => 'the customer wants to renew, sales was emailed', 'later' => 'the customer said later or no', 'wrong' => 'wrong person answered', 'unclear' => 'no clear answer'][$c['out_result'] ?? ''] ?? 'no answer to the question yet') . ' · ';
     if (($c['verify_note'] ?? '') !== '') $b = 'Vehicle check: ' . $c['verify_note'] . ' · ' . $b;
     return $b . call_after_rest($c);
 }
@@ -1018,7 +1156,7 @@ function gps_result_text(array $r, string $why = '', bool $ver = false): string 
 
 // ---------- after a phone call ----------
 // TaskManager entry point that creates one unassigned task (ai-call-task.php in the TaskManager project).
-const LIVE_VERSION = 34;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
+const LIVE_VERSION = 35;   // must match VERSION in live/server.js; the dashboard warns when the VPS runs an older copy
 const REC_URL = 'https://call.someswara.com/rec';   // where the call server serves a recording, with a short-lived pass
 const TASK_URL = 'https://salmon-goldfish-110661.hostingersite.com/ai-call-task.php';
 
@@ -1099,6 +1237,17 @@ function task_todo(array $x): string {
 // Everything that happens once a real phone call is over: understand it, raise a task in TaskManager for work
 // that needs the team (never for renewals), and send the team one email. Returns the fields to keep on the call.
 function call_wrap(array $c): array {
+    if (($c['out'] ?? '') !== '') {   // an outgoing renewal reminder: no task; the sales team is emailed only when the customer said yes
+        $res = (string)($c['out_result'] ?? '');
+        $keep = ['outcome' => $res === 'yes' ? 'renewal' : 'none', 'vehicle' => (string)$c['out'],
+            'summary' => 'Outgoing renewal reminder for ' . $c['out'] . ': ' . (['yes' => 'the customer wants to renew.', 'later' => 'the customer said later or no.', 'wrong' => 'wrong person answered.'][$res] ?? 'the call ended without a clear answer.')];
+        $keep['mailed'] = MAIL_ON && $res === 'yes' ? (lead_mail($c + $keep) ? 1 : -1) : 3;
+        if ($c['out'] !== 'test') {
+            $d = out_data();
+            if (isset($d['list'][$c['out']]) && in_array($d['list'][$c['out']]['status'], ['calling', 'talking'], true)) { $d['list'][$c['out']]['status'] = 'unclear'; write_json('out.json', $d); }
+        }
+        return $keep;
+    }
     $answered = !isset($c['answered']) || $c['answered'];
     $x = $answered ? call_extract($c) : ['type' => 'none'];
     $keep = ['outcome' => $x['type']];

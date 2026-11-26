@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 34;
+const VERSION = 35;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -618,9 +618,42 @@ function answerLine(kind, d) {
   return { text: 'మీ vehicle validity ' + date + ' వరకు ఉంది, ఇంకా ' + d.days + ' రోజులు ఉన్నాయి. ఇప్పుడు renewal అవసరం లేదు. Expiry కి దగ్గరలో మళ్ళీ call చేయండి. Thank you.' };
 }
 
+// ---------- outgoing renewal reminder ----------
+// She has phoned a customer and asked "shall I renew?". Their answer is read here, and she says a fixed line.
+const OUT_LINE = {
+  yes: 'Thank you సర్. ఒక సంవత్సరం renewal ఒక వెయ్యి రెండు వందల రూపాయలు. మా team payment link ని WhatsApp లో పంపిస్తారు. Payment చేసిన వెంటనే renewal అవుతుంది.',
+  later: 'సరే సర్. Expire అయ్యే ముందు renew చేసుకోండి. Thank you.',
+  wrong: 'Sorry సర్, wrong number కి call వచ్చింది. Thank you.',
+  again: 'మీ vehicle GPS renewal చేయమంటారా?',
+  price: 'ఒక సంవత్సరం renewal ఒక వెయ్యి రెండు వందల రూపాయలు. Renewal చేయమంటారా?',
+};
+const OUT_WRONG = /wrong\s*number|రాంగ్\s*నంబర్|నాది\s*కాదు|నా\s*(vehicle|బండి|వెహికల్)\s*కాదు|not my/i;
+const OUT_LATER = /తర్వాత|తరువాత|later|రేపు|ఇప్పుడు\s*వద్దు|busy|బిజీ|వద్దు|అవసరం\s*లేదు|అక్కర్లేదు/i;
+const OUT_YES = /చేయండి|చెయ్యండి|చేసేయండి|కావాలి|renew|రెన్యూ/i;
+async function outTurn(S, text, hearMs) {
+  S.flowDone = true;                                                              // none of the incoming-call scripts apply
+  const done = (result, line) => {
+    S.outDone = true;
+    ivr('out_result', { token: S.token, result }).catch((e) => log('outgoing result not saved:', e.message));
+    log('call', S.cfg.call_id, 'outgoing: the customer answered', result);
+    return sayLine(S, line, hearMs, true, true);                                  // then she ends the call
+  };
+  if (OUT_WRONG.test(text)) return done('wrong', OUT_LINE.wrong);
+  if (OUT_LATER.test(text) || (NO_WORDS.test(text) && !OUT_YES.test(text))) return done('later', OUT_LINE.later);
+  if (OUT_YES.test(text) || YES_WORDS.test(text)) return done('yes', OUT_LINE.yes);
+  if (/ఎంత|price|amount|cost|rate|ధర|రేటు/i.test(text) && !S.outPrice) { S.outPrice = true; return sayLine(S, OUT_LINE.price, hearMs, true); }   // asked the price first
+  S.outAsks = (S.outAsks || 0) + 1;
+  if (S.outAsks === 1) return sayLine(S, S.cfg.greeting, hearMs);                 // they said hello over her opening words: say them again
+  if (S.outAsks === 2) return sayLine(S, OUT_LINE.again, hearMs, true);
+  S.outDone = true;                                                               // still unclear: she answers in her own words from here
+  ivr('out_result', { token: S.token, result: 'unclear' }).catch(() => {});
+  return false;
+}
+
 // One caller turn in a scripted call. true = a fixed line was spoken; false = let the model answer this turn.
 async function scriptTurn(S, text, hearMs) {
   if (!SCRIPT_ON || S.cfg.trainer || S.cfg.allowed === false) return false;
+  if (S.cfg.outbound) return S.outDone ? false : outTurn(S, text, hearMs);
   const g = S.gen, stale = () => g !== S.gen || S.closed;
   const leave = () => { S.flow = null; S.flowDone = true; return false; };       // hand the rest of the call to the model
   if (!S.flow) {
@@ -905,7 +938,7 @@ async function reply(S, hearMs, ack, afterCheck, noRepeat) {
   // She is told to mark a booking with a tag, but often just says "our team will call" without it, and then no
   // booking ID exists. So when her reply sounds like the close of a booking, the call so far is read once more and,
   // if the customer has agreed to book, the booking is made here.
-  if (!book && !S.book && !afterCheck && !S.flow && S.kind !== 'old' && S.bookTries < 2 && BOOK_CLOSE.test(cleanReply(raw))) {
+  if (!book && !S.book && !afterCheck && !S.flow && !S.cfg.outbound && S.kind !== 'old' && S.bookTries < 2 && BOOK_CLOSE.test(cleanReply(raw))) {
     S.bookTries++;
     const talk = S.turns.slice(-24).map((t) => (t.who === 'agent' ? 'Agent: ' : 'Customer: ') + t.text).join('\n');
     let out = '';
@@ -1111,12 +1144,13 @@ function vobizAnswer(req, res, url) {
       return '';
     };
     const from = pick('from'), to = pick('to'), call = pick('calluuid', 'call_uuid', 'callid');
+    const out = (url.searchParams.get('out') || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 20);   // set on calls she makes: the call list entry
     if (call) {
       vobizPending.set(call, { from, to });
       setTimeout(() => vobizPending.delete(call), 60000);
     }
-    log('Vobiz call from', from || '(no number)', '- telling Vobiz to stream it here');
-    const ws = 'wss://' + (req.headers.host || 'call.someswara.com') + '/vobiz?' + new URLSearchParams({ key, from, to, call });
+    log(out ? 'Outgoing call answered by' : 'Vobiz call from', (out ? to : from) || '(no number)', '- telling Vobiz to stream it here');
+    const ws = 'wss://' + (req.headers.host || 'call.someswara.com') + '/vobiz?' + new URLSearchParams({ key, from, to, call, out });
     res.writeHead(200, { 'Content-Type': 'application/xml' });
     res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Stream bidirectional="true" audioTrack="inbound" keepCallAlive="true" contentType="audio/x-mulaw;rate=8000">'
       + xmlSafe(ws) + '</Stream><Hangup/></Response>');
@@ -1154,7 +1188,7 @@ function vobizCall(ws, key, q) {
       const rate = +fmt.sampleRate === 16000 ? 16000 : 8000;
       const known = vobizPending.get(st.callId || q.call) || {};
       let cfg;
-      try { cfg = await ivr('phone_config', { key, from: q.from || known.from || '', to: q.to || known.to || '', call_sid: String(st.callId || q.call || '') }); }
+      try { cfg = await ivr('phone_config', { key, from: q.from || known.from || '', to: q.to || known.to || '', call_sid: String(st.callId || q.call || ''), out: q.out || '' }); }
       catch (e) { log('phone call refused:', e.message); ws.close(); return; }
       cfg.pcm_rate = rate;
       S = newState(ws, cfg.token, cfg, rate);
@@ -1203,7 +1237,7 @@ server.on('upgrade', (req, socket, head) => {
     const key = url.searchParams.get('key') || '';
     if (!/^[a-f0-9]{32}$/.test(key)) return refuse('400 Bad Request');
     if (wss.clients.size >= MAX_CALLS) return refuse('503 Busy');
-    const q = { from: url.searchParams.get('from') || '', to: url.searchParams.get('to') || '', call: url.searchParams.get('call') || '' };
+    const q = { from: url.searchParams.get('from') || '', to: url.searchParams.get('to') || '', call: url.searchParams.get('call') || '', out: url.searchParams.get('out') || '' };
     return wss.handleUpgrade(req, socket, head, (ws) => vobizCall(guard(ws), key, q));
   }
   if (url.pathname !== '/live' || !/^[a-f0-9]{48}$/.test(token)) return refuse('400 Bad Request');
@@ -1217,3 +1251,9 @@ process.on('uncaughtException', (e) => log('unexpected error (server kept runnin
 process.on('unhandledRejection', (e) => log('unexpected failure (server kept running):', e && e.message ? e.message : e));
 
 server.listen(PORT, '127.0.0.1', () => log('live call server listening on', PORT));
+
+// The dialler for outgoing calls lives on the website; it only needs a regular nudge. Each nudge places at most one
+// call, and only when the owner has switched outgoing calls on and the time is inside the calling hours.
+setInterval(() => {
+  ivr('out_tick', {}, 30000).then((d) => { if (d.said && /^(called|could not)/.test(d.said)) log('outgoing:', d.said); }).catch(() => {});
+}, 30000).unref();
