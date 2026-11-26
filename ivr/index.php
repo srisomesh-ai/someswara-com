@@ -393,40 +393,26 @@ textarea{font:inherit;color:var(--text);width:100%;padding:12px;border-radius:8p
         <div class="hint14">She calls from: <b id="oc-from"></b></div>
         <div><button type="submit" class="btn-save" id="oc-auth-save">Save and check</button></div>
       </form>
-      <form class="card stack" id="oc-form" style="gap:14px">
-        <h2>2. Renewal reminders</h2>
-        <div style="display:flex;gap:14px;flex-wrap:wrap">
-          <div class="field"><label for="oc-days">Call when the GPS expires within</label><div style="display:flex;align-items:center;gap:8px"><input id="oc-days" type="text" inputmode="numeric" autocomplete="off" style="width:80px"><span>days</span></div></div>
-          <div class="field"><label for="oc-fromh">Calling hours</label><div style="display:flex;align-items:center;gap:8px"><select id="oc-fromh" style="min-height:44px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);font:inherit"><option value="9">9:00 am</option><option value="10">10:00 am</option><option value="11">11:00 am</option><option value="12">12:00 pm</option><option value="13">1:00 pm</option><option value="14">2:00 pm</option><option value="15">3:00 pm</option><option value="16">4:00 pm</option><option value="17">5:00 pm</option><option value="18">6:00 pm</option><option value="19">7:00 pm</option><option value="20">8:00 pm</option><option value="21">9:00 pm</option></select><span>to</span><select id="oc-toh" aria-label="Until" style="min-height:44px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);font:inherit"><option value="9">9:00 am</option><option value="10">10:00 am</option><option value="11">11:00 am</option><option value="12">12:00 pm</option><option value="13">1:00 pm</option><option value="14">2:00 pm</option><option value="15">3:00 pm</option><option value="16">4:00 pm</option><option value="17">5:00 pm</option><option value="18">6:00 pm</option><option value="19">7:00 pm</option><option value="20">8:00 pm</option><option value="21">9:00 pm</option></select></div></div>
-          <div class="field"><label for="oc-tries">If nobody answers, try</label><div style="display:flex;align-items:center;gap:8px"><input id="oc-tries" type="text" inputmode="numeric" autocomplete="off" style="width:80px"><span>times, on different days</span></div></div>
-        </div>
-        <div class="hint">She never calls outside these hours, never calls the same customer twice in one day, and stops calling a customer who says no.</div>
-        <div class="pill" id="oc-run" style="align-self:flex-start">Not started</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button type="submit" class="btn-save" id="oc-start">Start calling</button>
-          <button type="button" class="btn" id="oc-stop">Stop</button>
-        </div>
+      <div class="card stack" style="gap:10px">
+        <h2>2. Renewal reminder calls</h2>
+        <div class="hint14">Who she calls is now decided in TaskManager, on the WhatsApp Renewals page (AI renewal calls). She calls a customer who got the WhatsApp reminder and has not paid, once for all their vehicles. Switch the calls on or off there.</div>
+        <div class="hint" id="oc-said"></div>
         <div class="hint" id="oc-note"></div>
-      </form>
+      </div>
       <form class="card stack" id="oc-test-form" style="gap:14px">
         <h2>Test: call my number first</h2>
-        <div class="hint14">She calls this one number now and says exactly what a customer will hear. It uses the first vehicle on the list as the example.</div>
+        <div class="hint14">She calls this one number now and says exactly what a customer will hear. It uses a sample vehicle number.</div>
         <div class="inline" style="flex-wrap:wrap">
           <label class="sr" for="oc-test">Your mobile number</label>
           <input id="oc-test" type="text" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="Your mobile number" style="flex:1 1 180px;min-width:0">
           <button type="submit" class="btn" id="oc-test-go">Call me</button>
         </div>
       </form>
-      <div class="card stack" style="gap:14px">
-        <h2>3. Call list</h2>
-        <div class="hint14" id="oc-count">Made from your GPS servers.</div>
-        <div id="oc-rows" class="stack"></div>
-        <div class="hint">Every call is also in Call history with its recording. A customer who wants to renew goes to sales@bharatgps.com by email, to send the payment link.</div>
-      </div>
       <div class="card stack" style="gap:10px">
         <h2>What she says</h2>
         <div class="hint14">"Hello సర్, Bharat GPS Tracker నుండి call చేస్తున్నాను. మీ vehicle A P, three nine, W E, four two one nine GPS validity డిసెంబర్ 2 న expire అవుతుంది. Renewal చేయమంటారా?"</div>
-        <div class="hint14">If the customer says yes: "Thank you సర్. ఒక సంవత్సరం renewal ఒక వెయ్యి రెండు వందల రూపాయలు. మా team payment link ని WhatsApp లో పంపిస్తారు. Payment చేసిన వెంటనే renewal అవుతుంది."</div>
+        <div class="hint14">A customer with two or more vehicles hears the count: "మీ 5 vehicles GPS validity ఈ వారం expire అవుతుంది. Renewal చేయమంటారా?"</div>
+        <div class="hint14">If the customer says yes: "Thank you సర్. Payment link ఇప్పుడే మీ WhatsApp కి పంపిస్తున్నాము. Payment చేసిన వెంటనే renewal అవుతుంది." TaskManager sends the WhatsApp pay link at once.</div>
         <div class="hint14">If the customer says "later" or "no": "సరే సర్. Expire అయ్యే ముందు renew చేసుకోండి. Thank you." If the wrong person answers, she says sorry. She ends the call after each of these.</div>
       </div>
     </div>
@@ -1232,8 +1218,6 @@ function renderAreas(d) {
   $('sa-km').value = d.km; $('sa-out').value = d.outside;
 }
 // ---------- outgoing calls ----------
-const OC_STATUS = { wait: ['Waiting', ''], calling: ['Calling now', ''], talking: ['On the call now', ''], yes: ['Wants to renew', 'good'], later: ['Said later or no', ''], wrong: ['Wrong person answered', 'bad'],
-  noanswer: ['No answer', ''], unclear: ['Picked up, no clear answer', ''], nomobile: ['No mobile saved, skipped', 'bad'] };
 let ocTimer = 0;
 function renderOut(d) {
   if (document.activeElement !== $('oc-id')) $('oc-id').value = d.id;
@@ -1242,31 +1226,10 @@ function renderOut(d) {
   const st = $('oc-state'), ck = d.check || (d.id && d.token ? 'saved' : 'none');
   const stText = { ok: ['Connected', 'good'], bad: ['Vobiz did not accept these', 'bad'], unknown: ['Saved. Vobiz could not be checked just now', ''], saved: ['Saved', ''], none: ['Not saved yet', ''] }[ck];
   st.className = 'pill' + (stText[1] ? ' ' + stText[1] : ''); st.textContent = stText[0];
-  for (const [id, v] of [['oc-days', d.days], ['oc-tries', d.tries]]) if (document.activeElement !== $(id)) $(id).value = v;
-  if (document.activeElement !== $('oc-fromh')) $('oc-fromh').value = d.from_h;
-  if (document.activeElement !== $('oc-toh')) $('oc-toh').value = d.to_h;
-  const run = $('oc-run');
-  run.className = 'pill' + (d.on ? ' good' : ''); run.textContent = d.on ? (d.in_hours ? 'Calling is on' : 'On. She starts again in the calling hours') : 'Not calling';
-  $('oc-start').textContent = d.on ? 'Save changes' : 'Start calling';
+  $('oc-said').textContent = d.said_at ? 'Last check with TaskManager, ' + new Date(d.said_at * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ': ' + d.said + '.' : 'She has not asked TaskManager yet. Update the call server on the VPS.';
   $('oc-note').textContent = d.note ? 'Last problem: ' + d.note : '';
-  const c = d.count;
-  $('oc-count').textContent = !d.gps ? 'Connect your GPS servers first. The call list is made from them.' : !d.built ? 'The list could not be made yet. Check the GPS servers page.'
-    : !d.total ? 'No vehicle on your GPS servers has an expiry date in the next ' + d.days + ' days. Change the days above and press ' + (d.on ? 'Save changes' : 'Start calling') + ' to look further ahead.'
-    : d.total + (d.total === 1 ? ' vehicle expires' : ' vehicles expire') + ' in the next ' + d.days + ' days: ' + c.yes + ' want to renew, ' + c.calling + ' calling, ' + c.wait + ' waiting, ' + (c.noanswer + c.later + c.other) + ' called without a yes, ' + c.nomobile + ' skipped.';
-  const box = $('oc-rows'); box.textContent = '';
-  for (const r of d.rows) {
-    const row = el('div', 'item'); row.style.flexWrap = 'wrap';
-    const left = el('span'); const top = el('div', '', r.plate); top.style.fontWeight = '700'; left.appendChild(top);
-    const sub = el('div', 'hint', (r.name || 'No name') + ' · ' + (r.ending ? 'mobile ending ' + r.ending : 'no mobile') + ' · expires ' + r.expiry + (r.note ? ' · ' + r.note : '')); left.appendChild(sub);
-    row.appendChild(left);
-    const s = OC_STATUS[r.status] || [r.status, ''];
-    let text = s[0];
-    if (r.status === 'noanswer' || r.status === 'unclear') text += r.left ? ', will try again' : ', no more tries';
-    const pill = el('span', 'pill' + (s[1] ? ' ' + s[1] : ''), text); pill.style.flex = '0 0 auto';
-    row.appendChild(pill); box.appendChild(row);
-  }
   clearTimeout(ocTimer);
-  if (d.on && !$('view-out').classList.contains('hide')) ocTimer = setTimeout(loadOut, 20000);   // keep the list fresh while it is calling
+  if (!$('view-out').classList.contains('hide')) ocTimer = setTimeout(loadOut, 30000);
 }
 async function loadOut() { try { renderOut(await api('out_get')); } catch (err) { toast(err.message); } }
 for (const id of ['oc-id', 'oc-tok']) $(id).addEventListener('focus', () => { if ($(id).value.includes('•')) $(id).select(); });
@@ -1275,13 +1238,6 @@ $('oc-auth-form').addEventListener('submit', async (e) => {
   try { const d = await api('out_auth', { id: $('oc-id').value, token: $('oc-tok').value }); renderOut(d); toast(d.check === 'ok' ? 'Vobiz is connected.' : d.check === 'bad' ? 'Vobiz did not accept the Auth ID or Auth Token.' : 'Saved.'); } catch (err) { toast(err.message); }
   b.disabled = false; b.textContent = 'Save and check';
 });
-$('oc-form').addEventListener('submit', async (e) => {
-  e.preventDefault(); const b = $('oc-start'), was = b.textContent; b.disabled = true; b.textContent = 'Making the list';
-  try { renderOut(await api('out_start', { days: $('oc-days').value, tries: $('oc-tries').value, from_h: $('oc-fromh').value, to_h: $('oc-toh').value })); toast('Calling is on. She calls one customer at a time, in the calling hours.'); }
-  catch (err) { toast(err.message); b.textContent = was; }
-  b.disabled = false;
-});
-$('oc-stop').addEventListener('click', async () => { try { renderOut(await api('out_stop', {})); toast('Stopped. A call already in progress will finish.'); } catch (err) { toast(err.message); } });
 $('oc-test-form').addEventListener('submit', async (e) => {
   e.preventDefault(); const b = $('oc-test-go'); b.disabled = true; b.textContent = 'Calling';
   try { await api('out_test', { mobile: $('oc-test').value }); toast('Calling your number now. Pick up to hear her.'); } catch (err) { toast(err.message); }

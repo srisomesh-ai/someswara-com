@@ -55,9 +55,9 @@ hear a call-back message and the call ends. Phone calls are saved in the call lo
 
 ## Outgoing calls (renewal reminders)
 
-- Page: Outgoing calls. The owner pastes the Vobiz Auth ID and Auth Token (kept in `settings.json`, never in the code), sets the days, calling hours and tries, and presses Start.
-- The call list is made from the GPS servers: every vehicle whose expiry date falls within the chosen days and that has a customer mobile saved. It is kept in `out.json`.
-- The call server nudges `api.php?action=out_tick` every 30 seconds. Each nudge places at most one call through the Vobiz calling API (`POST /api/v1/Account/{auth_id}/Call/`), only while it is switched on and inside the calling hours (never before 9 am or after 9 pm).
-- When the customer picks up, Vobiz fetches the usual Answer URL with `&out=<vehicle>`; `phone_config` then gives the reminder as the opening line. The call server reads the answer (yes, later or no, wrong person) and says a fixed line, reports it with `out_result`, and ends the call.
+- Page: Outgoing calls. The owner pastes the Vobiz Auth ID and Auth Token (kept in `settings.json`, never in the code) and can make a test call.
+- Who is called is decided by TaskManager (WhatsApp Renewals page, "AI renewal calls"): customers who got the WhatsApp reminder and have not paid after the set days, one call per customer mobile for all their vehicles, up to three tries about two hours apart. TaskManager keeps the list, the calling hours and the on/off switch.
+- The call server nudges `api.php?action=out_tick` every 30 seconds. Each nudge asks TaskManager (`ai-call-task.php`, `call_next`, same key as for tasks) for the next call and places at most one through the Vobiz calling API (`POST /api/v1/Account/{auth_id}/Call/`). The job is kept in `out.json` for a day.
+- When the customer picks up, Vobiz fetches the usual Answer URL with `&out=tm<job id>`; `phone_config` then gives the reminder as the opening line (the vehicle number for one vehicle, the count for two or more). The call server reads the answer (yes, later or no, wrong person) and says a fixed line, reports it with `out_result`, and ends the call. The result goes back to TaskManager (`call_result`); on a yes TaskManager sends the WhatsApp pay link again.
 - A yes is emailed to the sales address with "send the payment link". No task is created for these calls.
 

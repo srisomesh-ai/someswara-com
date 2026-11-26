@@ -16,7 +16,7 @@ function fail(string $msg, int $code = 400): void { out(['error' => $msg], $code
 
 // Anything that changes data must be a POST sent by this page (custom header blocks cross-site forms).
 $writes = ['setup', 'login', 'logout', 'save_settings', 'call_start', 'call_turn', 'call_text', 'call_end', 'call_flag',
-    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes', 'gps_save', 'rec_token', 'areas_key', 'out_auth', 'out_save', 'out_start', 'out_stop', 'out_test', 'areas_save', 'area_tech_add', 'area_tech_remove'];
+    'training_save', 'correction_save', 'correction_ignore', 'live_token', 'phone_save', 'phone_newkey', 'train_save', 'product_save', 'product_remove', 'product_notes', 'gps_save', 'rec_token', 'areas_key', 'out_auth', 'out_test', 'areas_save', 'area_tech_add', 'area_tech_remove'];
 if (in_array($action, $writes, true)) {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || ($_SERVER['HTTP_X_IVR'] ?? '') !== '1') fail('Bad request.', 400);
 }
@@ -81,7 +81,7 @@ if ($action === 'phone_config') {
     $outId = (string)($_POST['out'] ?? ''); $entry = null;
     if ($outId !== '') {
         $od = out_data();
-        $entry = $outId === 'test' ? ($od['test'] ?? null) : ($od['list'][$outId] ?? null);
+        $entry = $outId === 'test' ? ($od['test'] ?? null) : ($od['jobs'][$outId] ?? null);   // tm<number> = a call TaskManager asked for
         if (!is_array($entry) || ($entry['mobile'] ?? '') === '') fail('Unknown outgoing call.', 404);
         $from = (string)$entry['mobile'];           // the person on the line is the customer, not the number Vobiz shows as "from"
     }
@@ -91,9 +91,13 @@ if ($action === 'phone_config') {
     $greeting = $entry ? out_line($entry) : ($allowed ? call_greeting() : ($lang === 'hi' ? BUSY_HI : BUSY_TE));
     $call = ['id' => bin2hex(random_bytes(8)), 'started' => time(), 'last' => time(), 'voice' => $voice, 'lang' => $lang,
         'live' => true, 'phone' => true, 'from' => $from, 'answered' => (bool)$allowed, 'turns' => [['who' => 'agent', 'text' => $greeting]]];
-    if ($entry) { $call['out'] = $outId === 'test' ? 'test' : (string)$entry['plate']; $call['vehicles'] = [(string)$entry['plate']]; }
+    if ($entry) {
+        $many = (int)($entry['count'] ?? 1) > 1;
+        $call['out'] = $outId === 'test' ? 'test' : ($many ? (int)$entry['count'] . ' vehicles' : (string)$entry['plate']);
+        if (!$many) $call['vehicles'] = [(string)$entry['plate']];
+        if (!empty($entry['job'])) $call['out_job'] = (int)$entry['job'];
+    }
     call_save($call);
-    if ($entry && $outId !== 'test') { $od['list'][$outId]['status'] = 'talking'; $od['list'][$outId]['last'] = time(); $od['list'][$outId]['call_id'] = $call['id']; write_json('out.json', $od); }
     $all = array_filter(read_json('live.json'), fn($r) => is_array($r) && ($r['exp'] ?? 0) > time());
     $tok = bin2hex(random_bytes(24));
     $all[$tok] = ['exp' => time() + 7200, 'call_id' => $call['id'], 'trainer' => $trainer];   // lets the server report this call's transcript
@@ -103,8 +107,14 @@ if ($action === 'phone_config') {
     $pay = live_payload($lang, $trainer);
     $memory = $allowed && !$trainer && !$entry ? caller_memory($from, $call['id']) : '';   // an earlier call from this same number
     if ($entry) {   // what this call is, for anything she has to answer beyond the fixed lines
+        $n = max(1, (int)($entry['count'] ?? 1));
         $pay['outbound'] = ['plate' => (string)$entry['plate']];
-        $pay['prompt'] = (string)$pay['prompt'] . "\n\nThis call is different: YOU phoned this customer. It is an outgoing reminder call. They are an existing customer, and the GPS subscription of their vehicle {$entry['plate']} expires on " . date('j F Y', strtotime((string)$entry['expiry'])) . ". You have already told them this and asked whether they want to renew. Do not ask for the vehicle number and do not sell a new tracker. One year renewal is one thousand two hundred rupees. If they agree, say our team will send the payment link on WhatsApp. If they do not want it now, accept that politely and end. Keep every reply to one short sentence.";
+        if ($n > 1) $pay['outbound']['price'] = 'ఒక్కో vehicle కి ఒక సంవత్సరం renewal ఒక వెయ్యి రెండు వందల రూపాయలు. Renewal చేయమంటారా?';
+        // a call TaskManager asked for: a yes makes TaskManager send the WhatsApp pay link at once
+        if (!empty($entry['job'])) $pay['outbound']['yes'] = 'Thank you సర్. Payment link ఇప్పుడే మీ WhatsApp కి పంపిస్తున్నాము. Payment చేసిన వెంటనే renewal అవుతుంది.';
+        $what = $n > 1 ? "their $n vehicles expires around " : "their vehicle {$entry['plate']} expires on ";
+        $link = !empty($entry['job']) ? 'say the payment link is being sent to their WhatsApp now' : 'say our team will send the payment link on WhatsApp';
+        $pay['prompt'] = (string)$pay['prompt'] . "\n\nThis call is different: YOU phoned this customer. It is an outgoing reminder call. They are an existing customer, and the GPS subscription of " . $what . date('j F Y', strtotime((string)$entry['expiry'])) . ". You have already told them this and asked whether they want to renew. Do not ask for the vehicle number and do not sell a new tracker. One year renewal is one thousand two hundred rupees for each vehicle. If they agree, $link. If they do not want it now, accept that politely and end. Keep every reply to one short sentence.";
     }
     if ($memory !== '') {   // with one language (Telugu only) there is no per-language list, only the one prompt
         foreach ((array)($pay['prompts'] ?? []) as $l => $x) $pay['prompts'][$l] = $x . "\n\n" . $memory;
@@ -196,7 +206,7 @@ if (in_array($action, ['live_config', 'live_sync', 'live_rule', 'live_vehicle', 
         $c = call_find((string)$all[$tok]['call_id']);
         if (!$c || ($c['out'] ?? '') === '') fail('Not an outgoing call.', 400);
         $c['out_result'] = $res; call_save($c);
-        if ($c['out'] !== 'test') { $d = out_data(); if (isset($d['list'][$c['out']])) { $d['list'][$c['out']]['status'] = $res; $d['list'][$c['out']]['last'] = time(); write_json('out.json', $d); } }
+        if (!empty($c['out_job'])) tm_call_result((int)$c['out_job'], $res);   // TaskManager keeps the list; a yes sends the WhatsApp pay link
         out(['ok' => true]);
     }
     if ($action === 'live_book') {   // she has the name and place for a booking: make the task now, so she can say its number
@@ -578,13 +588,8 @@ case 'train_save':   // who may teach her by voice
     write_json('settings.json', $s);
     out(training());
 
-case 'areas_get':
-case 'out_get': {
-    // Show the list as soon as the page is opened, not only after Start: make it now when it is missing or over an hour old.
-    $d = out_data();
-    if (gps_on() && time() - (int)$d['built'] > 3600) { session_write_close(); write_json('out.json', out_build($d)); }
+case 'out_get':
     out(out_view());
-}
 case 'out_auth': {   // save the Vobiz Auth ID and Auth Token, then ask Vobiz whether it accepts them
     $s = settings();
     foreach (['id' => 'vobiz_id', 'token' => 'vobiz_token'] as $f => $k) {
@@ -596,41 +601,19 @@ case 'out_auth': {   // save the Vobiz Auth ID and Auth Token, then ask Vobiz wh
     write_json('settings.json', $s);
     out(out_view() + ['check' => vobiz_check()]);
 }
-case 'out_save':
-case 'out_start':
-case 'out_stop': {
-    $d = out_data();
-    if ($action === 'out_stop') $d['on'] = false;
-    else {
-        $hour = function ($v, int $def) { $v = (string)$v; return ctype_digit($v) && (int)$v <= 23 ? (int)$v : $def; };
-        if (isset($_POST['days'])) $d['days'] = max(1, min(60, (int)$_POST['days']));
-        if (isset($_POST['tries'])) $d['tries'] = max(1, min(5, (int)$_POST['tries']));
-        if (isset($_POST['from_h'])) $d['from_h'] = max(9, min(20, $hour($_POST['from_h'], 10)));        // never before 9 am
-        if (isset($_POST['to_h'])) $d['to_h'] = max($d['from_h'] + 1, min(21, $hour($_POST['to_h'], 18)));   // never after 9 pm
-        if ($action === 'out_start') {
-            [$vid, $vtok] = vobiz_auth();
-            if ($vid === '' || $vtok === '') fail('Save your Vobiz Auth ID and Auth Token first.');
-            if (!gps_on()) fail('Connect your GPS servers first (GPS servers page). The call list is made from them.');
-            $d['on'] = true; $d['note'] = '';
-        }
-        $d = out_build($d);
-    }
-    write_json('out.json', $d);
-    out(out_view());
-}
 case 'out_test': {   // one call to the owner's own number, to hear exactly what a customer will hear
     $m = phone_digits($_POST['mobile'] ?? '');
     if (!preg_match('~^[6-9]\d{9}$~', $m)) fail('Type a ten-digit mobile number.');
     $d = out_data();
     if (time() - (int)($d['test_at'] ?? 0) < 40) fail('Wait a little before the next test call.');
-    $first = $d['list'] ? array_values($d['list'])[0] : null;
-    $d['test'] = ['plate' => $first ? $first['plate'] : 'AP39AB1234', 'expiry' => $first ? $first['expiry'] : date('Y-m-d', time() + 7 * 86400), 'mobile' => $m];
+    $d['test'] = ['plate' => 'AP39AB1234', 'expiry' => date('Y-m-d', time() + 7 * 86400), 'mobile' => $m];
     $d['test_at'] = time();
     write_json('out.json', $d);
     $r = vobiz_dial($m, 'test');
     if (!$r['ok']) fail($r['why']);
     out(['ok' => true]);
 }
+case 'areas_get':
 case 'areas_key':
 case 'areas_save':
 case 'area_tech_add':

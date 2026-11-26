@@ -16,7 +16,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 // Goes up by one whenever this file changes. The dashboard compares it with LIVE_VERSION in lib.php and tells the
 // owner when the copy running on the VPS is older than the website, so a forgotten installer run is noticed.
-const VERSION = 35;
+const VERSION = 36;
 const PORT = +(process.env.PORT || 8790);
 const IVR_API = process.env.IVR_API || 'https://someswara.com/ivr/api.php';
 const S_HTTP = process.env.SARVAM_HTTP || 'https://api.sarvam.ai';
@@ -640,8 +640,8 @@ async function outTurn(S, text, hearMs) {
   };
   if (OUT_WRONG.test(text)) return done('wrong', OUT_LINE.wrong);
   if (OUT_LATER.test(text) || (NO_WORDS.test(text) && !OUT_YES.test(text))) return done('later', OUT_LINE.later);
-  if (OUT_YES.test(text) || YES_WORDS.test(text)) return done('yes', OUT_LINE.yes);
-  if (/ఎంత|price|amount|cost|rate|ధర|రేటు/i.test(text) && !S.outPrice) { S.outPrice = true; return sayLine(S, OUT_LINE.price, hearMs, true); }   // asked the price first
+  if (OUT_YES.test(text) || YES_WORDS.test(text)) return done('yes', S.cfg.outbound.yes || OUT_LINE.yes);   // a TaskManager call: the pay link goes out at once
+  if (/ఎంత|price|amount|cost|rate|ధర|రేటు/i.test(text) && !S.outPrice) { S.outPrice = true; return sayLine(S, S.cfg.outbound.price || OUT_LINE.price, hearMs, true); }   // asked the price first
   S.outAsks = (S.outAsks || 0) + 1;
   if (S.outAsks === 1) return sayLine(S, S.cfg.greeting, hearMs);                 // they said hello over her opening words: say them again
   if (S.outAsks === 2) return sayLine(S, OUT_LINE.again, hearMs, true);
