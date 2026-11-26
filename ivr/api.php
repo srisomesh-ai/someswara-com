@@ -579,8 +579,12 @@ case 'train_save':   // who may teach her by voice
     out(training());
 
 case 'areas_get':
-case 'out_get':
+case 'out_get': {
+    // Show the list as soon as the page is opened, not only after Start: make it now when it is missing or over an hour old.
+    $d = out_data();
+    if (gps_on() && time() - (int)$d['built'] > 3600) { session_write_close(); write_json('out.json', out_build($d)); }
     out(out_view());
+}
 case 'out_auth': {   // save the Vobiz Auth ID and Auth Token, then ask Vobiz whether it accepts them
     $s = settings();
     foreach (['id' => 'vobiz_id', 'token' => 'vobiz_token'] as $f => $k) {

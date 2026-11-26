@@ -1250,7 +1250,8 @@ function renderOut(d) {
   $('oc-start').textContent = d.on ? 'Save changes' : 'Start calling';
   $('oc-note').textContent = d.note ? 'Last problem: ' + d.note : '';
   const c = d.count;
-  $('oc-count').textContent = !d.gps ? 'Connect your GPS servers first. The call list is made from them.' : !d.built ? 'The list is made when you press Start calling.'
+  $('oc-count').textContent = !d.gps ? 'Connect your GPS servers first. The call list is made from them.' : !d.built ? 'The list could not be made yet. Check the GPS servers page.'
+    : !d.total ? 'No vehicle on your GPS servers has an expiry date in the next ' + d.days + ' days. Change the days above and press ' + (d.on ? 'Save changes' : 'Start calling') + ' to look further ahead.'
     : d.total + (d.total === 1 ? ' vehicle expires' : ' vehicles expire') + ' in the next ' + d.days + ' days: ' + c.yes + ' want to renew, ' + c.calling + ' calling, ' + c.wait + ' waiting, ' + (c.noanswer + c.later + c.other) + ' called without a yes, ' + c.nomobile + ' skipped.';
   const box = $('oc-rows'); box.textContent = '';
   for (const r of d.rows) {
