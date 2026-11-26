@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Maps Business Extractor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="" width="24" height="24">
+    <h1>Maps Business Extractor</h1>
+  </header>
+
+  <main>
+    <section class="run">
+      <div id="run-status" class="run-status">Ready</div>
+      <p id="hint" class="lead" hidden>Search on Google Maps first, e.g. <i>plumbers in Hyderabad</i>, then click Start.</p>
+      <div class="run-opts" id="opts">
+        <label class="check"><input id="detailed" type="checkbox" checked> Open each place (full details)</label>
+        <label>Max <input id="max" type="number" min="1" max="2000" value="200"></label>
+      </div>
+      <button id="start" class="primary">Start extracting</button>
+      <button id="stop" hidden>Stop</button>
+      <button id="open-maps" class="primary" hidden>Open Google Maps</button>
+    </section>
+
+    <div class="stats three">
+      <div class="stat"><b id="n-all">0</b><span>Places</span></div>
+      <div class="stat"><b id="n-phone">0</b><span>With phone</span></div>
+      <div class="stat"><b id="n-web">0</b><span>With website</span></div>
+    </div>
+
+    <input id="search" type="search" placeholder="Search name, phone, address, category" autocomplete="off">
+
+    <div class="list-head">
+      <span id="count">0 places</span>
+      <label class="check"><input id="only-phone" type="checkbox"> Only with phone</label>
+    </div>
+    <ul id="list"></ul>
+
+    <div class="actions">
+      <button id="export-csv" class="primary">Download CSV</button>
+      <button id="export-vcf">vCard (.vcf)</button>
+      <button id="copy">Copy phones</button>
+    </div>
+    <div class="list-head">
+      <span>Results from every search are kept.</span>
+      <button id="clear" class="link-btn">Clear all</button>
+    </div>
+    <p id="toast" class="toast" role="status"></p>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
