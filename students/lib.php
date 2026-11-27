@@ -22,6 +22,8 @@ const DEFAULT_SETTINGS = [
     'w_attendance' => 20,
     'w_skills' => 20,
     'public_form' => true,            // the public registration page accepts new students
+    'motto' => 'Track today. Shape tomorrow.',   // shown big on the welcome page
+    'goal' => 'We walk with every student for up to five years, following their studies, marks, skills and achievements, so that when the right opportunity comes, we know exactly who is ready for it.',
 ];
 
 // ---------- JSON files ----------

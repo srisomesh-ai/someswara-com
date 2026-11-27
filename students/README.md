@@ -31,4 +31,5 @@ Trend: latest record score minus the first one.
 
 ## Notes
 - Forgot the password: delete `settings.json` in `students-data` (File Manager) and set up again; students are kept.
-- Clean URL: `someswara.com/students/register` opens the sign-up form.
+- Clean URLs: `someswara.com/students/welcome` (welcome page: goal, motto, the journey, growth chart) and `someswara.com/students/register` (sign-up form).
+- The motto and goal on the welcome page are edited in Settings → Welcome page.

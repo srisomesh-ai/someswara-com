@@ -379,6 +379,12 @@ function settingsPage() {
         <div class="field"><label>Public sign-up form</label><select id="s_pub"><option value="1" ${s.public_form ? 'selected' : ''}>Open</option><option value="0" ${s.public_form ? '' : 'selected'}>Closed</option></select></div>
       </div>
     </div>
+    <div class="card"><h2>Welcome page</h2>
+      <p class="hint">Shown at <b>${esc(location.origin + location.pathname.replace(/[^/]*$/, ''))}welcome</b>. Share this link with students and parents.</p>
+      <div class="grid"><div class="field"><label>Motto (the big headline)</label><input id="s_motto" maxlength="120" value="${esc(s.motto)}"></div></div>
+      <div class="grid"><div class="field"><label>Goal (one or two sentences under the headline)</label><textarea id="s_goal" maxlength="400">${esc(s.goal)}</textarea></div></div>
+      <div><a class="btn" style="display:inline-flex;align-items:center;text-decoration:none" href="welcome.php" target="_blank">Open welcome page</a></div>
+    </div>
     <div class="card"><h2>How the score is worked out</h2>
       <p class="hint">Each record gets a score out of 100 from these parts. The student's overall score is the average of their latest three records, with the newest counting most.</p>
       <div class="grid">
@@ -393,7 +399,7 @@ function settingsPage() {
       <div class="err" id="pErr"></div><div><button class="btn" id="pSave">Change password</button></div>
     </div>`;
   $('#sSave').onclick = async () => {
-    try { await api('save_settings', {org_name: $('#s_org').value, track_years: $('#s_years').value, public_form: $('#s_pub').value, w_marks: $('#s_wm').value, w_attendance: $('#s_wa').value, w_skills: $('#s_ws').value});
+    try { await api('save_settings', {org_name: $('#s_org').value, track_years: $('#s_years').value, public_form: $('#s_pub').value, w_marks: $('#s_wm').value, w_attendance: $('#s_wa').value, w_skills: $('#s_ws').value, motto: $('#s_motto').value, goal: $('#s_goal').value});
       await reload(); $('#sErr').style.color = 'var(--good)'; $('#sErr').textContent = 'Saved.'; } catch (e) { $('#sErr').style.color = ''; $('#sErr').textContent = e.message; }
   };
   $('#pSave').onclick = async () => {
