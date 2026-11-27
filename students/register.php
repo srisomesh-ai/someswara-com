@@ -36,7 +36,7 @@ button{font:inherit;width:100%;min-height:52px;border-radius:10px;border:none;ba
 </head>
 <body>
 <div class="wrap">
-  <div><h1><?= $org ?></h1><p class="hint">Student registration</p></div>
+  <div><h1><?= $org ?></h1><p class="hint">Student registration · <a href="welcome.php" style="color:var(--accent)">About us</a></p></div>
 <?php if (!$open): ?>
   <div class="card"><h2>Registration is closed right now</h2><p class="hint">Please check back later.</p></div>
 <?php else: ?>

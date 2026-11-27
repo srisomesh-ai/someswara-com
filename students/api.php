@@ -156,6 +156,8 @@ if ($action === 'save_settings') {
     foreach (['w_marks', 'w_attendance', 'w_skills'] as $k) $s[$k] = (int)clean_num($_POST[$k] ?? $s[$k]);
     if ($s['w_marks'] + $s['w_attendance'] + $s['w_skills'] <= 0) fail('At least one weight must be above 0.');
     $s['public_form'] = !empty($_POST['public_form']) && $_POST['public_form'] !== '0';
+    $s['motto'] = clean((string)($_POST['motto'] ?? $s['motto']), 120) ?: DEFAULT_SETTINGS['motto'];
+    $s['goal'] = clean((string)($_POST['goal'] ?? $s['goal']), 400) ?: DEFAULT_SETTINGS['goal'];
     write_json('settings.json', $s);
     out(['ok' => true]);
 }
