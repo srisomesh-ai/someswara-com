@@ -1,0 +1,5 @@
+RewriteEngine On
+RewriteRule ^register/?$ register.php [L]
+<FilesMatch "^(lib\.php|README\.md)$">
+  Require all denied
+</FilesMatch>
