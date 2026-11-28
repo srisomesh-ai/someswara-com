@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Student Tracker</title>
+<title>Golden Gates</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
@@ -83,7 +83,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <div id="app" class="shell hide">
   <aside class="side">
-    <div class="brand"><b id="orgTitle">Student Tracker</b><span>Education &amp; performance tracking</span></div>
+    <div class="brand"><b id="orgTitle">Golden Gates</b><span>Student selection &amp; growth</span></div>
     <nav class="nav">
       <button data-page="dash" class="on">Overview</button>
       <button data-page="list">All students</button>
@@ -116,7 +116,7 @@ let SETUP = false;
 function showAuth(needsSetup) {
   SETUP = needsSetup;
   $('#app').classList.add('hide'); $('#auth').classList.remove('hide');
-  $('#authTitle').textContent = needsSetup ? 'Set up Student Tracker' : 'Log in';
+  $('#authTitle').textContent = needsSetup ? 'Set up Golden Gates' : 'Log in';
   $('#authHint').textContent = needsSetup ? 'Choose the admin password. Only someone with this password can see student data.' : '';
   $('#orgWrap').classList.toggle('hide', !needsSetup);
   $('#authBtn').textContent = needsSetup ? 'Create and open' : 'Log in';
@@ -142,7 +142,7 @@ async function start() {
 async function reload() {
   DATA = await api('list');
   $('#orgTitle').textContent = DATA.settings.org_name;
-  document.title = DATA.settings.org_name + ' | Student Tracker';
+  document.title = DATA.settings.org_name + ' | Admin';
   const p = DATA.students.filter(s => s.status === 'pending').length;
   $('#pendCount').textContent = p; $('#pendCount').classList.toggle('hide', !p);
 }

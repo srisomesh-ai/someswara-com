@@ -1,4 +1,4 @@
-# Student Tracker
+# Golden Gates (student selection and growth)
 
 Collects student details and follows each student's education and performance for 3 to 5 years,
 so the best candidates can be found for courses, scholarships and jobs.
