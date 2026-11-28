@@ -16,14 +16,14 @@ define('DATA_DIR', pick_data_dir());
 date_default_timezone_set('Asia/Kolkata');
 
 const DEFAULT_SETTINGS = [
-    'org_name' => 'Student Tracker',
-    'track_years' => 5,               // how long a student is followed from the day they join (3 to 5)
+    'org_name' => 'Golden Gates',
+    'track_years' => 4,               // how long a student is followed from the day they join (3 to 5)
     'w_marks' => 60,                  // weights for a record's score, in percent
     'w_attendance' => 20,
     'w_skills' => 20,
     'public_form' => true,            // the public registration page accepts new students
-    'motto' => 'Track today. Shape tomorrow.',   // shown big on the welcome page
-    'goal' => 'We walk with every student for up to five years, following their studies, marks, skills and achievements, so that when the right opportunity comes, we know exactly who is ready for it.',
+    'motto' => 'We are here to build your future. You just have to join.',   // shown big on the welcome page
+    'goal' => 'Join today from 10th class. Show us your talent through tasks, challenges and questionnaires, and in 3 to 4 years we will show you the path to your destiny, in India or abroad.',
 ];
 
 // ---------- JSON files ----------
@@ -60,7 +60,17 @@ function with_students(callable $fn) {
 
 function students_all(): array { return read_json('students.json'); }
 
-function settings(): array { return array_merge(DEFAULT_SETTINGS, read_json('settings.json')); }
+// Old default wording saved before the Golden Gates rename is replaced by the new defaults.
+const OLD_DEFAULTS = [
+    'org_name' => 'Student Tracker',
+    'motto' => 'Track today. Shape tomorrow.',
+    'goal' => 'We walk with every student for up to five years, following their studies, marks, skills and achievements, so that when the right opportunity comes, we know exactly who is ready for it.',
+];
+function settings(): array {
+    $s = array_merge(DEFAULT_SETTINGS, read_json('settings.json'));
+    foreach (OLD_DEFAULTS as $k => $old) if (($s[$k] ?? '') === $old) $s[$k] = DEFAULT_SETTINGS[$k];
+    return $s;
+}
 function is_setup(): bool { return !empty(settings()['password_hash']); }
 function new_id(): string { return bin2hex(random_bytes(6)); }
 
